@@ -8,14 +8,23 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-function ResetNotice() {
+function LoginNotice() {
   const params = useSearchParams();
-  if (params.get("reset") !== "ok") return null;
-  return (
-    <p className="rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
-      Senha redefinida com sucesso. Faça login.
-    </p>
-  );
+  if (params.get("reset") === "ok") {
+    return (
+      <p className="rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+        Senha redefinida com sucesso. Faça login.
+      </p>
+    );
+  }
+  if (params.get("expirou") === "1") {
+    return (
+      <p className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800">
+        Sua sessão expirou. Por segurança, faça login novamente.
+      </p>
+    );
+  }
+  return null;
 }
 
 export default function LoginPage() {
@@ -34,7 +43,7 @@ export default function LoginPage() {
       </div>
 
       <Suspense fallback={null}>
-        <ResetNotice />
+        <LoginNotice />
       </Suspense>
 
       <form action={action} className="space-y-4">
