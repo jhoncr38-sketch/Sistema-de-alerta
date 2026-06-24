@@ -1,0 +1,111 @@
+import { isTributo } from "@/lib/constants";
+import {
+  competenciaKey,
+  competenciaShortLabel,
+  normalizeCompetencia,
+} from "@/lib/dates";
+import type { DocType } from "@/lib/types";
+
+/** Um ponto mensal do dashboard de faturamento. */
+export interface MonthlyPoint {
+  key: string; // "2026-06" (ordenável cronologicamente)
+  label: string; // "jun/26"
+  competencia: string; // "06/2026"
+  faturamento: number;
+  tributos: number;
+  carga: number | null; // % (tributos / faturamento); null se não há faturamento
+}
+
+export interface FaturamentoSummary {
+  data: MonthlyPoint[];
+  totalFaturamento: number;
+  totalTributos: number;
+  cargaMedia: number | null; // % no período
+  crescimento: number | null; // % do último mês com faturamento vs. o anterior
+}
+
+export interface DocInput {
+  type: DocType;
+  competencia: string;
+  amount: number | null;
+}
+
+export interface RevenueInput {
+  competencia: string;
+  amount: number;
+}
+
+interface Agg {
+  key: string;
+  competencia: string;
+  faturamento: number;
+  tributos: number;
+}
+
+export const MONTHS_SHOWN = 12;
+
+/**
+ * Agrega documentos (tributos) e faturamento por competência (mês/ano).
+ * Tributos somam só DAS/DARF/INSS/ISS (ver isTributo); FGTS e folha ficam fora.
+ * Passe os dados de uma empresa (visão por cliente) ou de todas (carteira).
+ */
+export function buildFaturamento(
+  docs: DocInput[],
+  revenues: RevenueInput[],
+  monthsShown: number = MONTHS_SHOWN,
+): FaturamentoSummary {
+  const byMonth = new Map<string, Agg>();
+  const ensure = (competenciaRaw: string): Agg | null => {
+    const key = competenciaKey(competenciaRaw);
+    if (!key) return null;
+    let agg = byMonth.get(key);
+    if (!agg) {
+      agg = {
+        key,
+        competencia: normalizeCompetencia(competenciaRaw),
+        faturamento: 0,
+        tributos: 0,
+      };
+      byMonth.set(key, agg);
+    }
+    return agg;
+  };
+
+  for (const d of docs) {
+    if (!isTributo(d.type)) continue;
+    const agg = ensure(d.competencia);
+    if (agg) agg.tributos += Number(d.amount ?? 0);
+  }
+  for (const r of revenues) {
+    const agg = ensure(r.competencia);
+    if (agg) agg.faturamento += Number(r.amount);
+  }
+
+  const data: MonthlyPoint[] = [...byMonth.values()]
+    .sort((a, b) => a.key.localeCompare(b.key))
+    .slice(-monthsShown)
+    .map((agg) => ({
+      key: agg.key,
+      label: competenciaShortLabel(agg.competencia),
+      competencia: agg.competencia,
+      faturamento: agg.faturamento,
+      tributos: agg.tributos,
+      carga:
+        agg.faturamento > 0 ? (agg.tributos / agg.faturamento) * 100 : null,
+    }));
+
+  const totalFaturamento = data.reduce((s, d) => s + d.faturamento, 0);
+  const totalTributos = data.reduce((s, d) => s + d.tributos, 0);
+  const cargaMedia =
+    totalFaturamento > 0 ? (totalTributos / totalFaturamento) * 100 : null;
+
+  const comFaturamento = data.filter((d) => d.faturamento > 0);
+  let crescimento: number | null = null;
+  if (comFaturamento.length >= 2) {
+    const ultimo = comFaturamento[comFaturamento.length - 1].faturamento;
+    const anterior = comFaturamento[comFaturamento.length - 2].faturamento;
+    if (anterior > 0) crescimento = ((ultimo - anterior) / anterior) * 100;
+  }
+
+  return { data, totalFaturamento, totalTributos, cargaMedia, crescimento };
+}
