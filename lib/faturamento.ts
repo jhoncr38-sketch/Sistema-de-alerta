@@ -2,6 +2,7 @@ import { isTributo } from "@/lib/constants";
 import {
   competenciaKey,
   competenciaShortLabel,
+  currentCompetenciaKey,
   normalizeCompetencia,
 } from "@/lib/dates";
 import type { DocType } from "@/lib/types";
@@ -22,6 +23,7 @@ export interface FaturamentoSummary {
   totalTributos: number;
   cargaMedia: number | null; // % no período
   crescimento: number | null; // % do último mês com faturamento vs. o anterior
+  periodoLabel: string | null; // intervalo real coberto, ex. "abr/26 – jun/26"
 }
 
 export interface DocInput {
@@ -53,11 +55,15 @@ export function buildFaturamento(
   docs: DocInput[],
   revenues: RevenueInput[],
   monthsShown: number = MONTHS_SHOWN,
+  // Ignora competências posteriores a este mês (padrão: mês atual). Assim o
+  // "período" não soma faturamento de meses que ainda não aconteceram.
+  maxKey: string | null = currentCompetenciaKey(),
 ): FaturamentoSummary {
   const byMonth = new Map<string, Agg>();
   const ensure = (competenciaRaw: string): Agg | null => {
     const key = competenciaKey(competenciaRaw);
     if (!key) return null;
+    if (maxKey && key > maxKey) return null; // competência futura: fora do período
     let agg = byMonth.get(key);
     if (!agg) {
       agg = {
@@ -107,5 +113,19 @@ export function buildFaturamento(
     if (anterior > 0) crescimento = ((ultimo - anterior) / anterior) * 100;
   }
 
-  return { data, totalFaturamento, totalTributos, cargaMedia, crescimento };
+  const periodoLabel =
+    data.length === 0
+      ? null
+      : data.length === 1
+        ? data[0].label
+        : `${data[0].label} – ${data[data.length - 1].label}`;
+
+  return {
+    data,
+    totalFaturamento,
+    totalTributos,
+    cargaMedia,
+    crescimento,
+    periodoLabel,
+  };
 }

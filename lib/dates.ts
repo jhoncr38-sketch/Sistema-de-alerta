@@ -106,6 +106,22 @@ export function competenciaShortLabel(competencia: string): string {
   return `${MESES_CURTOS[d.getMonth()]}/${String(d.getFullYear()).slice(-2)}`;
 }
 
+/**
+ * Mês de referência atual como chave "YYYY-MM", no fuso do Brasil
+ * (America/Sao_Paulo) para não virar o mês indevidamente em servidores UTC.
+ * Usado para ignorar competências futuras nos relatórios.
+ */
+export function currentCompetenciaKey(today: Date = new Date()): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+  }).formatToParts(today);
+  const year = parts.find((p) => p.type === "year")?.value ?? "1970";
+  const month = parts.find((p) => p.type === "month")?.value ?? "01";
+  return `${year}-${month}`;
+}
+
 /** Categoria usada pelo cron de e-mails (null = não dispara alerta). */
 export function alertKind(
   dueDate: string | Date,

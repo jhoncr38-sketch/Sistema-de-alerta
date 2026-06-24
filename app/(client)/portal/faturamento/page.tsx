@@ -6,7 +6,6 @@ import { RevenueCharts } from "@/components/revenue-charts";
 import { getUserAndProfile } from "@/lib/auth";
 import {
   buildFaturamento,
-  MONTHS_SHOWN,
   type DocInput,
   type RevenueInput,
 } from "@/lib/faturamento";
@@ -27,11 +26,17 @@ export default async function PortalFaturamentoPage() {
     supabase.from("revenues").select("competencia, amount"),
   ]);
 
-  const { data, totalFaturamento, totalTributos, cargaMedia, crescimento } =
-    buildFaturamento(
-      (docsRaw ?? []) as DocInput[],
-      (revenuesRaw ?? []) as RevenueInput[],
-    );
+  const {
+    data,
+    totalFaturamento,
+    totalTributos,
+    cargaMedia,
+    crescimento,
+    periodoLabel,
+  } = buildFaturamento(
+    (docsRaw ?? []) as DocInput[],
+    (revenuesRaw ?? []) as RevenueInput[],
+  );
 
   const companyName =
     profile?.company?.nome_fantasia || profile?.company?.razao_social || "";
@@ -52,7 +57,7 @@ export default async function PortalFaturamentoPage() {
           <MetricCard
             label="Faturamento no período"
             value={formatCurrency(totalFaturamento)}
-            sub={`últimos ${data.length || MONTHS_SHOWN} meses`}
+            sub={periodoLabel ?? "sem lançamentos"}
           />
           <MetricCard
             label="Tributos no período"
