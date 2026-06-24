@@ -35,6 +35,15 @@ export function DocumentsTable({
     );
   }
 
+  // Esconde automaticamente as colunas que não se aplicam à lista atual:
+  // folha e documentos não têm valor/vencimento; documentos da empresa também
+  // não têm competência; e só boletos têm status (vencido/pago).
+  const hasCompetencia = documents.some((d) => !!d.competencia);
+  const hasAmount = documents.some((d) => d.amount != null);
+  const hasDueDate = documents.some((d) => d.due_date != null);
+  const hasBoleto = documents.some((d) => d.categoria === "boleto");
+  const showPaidCol = showPaid && hasBoleto;
+
   // Selo de status (boleto com vencimento) ou "Informativo" — usado nos dois layouts.
   function statusBadge(doc: DocumentWithCompany) {
     if (doc.categoria === "boleto" && doc.due_date) {
@@ -111,7 +120,9 @@ export function DocumentsTable({
                     {docTypeLabel(doc.type)}
                   </div>
                 </div>
-                <div className="shrink-0">{statusBadge(doc)}</div>
+                {hasBoleto ? (
+                  <div className="shrink-0">{statusBadge(doc)}</div>
+                ) : null}
               </div>
 
               {doc.amount != null || doc.competencia || doc.due_date ? (
@@ -152,7 +163,7 @@ export function DocumentsTable({
         })}
       </div>
 
-      {/* ----- Desktop: tabela completa ----- */}
+      {/* ----- Desktop: tabela (só com as colunas que fazem sentido) ----- */}
       <div className="hidden overflow-x-auto rounded-xl border bg-card md:block">
         <table className="w-full text-sm">
           <thead>
@@ -161,11 +172,19 @@ export function DocumentsTable({
                 <th className="px-4 py-2.5 font-medium">Cliente</th>
               ) : null}
               <th className="px-4 py-2.5 font-medium">Tipo</th>
-              <th className="px-4 py-2.5 font-medium">Competência</th>
-              <th className="px-4 py-2.5 font-medium">Valor</th>
-              <th className="px-4 py-2.5 font-medium">Vencimento</th>
-              <th className="px-4 py-2.5 font-medium">Status</th>
-              {showPaid ? (
+              {hasCompetencia ? (
+                <th className="px-4 py-2.5 font-medium">Competência</th>
+              ) : null}
+              {hasAmount ? (
+                <th className="px-4 py-2.5 font-medium">Valor</th>
+              ) : null}
+              {hasDueDate ? (
+                <th className="px-4 py-2.5 font-medium">Vencimento</th>
+              ) : null}
+              {hasBoleto ? (
+                <th className="px-4 py-2.5 font-medium">Status</th>
+              ) : null}
+              {showPaidCol ? (
                 <th className="px-4 py-2.5 font-medium">Pagamento</th>
               ) : null}
               {showActions ? <th className="px-4 py-2.5 font-medium" /> : null}
@@ -187,17 +206,25 @@ export function DocumentsTable({
                     </td>
                   ) : null}
                   <td className="px-4 py-3">{docTypeLabel(doc.type)}</td>
-                  <td className="px-4 py-3 text-muted-foreground">
-                    {doc.competencia || "—"}
-                  </td>
-                  <td className="px-4 py-3 tabular-nums">
-                    {doc.amount != null ? formatCurrency(doc.amount) : "—"}
-                  </td>
-                  <td className="px-4 py-3 tabular-nums">
-                    {doc.due_date ? formatDate(doc.due_date) : "—"}
-                  </td>
-                  <td className="px-4 py-3">{statusBadge(doc)}</td>
-                  {showPaid ? (
+                  {hasCompetencia ? (
+                    <td className="px-4 py-3 text-muted-foreground">
+                      {doc.competencia || "—"}
+                    </td>
+                  ) : null}
+                  {hasAmount ? (
+                    <td className="px-4 py-3 tabular-nums">
+                      {doc.amount != null ? formatCurrency(doc.amount) : "—"}
+                    </td>
+                  ) : null}
+                  {hasDueDate ? (
+                    <td className="px-4 py-3 tabular-nums">
+                      {doc.due_date ? formatDate(doc.due_date) : "—"}
+                    </td>
+                  ) : null}
+                  {hasBoleto ? (
+                    <td className="px-4 py-3">{statusBadge(doc)}</td>
+                  ) : null}
+                  {showPaidCol ? (
                     <td className="px-4 py-3">
                       {isBoleto ? (
                         <PaidToggle docId={doc.id} paid={doc.status === "paid"} />
