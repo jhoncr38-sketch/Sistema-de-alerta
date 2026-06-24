@@ -62,6 +62,11 @@ export function UploadForm({
               </option>
             ))}
           </select>
+          <p className="text-xs text-muted-foreground">
+            {isBoleto
+              ? "Vai para a aba “Meus boletos” do cliente — com valor, vencimento e alerta de pagamento."
+              : "Vai para a aba “Documentos” do cliente — apenas para baixar (sem valor ou vencimento)."}
+          </p>
         </div>
 
         <div className="space-y-1.5">

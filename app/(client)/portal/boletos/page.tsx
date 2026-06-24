@@ -8,6 +8,7 @@ export default async function MeusBoletosPage() {
   const { data } = await supabase
     .from("documents")
     .select("*, company:companies(id,razao_social,nome_fantasia,email)")
+    .eq("categoria", "boleto")
     .order("created_at", { ascending: false });
 
   const docs = (data ?? []) as DocumentWithCompany[];
@@ -15,15 +16,15 @@ export default async function MeusBoletosPage() {
   return (
     <>
       <PageHeader
-        title="Meus boletos e documentos"
-        subtitle="Baixe seus boletos e relatórios e marque o que já foi pago"
+        title="Meus boletos"
+        subtitle="Baixe seus boletos e marque o que já foi pago"
       />
       <div className="p-6">
         <DocumentsTable
           documents={docs}
           showDownload
           showPaid
-          emptyMessage="Nenhum boleto ou documento disponível no momento."
+          emptyMessage="Nenhum boleto disponível no momento."
         />
       </div>
     </>

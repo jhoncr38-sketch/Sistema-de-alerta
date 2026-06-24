@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   Bell,
   FileText,
+  Files,
   History,
   LayoutDashboard,
   LogOut,
@@ -43,6 +44,7 @@ const ADMIN_NAV: NavItem[] = [
 const CLIENT_NAV: NavItem[] = [
   { label: "Início", href: "/portal", icon: LayoutDashboard },
   { label: "Meus boletos", href: "/portal/boletos", icon: FileText },
+  { label: "Documentos", href: "/portal/documentos", icon: Files },
   { label: "Meu faturamento", href: "/portal/faturamento", icon: TrendingUp },
   { label: "Notificações", href: "/portal/notificacoes", icon: Bell },
 ];
