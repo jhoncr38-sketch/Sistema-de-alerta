@@ -4,9 +4,13 @@ import { Suspense, useActionState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { login, type AuthState } from "./actions";
+import { AuthTabs } from "@/components/auth-tabs";
+import { PasswordInput } from "@/components/password-input";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+
+const authInputClass = "h-10 bg-primary/5";
 
 function LoginNotice() {
   const params = useSearchParams();
@@ -35,10 +39,12 @@ export default function LoginPage() {
 
   return (
     <div className="space-y-5">
-      <div className="space-y-1">
-        <h1 className="text-lg font-semibold">Entrar</h1>
+      <AuthTabs />
+
+      <div className="space-y-1 text-center">
+        <h1 className="text-xl font-semibold">Bem-vindo!</h1>
         <p className="text-sm text-muted-foreground">
-          Acesse o portal para ver seus boletos e documentos.
+          Preencha seus dados para entrar
         </p>
       </div>
 
@@ -56,24 +62,17 @@ export default function LoginPage() {
             required
             autoComplete="email"
             placeholder="voce@empresa.com.br"
+            className={authInputClass}
           />
         </div>
         <div className="space-y-1.5">
-          <div className="flex items-center justify-between">
-            <Label htmlFor="password">Senha</Label>
-            <Link
-              href="/forgot-password"
-              className="text-xs text-primary hover:underline"
-            >
-              Esqueci minha senha
-            </Link>
-          </div>
-          <Input
+          <Label htmlFor="password">Senha</Label>
+          <PasswordInput
             id="password"
             name="password"
-            type="password"
             required
             autoComplete="current-password"
+            className={authInputClass}
           />
         </div>
 
@@ -81,17 +80,18 @@ export default function LoginPage() {
           <p className="text-sm text-destructive">{state.error}</p>
         ) : null}
 
-        <Button type="submit" size="lg" className="w-full" disabled={pending}>
-          {pending ? "Entrando..." : "Entrar"}
-        </Button>
+        <div className="flex items-center justify-between gap-3 pt-1">
+          <Button type="submit" size="lg" className="px-8" disabled={pending}>
+            {pending ? "Entrando..." : "Entrar"}
+          </Button>
+          <Link
+            href="/forgot-password"
+            className="text-sm text-primary hover:underline"
+          >
+            Recuperar senha
+          </Link>
+        </div>
       </form>
-
-      <p className="text-center text-sm text-muted-foreground">
-        Não tem conta?{" "}
-        <Link href="/register" className="text-primary hover:underline">
-          Cadastre-se
-        </Link>
-      </p>
     </div>
   );
 }

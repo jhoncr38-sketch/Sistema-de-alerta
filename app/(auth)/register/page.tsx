@@ -1,11 +1,14 @@
 "use client";
 
 import { useActionState } from "react";
-import Link from "next/link";
 import { register, type AuthState } from "./actions";
+import { AuthTabs } from "@/components/auth-tabs";
+import { PasswordInput } from "@/components/password-input";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+
+const authInputClass = "h-10 bg-primary/5";
 
 export default function RegisterPage() {
   const [state, action, pending] = useActionState<AuthState, FormData>(
@@ -15,18 +18,26 @@ export default function RegisterPage() {
 
   return (
     <div className="space-y-5">
-      <div className="space-y-1">
-        <h1 className="text-lg font-semibold">Criar conta</h1>
+      <AuthTabs />
+
+      <div className="space-y-1 text-center">
+        <h1 className="text-xl font-semibold">Crie sua conta</h1>
         <p className="text-sm text-muted-foreground">
-          Cadastre-se para acessar seus boletos. Seu contador irá liberar o
-          acesso e vincular sua empresa.
+          Cadastre-se para acessar seus boletos e documentos
         </p>
       </div>
 
       <form action={action} className="space-y-4">
         <div className="space-y-1.5">
           <Label htmlFor="name">Nome</Label>
-          <Input id="name" name="name" required autoComplete="name" placeholder="Seu nome" />
+          <Input
+            id="name"
+            name="name"
+            required
+            autoComplete="name"
+            placeholder="Seu nome"
+            className={authInputClass}
+          />
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="email">E-mail</Label>
@@ -37,18 +48,19 @@ export default function RegisterPage() {
             required
             autoComplete="email"
             placeholder="voce@empresa.com.br"
+            className={authInputClass}
           />
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="password">Senha</Label>
-          <Input
+          <PasswordInput
             id="password"
             name="password"
-            type="password"
             required
             minLength={6}
             autoComplete="new-password"
             placeholder="Mínimo 6 caracteres"
+            className={authInputClass}
           />
         </div>
 
@@ -61,11 +73,8 @@ export default function RegisterPage() {
         </Button>
       </form>
 
-      <p className="text-center text-sm text-muted-foreground">
-        Já tem conta?{" "}
-        <Link href="/login" className="text-primary hover:underline">
-          Entrar
-        </Link>
+      <p className="text-center text-xs text-muted-foreground">
+        Após o cadastro, seu contador libera o acesso e vincula sua empresa.
       </p>
     </div>
   );

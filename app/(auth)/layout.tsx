@@ -16,7 +16,7 @@ export default async function AuthLayout({
     <div className="flex min-h-screen items-center justify-center bg-muted/40 p-4">
       <div className="w-full max-w-sm">
         <div className="mb-6 flex justify-center">
-          <Brand name={branding.name} logoUrl={branding.logoUrl} />
+          <Brand size="lg" name={branding.name} logoUrl={branding.logoUrl} />
         </div>
         {!configured ? (
           <div className="mb-4 flex items-start gap-2 rounded-lg bg-amber-50 px-3.5 py-2.5 text-sm text-amber-800 ring-1 ring-inset ring-amber-600/20">
