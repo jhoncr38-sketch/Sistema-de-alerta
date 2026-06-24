@@ -24,7 +24,7 @@ export type SessionMode = "inactivity" | "absolute";
 
 // >>> Ajuste aqui <<<
 export const SESSION_MODE: SessionMode = "inactivity";
-export const SESSION_MAX_AGE_DAYS = 15;
+export const SESSION_MAX_AGE_DAYS = 5;
 
 export const SESSION_MAX_AGE_MS = SESSION_MAX_AGE_DAYS * 24 * 60 * 60 * 1000;
 
