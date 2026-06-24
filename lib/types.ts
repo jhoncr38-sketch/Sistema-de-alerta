@@ -77,3 +77,10 @@ export interface NotificationRow {
   kind: "vence_hoje" | "dias_3" | "vencido";
   sent_at: string;
 }
+
+export interface AppSettingsRow {
+  id: true;
+  brand_name: string;
+  logo_path: string | null;
+  updated_at: string;
+}

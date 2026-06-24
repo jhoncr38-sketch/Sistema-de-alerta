@@ -61,11 +61,15 @@ export function AppSidebar({
   userName,
   roleLabel,
   brandSubtitle,
+  brandName,
+  brandLogoUrl,
 }: {
   role: Role;
   userName: string;
   roleLabel: string;
   brandSubtitle?: string;
+  brandName?: string | null;
+  brandLogoUrl?: string | null;
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -140,7 +144,7 @@ export function AppSidebar({
     <>
       {/* Barra superior — só no mobile */}
       <header className="flex items-center justify-between border-b bg-card px-4 py-3 md:hidden">
-        <Brand subtitle={brandSubtitle} />
+        <Brand subtitle={brandSubtitle} name={brandName} logoUrl={brandLogoUrl} />
         <Button
           variant="ghost"
           size="icon-sm"
@@ -154,7 +158,7 @@ export function AppSidebar({
       {/* Sidebar fixa — só no desktop */}
       <aside className="hidden w-60 shrink-0 flex-col border-r bg-card md:flex">
         <div className="border-b px-4 py-4">
-          <Brand subtitle={brandSubtitle} />
+          <Brand subtitle={brandSubtitle} name={brandName} logoUrl={brandLogoUrl} />
         </div>
         <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto p-2">
           {navLinks()}
@@ -178,7 +182,7 @@ export function AppSidebar({
             className="absolute inset-y-0 left-0 flex w-64 max-w-[82%] flex-col bg-card shadow-xl"
           >
             <div className="flex items-center justify-between border-b px-4 py-4">
-              <Brand subtitle={brandSubtitle} />
+              <Brand subtitle={brandSubtitle} name={brandName} logoUrl={brandLogoUrl} />
               <Button
                 variant="ghost"
                 size="icon-sm"
