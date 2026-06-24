@@ -76,7 +76,10 @@ const MESES_CURTOS = [
  * Converte "06/2026" (ou "6/2026") no 1º dia do mês como data local.
  * Retorna null se o formato não bater — usado para ordenar/agrupar por mês.
  */
-export function parseCompetencia(competencia: string): Date | null {
+export function parseCompetencia(
+  competencia: string | null | undefined,
+): Date | null {
+  if (!competencia) return null;
   const m = competencia.trim().match(COMPETENCIA_RE);
   if (!m) return null;
   const month = Number(m[1]);

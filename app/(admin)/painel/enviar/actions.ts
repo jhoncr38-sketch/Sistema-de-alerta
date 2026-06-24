@@ -28,18 +28,26 @@ export async function uploadDocument(
 
   const companyId = String(formData.get("company_id") ?? "");
   const type = String(formData.get("type") ?? "");
-  const categoria =
-    String(formData.get("categoria") ?? "boleto") === "documento"
+  const categoriaRaw = String(formData.get("categoria") ?? "boleto");
+  const categoria: "boleto" | "documento" | "folha" =
+    categoriaRaw === "documento"
       ? "documento"
-      : "boleto";
+      : categoriaRaw === "folha"
+        ? "folha"
+        : "boleto";
   const isBoleto = categoria === "boleto";
+  // Boleto e folha têm mês de referência; documento da empresa, não.
+  const precisaCompetencia = categoria !== "documento";
   const competencia = normalizeCompetencia(
     String(formData.get("competencia") ?? ""),
   );
   const file = formData.get("file");
 
-  if (!companyId || !type || !competencia) {
+  if (!companyId || !type) {
     return { error: "Preencha todos os campos." };
+  }
+  if (precisaCompetencia && !competencia) {
+    return { error: "Informe a competência (mês/ano)." };
   }
 
   // Boletos exigem valor e vencimento; documentos informativos, não.
@@ -95,7 +103,7 @@ export async function uploadDocument(
     company_id: companyId,
     type,
     categoria,
-    competencia,
+    competencia: competencia || null, // documento da empresa pode não ter mês
     amount,
     due_date: dueDate,
     file_path: path,

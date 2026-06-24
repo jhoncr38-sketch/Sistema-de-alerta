@@ -15,6 +15,7 @@ import {
   TrendingUp,
   Upload,
   Users,
+  Wallet,
   X,
   type LucideIcon,
 } from "lucide-react";
@@ -45,6 +46,7 @@ const CLIENT_NAV: NavItem[] = [
   { label: "Início", href: "/portal", icon: LayoutDashboard },
   { label: "Meus boletos", href: "/portal/boletos", icon: FileText },
   { label: "Documentos", href: "/portal/documentos", icon: Files },
+  { label: "Folha de pagamento", href: "/portal/folha", icon: Wallet },
   { label: "Meu faturamento", href: "/portal/faturamento", icon: TrendingUp },
   { label: "Notificações", href: "/portal/notificacoes", icon: Bell },
 ];

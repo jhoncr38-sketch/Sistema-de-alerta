@@ -75,7 +75,8 @@ export function DocumentsTable({
           <>
             O documento{" "}
             <strong>
-              {docTypeLabel(doc.type)} · {doc.competencia}
+              {docTypeLabel(doc.type)}
+              {doc.competencia ? ` · ${doc.competencia}` : ""}
             </strong>
             {doc.company
               ? ` de ${doc.company.nome_fantasia || doc.company.razao_social}`
@@ -113,19 +114,27 @@ export function DocumentsTable({
                 <div className="shrink-0">{statusBadge(doc)}</div>
               </div>
 
-              <div className="flex items-end justify-between gap-3">
-                <div className="text-xl font-semibold tabular-nums">
-                  {doc.amount != null ? formatCurrency(doc.amount) : "—"}
-                </div>
-                <div className="text-right text-xs leading-tight text-muted-foreground">
-                  <div>Competência {doc.competencia}</div>
-                  {doc.due_date ? (
-                    <div className="tabular-nums">
-                      Vence {formatDate(doc.due_date)}
+              {doc.amount != null || doc.competencia || doc.due_date ? (
+                <div className="flex items-end justify-between gap-3">
+                  {doc.amount != null ? (
+                    <div className="text-xl font-semibold tabular-nums">
+                      {formatCurrency(doc.amount)}
                     </div>
-                  ) : null}
+                  ) : (
+                    <span />
+                  )}
+                  <div className="text-right text-xs leading-tight text-muted-foreground">
+                    {doc.competencia ? (
+                      <div>Competência {doc.competencia}</div>
+                    ) : null}
+                    {doc.due_date ? (
+                      <div className="tabular-nums">
+                        Vence {formatDate(doc.due_date)}
+                      </div>
+                    ) : null}
+                  </div>
                 </div>
-              </div>
+              ) : null}
 
               {hasActions ? (
                 <div className="flex flex-wrap items-center gap-2 border-t pt-3">
@@ -179,7 +188,7 @@ export function DocumentsTable({
                   ) : null}
                   <td className="px-4 py-3">{docTypeLabel(doc.type)}</td>
                   <td className="px-4 py-3 text-muted-foreground">
-                    {doc.competencia}
+                    {doc.competencia || "—"}
                   </td>
                   <td className="px-4 py-3 tabular-nums">
                     {doc.amount != null ? formatCurrency(doc.amount) : "—"}

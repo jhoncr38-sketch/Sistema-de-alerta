@@ -25,6 +25,10 @@ export function UploadForm({
   const [categoria, setCategoria] = useState<DocCategoria>("boleto");
   const [type, setType] = useState("");
   const isBoleto = categoria === "boleto";
+  const isFolha = categoria === "folha";
+  const isDocumento = categoria === "documento";
+  // Boleto e folha têm mês de referência; documento da empresa, não.
+  const precisaCompetencia = !isDocumento;
   const typeOptions = docTypeOptionsFor(categoria);
 
   return (
@@ -52,8 +56,9 @@ export function UploadForm({
             className={selectClass}
             value={categoria}
             onChange={(e) => {
-              setCategoria(e.target.value as DocCategoria);
-              setType(""); // tipo depende da categoria
+              const c = e.target.value as DocCategoria;
+              setCategoria(c);
+              setType(c === "folha" ? "folha" : ""); // folha tem tipo único
             }}
           >
             {(Object.keys(CATEGORIA_LABELS) as DocCategoria[]).map((c) => (
@@ -65,37 +70,47 @@ export function UploadForm({
           <p className="text-xs text-muted-foreground">
             {isBoleto
               ? "Vai para a aba “Meus boletos” do cliente — com valor, vencimento e alerta de pagamento."
-              : "Vai para a aba “Documentos” do cliente — apenas para baixar (sem valor ou vencimento)."}
+              : isFolha
+                ? "Vai para a aba “Folha de pagamento” do cliente — uma por mês (competência)."
+                : "Vai para a aba “Documentos” do cliente — documentos da empresa, apenas para baixar."}
           </p>
         </div>
 
-        <div className="space-y-1.5">
-          <Label htmlFor="type">
-            {isBoleto ? "Tipo de imposto" : "Tipo de documento"}
-          </Label>
-          <select
-            id="type"
-            name="type"
-            className={selectClass}
-            required
-            value={type}
-            onChange={(e) => setType(e.target.value)}
-          >
-            <option value="" disabled>
-              Selecione...
-            </option>
-            {typeOptions.map((o) => (
-              <option key={o.value} value={o.value}>
-                {o.label}
+        {isFolha ? (
+          <input type="hidden" name="type" value="folha" />
+        ) : (
+          <div className="space-y-1.5">
+            <Label htmlFor="type">
+              {isBoleto ? "Tipo de imposto" : "Tipo de documento"}
+            </Label>
+            <select
+              id="type"
+              name="type"
+              className={selectClass}
+              required
+              value={type}
+              onChange={(e) => setType(e.target.value)}
+            >
+              <option value="" disabled>
+                Selecione...
               </option>
-            ))}
-          </select>
-        </div>
+              {typeOptions.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
 
-        <div className="space-y-1.5">
-          <Label htmlFor="competencia">Competência (mês/ano)</Label>
-          <Input id="competencia" name="competencia" placeholder="06/2026" required />
-        </div>
+        {precisaCompetencia ? (
+          <div className="space-y-1.5">
+            <Label htmlFor="competencia">
+              {isFolha ? "Competência da folha (mês/ano)" : "Competência (mês/ano)"}
+            </Label>
+            <Input id="competencia" name="competencia" placeholder="06/2026" required />
+          </div>
+        ) : null}
 
         {isBoleto ? (
           <>
@@ -128,20 +143,27 @@ export function UploadForm({
           </>
         ) : (
           <p className="text-xs text-muted-foreground sm:col-span-2">
-            Documentos/relatórios são apenas para o cliente baixar — não têm
-            valor, vencimento nem alerta de pagamento.
+            {isFolha
+              ? "A folha não tem valor nem vencimento — informe a competência (mês) e anexe o PDF."
+              : "Documentos da empresa não têm valor, vencimento nem competência — é só anexar o PDF."}
           </p>
         )}
       </div>
 
       <div className="space-y-1.5">
         <Label htmlFor="file">
-          {isBoleto ? "Arquivo do boleto" : "Arquivo do documento"}
+          {isBoleto
+            ? "Arquivo do boleto"
+            : isFolha
+              ? "Arquivo da folha"
+              : "Arquivo do documento"}
         </Label>
         <div className="rounded-xl border border-dashed bg-muted/30 p-6 text-center">
           <UploadCloud className="mx-auto size-7 text-muted-foreground" />
           <p className="mt-2 text-sm text-muted-foreground">
-            Selecione o PDF {isBoleto ? "do boleto" : "do documento"} (até 10MB)
+            Selecione o PDF{" "}
+            {isBoleto ? "do boleto" : isFolha ? "da folha" : "do documento"} (até
+            10MB)
           </p>
           <Input
             id="file"

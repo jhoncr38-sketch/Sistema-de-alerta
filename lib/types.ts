@@ -11,9 +11,13 @@ export type DocType =
   | "fgts"
   | "folha"
   | "relatorio_fiscal"
+  | "cartao_cnpj"
+  | "contrato_social"
+  | "licenca"
+  | "alvara"
   | "outro";
 export type DocStatus = "open" | "paid";
-export type DocCategoria = "boleto" | "documento";
+export type DocCategoria = "boleto" | "documento" | "folha";
 
 export interface Company {
   id: string;
@@ -45,7 +49,7 @@ export interface DocumentRow {
   company_id: string;
   type: DocType;
   categoria: DocCategoria;
-  competencia: string;
+  competencia: string | null; // documento da empresa não tem mês de referência
   amount: number | null; // null em documentos informativos
   due_date: string | null; // ISO date (YYYY-MM-DD); null em documentos informativos
   status: DocStatus;

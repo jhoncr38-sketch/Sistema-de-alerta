@@ -12,6 +12,10 @@ export const DOC_TYPE_LABELS: Record<DocType, string> = {
   fgts: "FGTS",
   folha: "Folha de Pagamento",
   relatorio_fiscal: "Relatório Fiscal",
+  cartao_cnpj: "Cartão CNPJ",
+  contrato_social: "Contrato Social",
+  licenca: "Licença",
+  alvara: "Alvará",
   outro: "Outro",
 };
 
@@ -21,10 +25,14 @@ export const DOC_TYPE_OPTIONS = Object.entries(DOC_TYPE_LABELS).map(
 
 export const CATEGORIA_LABELS: Record<DocCategoria, string> = {
   boleto: "Boleto a pagar",
-  documento: "Documento / Relatório",
+  documento: "Documento da empresa",
+  folha: "Folha de pagamento",
 };
 
-// Tipos de cada categoria. 'boleto' = guias com pagamento; 'documento' = só leitura.
+// Tipos de cada categoria:
+//  'boleto'    = guias com valor/vencimento/pagamento;
+//  'documento' = institucionais, sem periodicidade (CNPJ, contrato, alvará...);
+//  'folha'     = folha de pagamento mensal.
 const BOLETO_TYPES: DocType[] = [
   "das",
   "darf_irpj",
@@ -34,13 +42,26 @@ const BOLETO_TYPES: DocType[] = [
   "fgts",
   "outro",
 ];
-const DOCUMENTO_TYPES: DocType[] = ["folha", "relatorio_fiscal", "outro"];
+const DOCUMENTO_TYPES: DocType[] = [
+  "cartao_cnpj",
+  "contrato_social",
+  "licenca",
+  "alvara",
+  "relatorio_fiscal",
+  "outro",
+];
+const FOLHA_TYPES: DocType[] = ["folha"];
 
 /** Opções de tipo de documento conforme a categoria escolhida no envio. */
 export function docTypeOptionsFor(
   categoria: DocCategoria,
 ): { value: DocType; label: string }[] {
-  const types = categoria === "boleto" ? BOLETO_TYPES : DOCUMENTO_TYPES;
+  const types =
+    categoria === "boleto"
+      ? BOLETO_TYPES
+      : categoria === "folha"
+        ? FOLHA_TYPES
+        : DOCUMENTO_TYPES;
   return types.map((value) => ({ value, label: DOC_TYPE_LABELS[value] }));
 }
 
