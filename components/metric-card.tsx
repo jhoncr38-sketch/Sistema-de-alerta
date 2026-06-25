@@ -35,13 +35,13 @@ export function MetricCard({
   icon?: ReactNode;
 }) {
   return (
-    <Card className="transition-shadow hover:shadow-sm">
-      <div className="flex items-center justify-between px-4">
+    <Card className="gap-2.5 shadow-sm transition-shadow hover:shadow-md">
+      <div className="flex items-start justify-between gap-3 px-4">
         <span className="text-xs font-medium text-muted-foreground">{label}</span>
         {icon ? (
           <span
             className={cn(
-              "flex size-8 items-center justify-center rounded-lg",
+              "flex size-10 shrink-0 items-center justify-center rounded-xl [&_svg]:size-5",
               iconTone[tone],
             )}
           >

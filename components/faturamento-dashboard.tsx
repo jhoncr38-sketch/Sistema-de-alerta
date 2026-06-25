@@ -1,7 +1,16 @@
 "use client";
 
 import { useState } from "react";
-import { CalendarRange, TrendingDown, TrendingUp } from "lucide-react";
+import {
+  BarChart3,
+  CalendarRange,
+  DollarSign,
+  Percent,
+  Receipt,
+  TrendingDown,
+  TrendingUp,
+  Wallet,
+} from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { MetricCard } from "@/components/metric-card";
 import { RevenueCharts } from "@/components/revenue-charts";
@@ -66,10 +75,10 @@ export function FaturamentoDashboard({
     crescimento,
     periodoLabel,
     mediaMensal,
-    melhorMes,
   } = summarizePoints(shown);
 
   const hasData = shown.length > 0;
+  const receitaLiquida = totalFaturamento - totalTributos;
 
   return (
     <div className="space-y-6">
@@ -123,11 +132,22 @@ export function FaturamentoDashboard({
           label="Faturamento no período"
           value={formatCurrency(totalFaturamento)}
           sub={periodoLabel ?? "sem lançamentos"}
+          tone="info"
+          icon={<DollarSign />}
         />
         <MetricCard
           label="Tributos no período"
           value={formatCurrency(totalTributos)}
           sub="DAS, DARF, INSS, ISS"
+          tone="danger"
+          icon={<Receipt />}
+        />
+        <MetricCard
+          label="Receita líquida"
+          value={formatCurrency(receitaLiquida)}
+          sub="faturamento − tributos"
+          tone={receitaLiquida >= 0 ? "success" : "danger"}
+          icon={<Wallet />}
         />
         <MetricCard
           label="Carga tributária média"
@@ -142,23 +162,14 @@ export function FaturamentoDashboard({
                   ? "warning"
                   : "success"
           }
+          icon={<Percent />}
         />
         <MetricCard
           label="Faturamento médio/mês"
           value={mediaMensal === null ? "—" : formatCurrency(mediaMensal)}
           sub="média dos meses faturados"
-        />
-        <MetricCard
-          label="Melhor mês"
-          value={
-            melhorMes === null ? "—" : formatCurrency(melhorMes.faturamento)
-          }
-          sub={
-            melhorMes === null
-              ? "sem faturamento"
-              : `maior faturamento · ${melhorMes.label}`
-          }
-          tone={melhorMes === null ? "muted" : "info"}
+          tone="info"
+          icon={<BarChart3 />}
         />
         <MetricCard
           label="Crescimento no último mês"
@@ -177,9 +188,9 @@ export function FaturamentoDashboard({
           }
           icon={
             crescimento === null ? undefined : crescimento >= 0 ? (
-              <TrendingUp className="size-4" />
+              <TrendingUp />
             ) : (
-              <TrendingDown className="size-4" />
+              <TrendingDown />
             )
           }
         />
