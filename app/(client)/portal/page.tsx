@@ -92,6 +92,7 @@ export default async function PortalHome() {
           <h2 className="text-sm font-semibold">Boletos em aberto</h2>
           <DocumentsTable
             documents={open}
+            showPreview
             showDownload
             showPaid
             emptyMessage="Você não tem boletos em aberto."
