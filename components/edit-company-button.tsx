@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { CnpjInput } from "@/components/masked-inputs";
 import type { Company } from "@/lib/types";
 
 export function EditCompanyButton({ company }: { company: Company }) {
@@ -82,7 +83,7 @@ export function EditCompanyButton({ company }: { company: Company }) {
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor={`cnpj-${company.id}`}>CNPJ *</Label>
-                <Input
+                <CnpjInput
                   id={`cnpj-${company.id}`}
                   name="cnpj"
                   required

@@ -6,6 +6,7 @@ import { PageHeader } from "@/components/page-header";
 import { getUserAndProfile } from "@/lib/auth";
 import { getClientCompanyContext } from "@/lib/companies";
 import { getUrgency } from "@/lib/dates";
+import { formatCurrency } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
 import type { DocumentWithCompany } from "@/lib/types";
 
@@ -27,14 +28,24 @@ export default async function PortalHome() {
   let vencidos = 0;
   let venceHoje = 0;
   let emBreve = 0;
+  let vencidosValor = 0;
+  let emBreveValor = 0;
   for (const d of open) {
     if (!d.due_date) continue;
     const { urgency } = getUrgency(d.due_date, d.status);
-    if (urgency === "vencido") vencidos++;
+    if (urgency === "vencido") {
+      vencidos++;
+      vencidosValor += d.amount ?? 0;
+    }
     if (urgency === "vence_hoje") venceHoje++;
-    if (["vence_hoje", "proximos_3", "proximos_7"].includes(urgency)) emBreve++;
+    if (["vence_hoje", "proximos_3", "proximos_7"].includes(urgency)) {
+      emBreve++;
+      emBreveValor += d.amount ?? 0;
+    }
   }
-  const pagos = boletos.filter((d) => d.status === "paid").length;
+  const pagosBoletos = boletos.filter((d) => d.status === "paid");
+  const pagos = pagosBoletos.length;
+  const pagosValor = pagosBoletos.reduce((s, d) => s + (d.amount ?? 0), 0);
 
   const companyName =
     active?.nome_fantasia ||
@@ -68,21 +79,21 @@ export default async function PortalHome() {
           <MetricCard
             label="Vencidos"
             value={vencidos}
-            sub="ação urgente"
+            sub={`${formatCurrency(vencidosValor)} em atraso`}
             tone="danger"
             icon={<AlertTriangle className="size-4" />}
           />
           <MetricCard
             label="Vencem em breve"
             value={emBreve}
-            sub="próximos 7 dias"
+            sub={`${formatCurrency(emBreveValor)} a vencer`}
             tone="warning"
             icon={<CalendarClock className="size-4" />}
           />
           <MetricCard
             label="Pagos"
             value={pagos}
-            sub="em dia"
+            sub={`${formatCurrency(pagosValor)} quitados`}
             tone="success"
             icon={<CheckCircle2 className="size-4" />}
           />

@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PageHeader } from "@/components/page-header";
 import { ClientActionsMenu } from "@/components/client-actions-menu";
+import { CnpjInput } from "@/components/masked-inputs";
 import { ConfirmActionButton } from "@/components/confirm-action-button";
 import { ConfirmDeleteButton } from "@/components/confirm-delete-button";
 import { EditClientButton } from "@/components/edit-client-button";
@@ -156,11 +157,7 @@ export default async function ClientesPage() {
                         <Label htmlFor={`cnpj-${c.id}`} className="text-xs">
                           CNPJ (novo)
                         </Label>
-                        <Input
-                          id={`cnpj-${c.id}`}
-                          name="cnpj"
-                          placeholder="00.000.000/0001-00"
-                        />
+                        <CnpjInput id={`cnpj-${c.id}`} name="cnpj" />
                       </div>
                     </div>
 

@@ -4,6 +4,7 @@ import { DocumentsTable } from "@/components/documents-table";
 import { MetricCard } from "@/components/metric-card";
 import { PageHeader } from "@/components/page-header";
 import { getUrgency } from "@/lib/dates";
+import { formatCurrency } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
 import type { DocumentWithCompany } from "@/lib/types";
 
@@ -23,13 +24,22 @@ export default async function PainelPage() {
 
   let vencidosHoje = 0;
   let vencendo = 0;
+  let vencidosHojeValor = 0;
+  let vencendoValor = 0;
   for (const d of open) {
     if (!d.due_date) continue;
     const { urgency } = getUrgency(d.due_date, d.status);
-    if (urgency === "vencido" || urgency === "vence_hoje") vencidosHoje++;
-    else if (urgency === "proximos_3" || urgency === "proximos_7") vencendo++;
+    if (urgency === "vencido" || urgency === "vence_hoje") {
+      vencidosHoje++;
+      vencidosHojeValor += d.amount ?? 0;
+    } else if (urgency === "proximos_3" || urgency === "proximos_7") {
+      vencendo++;
+      vencendoValor += d.amount ?? 0;
+    }
   }
-  const pagos = boletos.filter((d) => d.status === "paid").length;
+  const pagosBoletos = boletos.filter((d) => d.status === "paid");
+  const pagos = pagosBoletos.length;
+  const pagosValor = pagosBoletos.reduce((s, d) => s + (d.amount ?? 0), 0);
   const totalClientes = companies?.length ?? 0;
 
   return (
@@ -68,21 +78,21 @@ export default async function PainelPage() {
           <MetricCard
             label="Vencidos / hoje"
             value={vencidosHoje}
-            sub="ação urgente"
+            sub={`${formatCurrency(vencidosHojeValor)} em atraso`}
             tone="danger"
             icon={<AlertTriangle className="size-4" />}
           />
           <MetricCard
             label="Vencendo em breve"
             value={vencendo}
-            sub="próximos 7 dias"
+            sub={`${formatCurrency(vencendoValor)} a vencer`}
             tone="warning"
             icon={<CalendarClock className="size-4" />}
           />
           <MetricCard
             label="Pagos"
             value={pagos}
-            sub="em dia"
+            sub={`${formatCurrency(pagosValor)} quitados`}
             tone="success"
             icon={<CheckCircle2 className="size-4" />}
           />

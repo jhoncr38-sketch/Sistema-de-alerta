@@ -5,6 +5,7 @@ import { UploadCloud } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { CompetenciaInput, CurrencyInput } from "@/components/masked-inputs";
 import { CATEGORIA_LABELS, docTypeOptionsFor } from "@/lib/constants";
 import type { DocCategoria } from "@/lib/types";
 import { uploadDocument, type UploadState } from "./actions";
@@ -108,7 +109,7 @@ export function UploadForm({
             <Label htmlFor="competencia">
               {isFolha ? "Competência da folha (mês/ano)" : "Competência (mês/ano)"}
             </Label>
-            <Input id="competencia" name="competencia" placeholder="06/2026" required />
+            <CompetenciaInput id="competencia" name="competencia" required />
           </div>
         ) : null}
 
@@ -116,7 +117,7 @@ export function UploadForm({
           <>
             <div className="space-y-1.5">
               <Label htmlFor="amount">Valor (R$)</Label>
-              <Input id="amount" name="amount" inputMode="decimal" placeholder="1.240,00" required />
+              <CurrencyInput id="amount" name="amount" placeholder="1.240,00" required />
             </div>
 
             <div className="space-y-1.5">
@@ -129,10 +130,9 @@ export function UploadForm({
                 Faturamento do mês (R$){" "}
                 <span className="text-muted-foreground">— opcional</span>
               </Label>
-              <Input
+              <CurrencyInput
                 id="faturamento"
                 name="faturamento"
-                inputMode="decimal"
                 placeholder="50.000,00"
               />
               <p className="text-xs text-muted-foreground">

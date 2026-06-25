@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { CnpjInput } from "@/components/masked-inputs";
 
 export function NewCompanyButton() {
   const [open, setOpen] = useState(false);
@@ -77,12 +78,7 @@ export function NewCompanyButton() {
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="cnpj">CNPJ *</Label>
-                <Input
-                  id="cnpj"
-                  name="cnpj"
-                  required
-                  placeholder="00.000.000/0001-00"
-                />
+                <CnpjInput id="cnpj" name="cnpj" required />
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="email">E-mail</Label>
