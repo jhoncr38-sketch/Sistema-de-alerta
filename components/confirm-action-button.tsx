@@ -1,7 +1,7 @@
 "use client";
 
 import { type ReactNode, useState, useTransition } from "react";
-import { Loader2, type LucideIcon } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -29,7 +29,7 @@ type ButtonVariant =
  */
 export function ConfirmActionButton({
   action,
-  icon: Icon,
+  icon,
   triggerLabel,
   triggerVariant = "outline",
   title,
@@ -39,7 +39,12 @@ export function ConfirmActionButton({
   successMessage = "Feito.",
 }: {
   action: () => Promise<void>;
-  icon: LucideIcon;
+  /**
+   * Ícone já como ELEMENTO (ex.: <ShieldCheck />), não como componente.
+   * Componentes (server components do lucide) não cruzam a fronteira
+   * Server→Client; elementos JSX sim.
+   */
+  icon: ReactNode;
   triggerLabel: string;
   triggerVariant?: ButtonVariant;
   title: string;
@@ -72,7 +77,7 @@ export function ConfirmActionButton({
         onClick={() => setOpen(true)}
         title={title}
       >
-        <Icon />
+        {icon}
         {triggerLabel}
       </Button>
 
@@ -92,7 +97,7 @@ export function ConfirmActionButton({
               onClick={handleConfirm}
               disabled={pending}
             >
-              {pending ? <Loader2 className="animate-spin" /> : <Icon />}
+              {pending ? <Loader2 className="animate-spin" /> : icon}
               {confirmLabel}
             </Button>
           </DialogFooter>

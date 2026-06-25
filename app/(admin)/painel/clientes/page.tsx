@@ -320,7 +320,7 @@ export default async function ClientesPage() {
                             />
                             <ConfirmActionButton
                               action={promoteToAdmin.bind(null, c.id)}
-                              icon={ShieldCheck}
+                              icon={<ShieldCheck />}
                               triggerLabel="Tornar contador"
                               triggerVariant="ghost"
                               confirmLabel="Tornar contador"
@@ -403,7 +403,7 @@ export default async function ClientesPage() {
                           {isMe ? null : (
                             <ConfirmActionButton
                               action={demoteToClient.bind(null, a.id)}
-                              icon={ShieldOff}
+                              icon={<ShieldOff />}
                               triggerLabel="Remover acesso"
                               triggerVariant="ghost"
                               confirmVariant="destructive"
