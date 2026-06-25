@@ -4,6 +4,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PageHeader } from "@/components/page-header";
+import { ClientActionsMenu } from "@/components/client-actions-menu";
 import { ConfirmActionButton } from "@/components/confirm-action-button";
 import { ConfirmDeleteButton } from "@/components/confirm-delete-button";
 import { EditClientButton } from "@/components/edit-client-button";
@@ -318,25 +319,6 @@ export default async function ClientesPage() {
                               companies={companies}
                               linkedIds={linkedIds}
                             />
-                            <ConfirmActionButton
-                              action={promoteToAdmin.bind(null, c.id)}
-                              icon={<ShieldCheck />}
-                              triggerLabel="Tornar contador"
-                              triggerVariant="ghost"
-                              confirmLabel="Tornar contador"
-                              successMessage="Cliente agora tem acesso de contador."
-                              title="Dar acesso de contador?"
-                              description={
-                                <>
-                                  <strong>{c.name}</strong> passará a ver o{" "}
-                                  <strong>painel completo do contador</strong>,
-                                  com todos os clientes, empresas e documentos do
-                                  escritório. Use apenas para sócios ou
-                                  assistentes de confiança. Você pode remover o
-                                  acesso depois.
-                                </>
-                              }
-                            />
                             <ConfirmDeleteButton
                               action={deleteClient.bind(null, c.id)}
                               title="Apagar cliente?"
@@ -352,6 +334,10 @@ export default async function ClientesPage() {
                                   desfeita.
                                 </>
                               }
+                            />
+                            <ClientActionsMenu
+                              clientName={c.name}
+                              promoteAction={promoteToAdmin.bind(null, c.id)}
                             />
                           </div>
                         </td>
