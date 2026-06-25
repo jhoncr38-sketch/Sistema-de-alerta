@@ -190,6 +190,39 @@ export async function approveClient(formData: FormData) {
   revalidateClientes();
 }
 
+/**
+ * Apaga o CADASTRO de um cliente (login/pessoa) da base — sem mexer nas
+ * empresas, que são do contador e podem ter outros clientes vinculados.
+ * Apagar o usuário do Auth cascateia automaticamente: o profile
+ * (on delete cascade) e os vínculos em client_companies (on delete cascade).
+ * Os documentos/boletos permanecem, pois pertencem à EMPRESA, não ao cliente.
+ * Trava de segurança: só apaga linhas com role='client'; o contador (admin)
+ * nunca é apagado. Usa o service-role porque apagar usuários do Auth exige
+ * privilégio. Irreversível.
+ */
+export async function deleteClient(userId: string) {
+  await requireAdmin();
+  if (!userId) return;
+
+  const admin = createAdminClient();
+
+  // Garante que o alvo é mesmo um cliente (nunca apaga o contador/admin).
+  const { data: prof } = await admin
+    .from("profiles")
+    .select("role")
+    .eq("id", userId)
+    .single();
+  if (!prof || prof.role !== "client") {
+    throw new Error("Só é possível apagar cadastros de clientes.");
+  }
+
+  const { error } = await admin.auth.admin.deleteUser(userId);
+  if (error) throw new Error(error.message);
+
+  revalidatePath("/painel/clientes");
+  revalidatePath("/painel");
+}
+
 /** Recusa um cadastro pendente. */
 export async function rejectClient(formData: FormData) {
   await requireAdmin();

@@ -10,7 +10,12 @@ import { EditCompanyButton } from "@/components/edit-company-button";
 import { NewCompanyButton } from "@/components/new-company-button";
 import { createClient } from "@/lib/supabase/server";
 import type { Company, ProfileWithCompany } from "@/lib/types";
-import { approveClient, deleteCompany, rejectClient } from "./actions";
+import {
+  approveClient,
+  deleteClient,
+  deleteCompany,
+  rejectClient,
+} from "./actions";
 
 const selectClass =
   "h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
@@ -291,11 +296,27 @@ export default async function ClientesPage() {
                           )}
                         </td>
                         <td className="px-4 py-3">
-                          <div className="flex justify-end">
+                          <div className="flex justify-end gap-1">
                             <EditClientButton
                               client={c}
                               companies={companies}
                               linkedIds={linkedIds}
+                            />
+                            <ConfirmDeleteButton
+                              action={deleteClient.bind(null, c.id)}
+                              title="Apagar cliente?"
+                              confirmLabel="Apagar cliente"
+                              successMessage="Cliente apagado do sistema."
+                              description={
+                                <>
+                                  O cadastro de <strong>{c.name}</strong>
+                                  {c.email ? ` (${c.email})` : ""} será removido,
+                                  junto com o login de acesso e os vínculos com
+                                  as empresas. As empresas e seus documentos
+                                  permanecem no sistema. Esta ação não pode ser
+                                  desfeita.
+                                </>
+                              }
                             />
                           </div>
                         </td>
