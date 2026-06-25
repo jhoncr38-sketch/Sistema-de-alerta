@@ -23,6 +23,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Brand } from "@/components/brand";
 import { CompanySwitcher } from "@/components/company-switcher";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { createClient } from "@/lib/supabase/client";
 import type { Company, Role } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -138,6 +139,7 @@ export function AppSidebar({
         <div className="truncate text-sm font-medium">{userName}</div>
         <div className="truncate text-xs text-muted-foreground">{roleLabel}</div>
       </div>
+      <ThemeToggle />
       <Button
         variant="ghost"
         size="icon-sm"
