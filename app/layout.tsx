@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "ContAlert — Obrigações Contábeis",
+  title: "S J Contabilidade",
   description:
     "Portal de boletos e obrigações contábeis: seus clientes baixam documentos e recebem alertas de vencimento.",
 };
