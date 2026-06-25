@@ -5,6 +5,55 @@ import { requireAdmin } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
+export interface CompanyFormState {
+  error?: string;
+  ok?: boolean;
+}
+
+/**
+ * Cadastra uma empresa avulsa (sem depender de um cadastro de cliente).
+ * Útil para pré-cadastrar empresas que o contador já atende e enviar
+ * documentos antes mesmo do cliente criar um login.
+ */
+export async function createCompany(
+  _prev: CompanyFormState,
+  formData: FormData,
+): Promise<CompanyFormState> {
+  await requireAdmin();
+  const supabase = await createClient();
+
+  const razao = String(formData.get("razao_social") ?? "").trim();
+  const fantasia = String(formData.get("nome_fantasia") ?? "").trim();
+  const cnpj = String(formData.get("cnpj") ?? "").trim();
+  const email = String(formData.get("email") ?? "").trim();
+  const phone = String(formData.get("phone") ?? "").trim();
+
+  if (!razao || !cnpj) {
+    return { error: "Informe ao menos a razão social e o CNPJ." };
+  }
+
+  const { error } = await supabase.from("companies").insert({
+    razao_social: razao,
+    nome_fantasia: fantasia || null,
+    cnpj,
+    email: email || null,
+    phone: phone || null,
+  });
+
+  if (error) {
+    if (error.code === "23505") {
+      return { error: "Já existe uma empresa com esse CNPJ." };
+    }
+    return { error: error.message };
+  }
+
+  revalidatePath("/painel/clientes");
+  revalidatePath("/painel/faturamento");
+  revalidatePath("/painel/documentos");
+  revalidatePath("/painel/enviar");
+  return { ok: true };
+}
+
 /** Aprova um cliente pendente e vincula a uma empresa (existente ou nova). */
 export async function approveClient(formData: FormData) {
   await requireAdmin();

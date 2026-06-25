@@ -1,10 +1,11 @@
-import { Building2, UserCheck } from "lucide-react";
+import { Building2, UserCheck, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PageHeader } from "@/components/page-header";
 import { ConfirmDeleteButton } from "@/components/confirm-delete-button";
+import { NewCompanyButton } from "@/components/new-company-button";
 import { createClient } from "@/lib/supabase/server";
 import type { Company, ProfileWithCompany } from "@/lib/types";
 import { approveClient, deleteCompany, rejectClient } from "./actions";
@@ -28,12 +29,23 @@ export default async function ClientesPage() {
   const pending = clients.filter((c) => c.status === "pending");
   const approved = clients.filter((c) => c.status === "approved");
 
+  // Clientes (logins) aprovados vinculados a cada empresa.
+  const clientsByCompany = new Map<string, ProfileWithCompany[]>();
+  for (const c of approved) {
+    if (!c.company_id) continue;
+    const arr = clientsByCompany.get(c.company_id) ?? [];
+    arr.push(c);
+    clientsByCompany.set(c.company_id, arr);
+  }
+
   return (
     <>
       <PageHeader
         title="Clientes"
         subtitle="Aprove cadastros e vincule cada cliente à empresa (CNPJ)"
-      />
+      >
+        <NewCompanyButton />
+      </PageHeader>
       <div className="space-y-8 p-6">
         <section className="space-y-3">
           <h2 className="flex items-center gap-2 text-sm font-semibold">
@@ -124,7 +136,83 @@ export default async function ClientesPage() {
 
         <section className="space-y-3">
           <h2 className="flex items-center gap-2 text-sm font-semibold">
-            <Building2 className="size-4" /> Clientes ativos
+            <Building2 className="size-4" /> Empresas
+          </h2>
+          <div className="overflow-x-auto rounded-xl border bg-card">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b bg-muted/50 text-left text-xs text-muted-foreground uppercase">
+                  <th className="px-4 py-2.5 font-medium">Empresa</th>
+                  <th className="px-4 py-2.5 font-medium">CNPJ</th>
+                  <th className="px-4 py-2.5 font-medium">Contato</th>
+                  <th className="px-4 py-2.5 font-medium">Clientes com acesso</th>
+                  <th className="px-4 py-2.5 font-medium" />
+                </tr>
+              </thead>
+              <tbody>
+                {companies.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={5}
+                      className="px-4 py-8 text-center text-muted-foreground"
+                    >
+                      Nenhuma empresa cadastrada. Use “Cadastrar empresa” para
+                      adicionar a primeira.
+                    </td>
+                  </tr>
+                ) : (
+                  companies.map((co) => {
+                    const nome = co.nome_fantasia || co.razao_social;
+                    const vinculados = clientsByCompany.get(co.id) ?? [];
+                    return (
+                      <tr key={co.id} className="border-b last:border-0">
+                        <td className="px-4 py-3 font-medium">{nome}</td>
+                        <td className="px-4 py-3 text-muted-foreground">
+                          {co.cnpj}
+                        </td>
+                        <td className="px-4 py-3 text-muted-foreground">
+                          {co.email || "—"}
+                        </td>
+                        <td className="px-4 py-3 text-muted-foreground">
+                          {vinculados.length > 0 ? (
+                            vinculados.map((v) => v.name).join(", ")
+                          ) : (
+                            <span className="text-muted-foreground/60">
+                              Sem acesso ainda
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex justify-end">
+                            <ConfirmDeleteButton
+                              action={deleteCompany.bind(null, co.id)}
+                              title="Apagar empresa?"
+                              confirmLabel="Apagar empresa"
+                              successMessage="Empresa apagada do sistema."
+                              description={
+                                <>
+                                  A empresa <strong>{nome}</strong>
+                                  {co.cnpj ? ` (${co.cnpj})` : ""} será removida
+                                  com todos os boletos, documentos, histórico de
+                                  faturamento e o acesso dos clientes vinculados.
+                                  Esta ação não pode ser desfeita.
+                                </>
+                              }
+                            />
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section className="space-y-3">
+          <h2 className="flex items-center gap-2 text-sm font-semibold">
+            <Users className="size-4" /> Clientes ativos
           </h2>
           <div className="overflow-x-auto rounded-xl border bg-card">
             <table className="w-full text-sm">
@@ -134,14 +222,13 @@ export default async function ClientesPage() {
                   <th className="px-4 py-2.5 font-medium">E-mail</th>
                   <th className="px-4 py-2.5 font-medium">Empresa</th>
                   <th className="px-4 py-2.5 font-medium">CNPJ</th>
-                  <th className="px-4 py-2.5 font-medium" />
                 </tr>
               </thead>
               <tbody>
                 {approved.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={5}
+                      colSpan={4}
                       className="px-4 py-8 text-center text-muted-foreground"
                     >
                       Nenhum cliente ativo ainda.
@@ -160,30 +247,6 @@ export default async function ClientesPage() {
                         <td className="px-4 py-3">{companyName || "—"}</td>
                         <td className="px-4 py-3 text-muted-foreground">
                           {c.company?.cnpj ?? "—"}
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="flex justify-end">
-                            {c.company ? (
-                              <ConfirmDeleteButton
-                                action={deleteCompany.bind(null, c.company.id)}
-                                title="Apagar empresa?"
-                                confirmLabel="Apagar empresa"
-                                successMessage="Empresa apagada do sistema."
-                                description={
-                                  <>
-                                    A empresa <strong>{companyName}</strong>
-                                    {c.company.cnpj
-                                      ? ` (${c.company.cnpj})`
-                                      : ""}{" "}
-                                    será removida com todos os boletos,
-                                    documentos, histórico de faturamento e o
-                                    acesso dos clientes vinculados. Esta ação não
-                                    pode ser desfeita.
-                                  </>
-                                }
-                              />
-                            ) : null}
-                          </div>
                         </td>
                       </tr>
                     );
