@@ -11,9 +11,11 @@ export async function getUserAndProfile() {
 
   if (!user) return { user: null, profile: null as ProfileWithCompany | null };
 
+  // Desambigua a relação: profiles tem 2 caminhos até companies (company_id
+  // direto e o N-para-N via client_companies). Usamos a FK direta (principal).
   const { data: profile } = await supabase
     .from("profiles")
-    .select("*, company:companies(*)")
+    .select("*, company:companies!profiles_company_id_fkey(*)")
     .eq("id", user.id)
     .single();
 

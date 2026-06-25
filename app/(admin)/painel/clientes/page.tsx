@@ -21,7 +21,8 @@ export default async function ClientesPage() {
     await Promise.all([
       supabase
         .from("profiles")
-        .select("*, company:companies(*)")
+        // Desambigua: profiles tem 2 caminhos até companies (FK direta + N-para-N).
+        .select("*, company:companies!profiles_company_id_fkey(*)")
         .eq("role", "client")
         .order("created_at", { ascending: false }),
       supabase.from("companies").select("*").order("razao_social"),
