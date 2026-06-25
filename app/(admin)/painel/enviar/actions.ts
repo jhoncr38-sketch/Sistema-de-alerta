@@ -41,7 +41,13 @@ export async function uploadDocument(
   const competencia = normalizeCompetencia(
     String(formData.get("competencia") ?? ""),
   );
-  const file = formData.get("file");
+
+  // Folha pode ter vários arquivos (folha, recibo, frequência...). Boleto e
+  // documento usam apenas um.
+  const allFiles = formData
+    .getAll("file")
+    .filter((f): f is File => f instanceof File && f.size > 0);
+  const files = isBoleto ? allFiles.slice(0, 1) : allFiles;
 
   if (!companyId || !type) {
     return { error: "Preencha todos os campos." };
@@ -76,44 +82,59 @@ export async function uploadDocument(
     }
   }
 
-  if (!(file instanceof File) || file.size === 0) {
-    return { error: "Anexe o arquivo (PDF)." };
+  if (files.length === 0) {
+    return { error: "Anexe ao menos um arquivo (PDF)." };
   }
-  if (file.size > 10 * 1024 * 1024) {
-    return { error: "Arquivo muito grande (máx. 10MB)." };
+  for (const f of files) {
+    if (f.size > 10 * 1024 * 1024) {
+      return { error: `O arquivo “${f.name}” é muito grande (máx. 10MB).` };
+    }
   }
 
   const supabase = await createClient();
-  const docId = crypto.randomUUID();
-  const safeName = file.name.replace(/[^\w.\-]+/g, "_");
-  const path = `${companyId}/${docId}-${safeName}`;
 
-  const { error: uploadError } = await supabase.storage
-    .from("boletos")
-    .upload(path, file, {
-      contentType: file.type || "application/pdf",
-      upsert: false,
+  // Sobe cada arquivo e monta uma linha de documento por arquivo (todos com a
+  // mesma competência/categoria — agrupam por mês na tela do cliente).
+  const uploadedPaths: string[] = [];
+  const rows = [];
+  for (const file of files) {
+    const docId = crypto.randomUUID();
+    const safeName = file.name.replace(/[^\w.\-]+/g, "_");
+    const path = `${companyId}/${docId}-${safeName}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from("boletos")
+      .upload(path, file, {
+        contentType: file.type || "application/pdf",
+        upsert: false,
+      });
+    if (uploadError) {
+      if (uploadedPaths.length) {
+        await supabase.storage.from("boletos").remove(uploadedPaths);
+      }
+      return { error: `Falha ao enviar o arquivo: ${uploadError.message}` };
+    }
+    uploadedPaths.push(path);
+
+    rows.push({
+      id: docId,
+      company_id: companyId,
+      type,
+      categoria,
+      competencia: competencia || null, // documento da empresa pode não ter mês
+      amount,
+      due_date: dueDate,
+      file_path: path,
+      file_name: file.name,
+      uploaded_by: profile.id,
     });
-  if (uploadError) {
-    return { error: `Falha ao enviar o arquivo: ${uploadError.message}` };
   }
 
-  const { error: insertError } = await supabase.from("documents").insert({
-    id: docId,
-    company_id: companyId,
-    type,
-    categoria,
-    competencia: competencia || null, // documento da empresa pode não ter mês
-    amount,
-    due_date: dueDate,
-    file_path: path,
-    file_name: file.name,
-    uploaded_by: profile.id,
-  });
+  const { error: insertError } = await supabase.from("documents").insert(rows);
 
   if (insertError) {
-    // desfaz o upload se o registro falhar
-    await supabase.storage.from("boletos").remove([path]);
+    // desfaz os uploads se o registro falhar
+    await supabase.storage.from("boletos").remove(uploadedPaths);
     return { error: `Falha ao salvar o registro: ${insertError.message}` };
   }
 

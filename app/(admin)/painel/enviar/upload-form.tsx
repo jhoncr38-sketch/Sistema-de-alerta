@@ -155,15 +155,15 @@ export function UploadForm({
           {isBoleto
             ? "Arquivo do boleto"
             : isFolha
-              ? "Arquivo da folha"
+              ? "Arquivos da folha"
               : "Arquivo do documento"}
         </Label>
         <div className="rounded-xl border border-dashed bg-muted/30 p-6 text-center">
           <UploadCloud className="mx-auto size-7 text-muted-foreground" />
           <p className="mt-2 text-sm text-muted-foreground">
-            Selecione o PDF{" "}
-            {isBoleto ? "do boleto" : isFolha ? "da folha" : "do documento"} (até
-            10MB)
+            {isFolha
+              ? "Selecione um ou vários PDFs da folha (folha, recibo, frequência...) — até 10MB cada"
+              : `Selecione o PDF ${isBoleto ? "do boleto" : "do documento"} (até 10MB)`}
           </p>
           <Input
             id="file"
@@ -171,8 +171,15 @@ export function UploadForm({
             type="file"
             accept="application/pdf,image/png,image/jpeg"
             required
+            multiple={isFolha}
             className="mx-auto mt-3 max-w-xs"
           />
+          {isFolha ? (
+            <p className="mt-2 text-xs text-muted-foreground">
+              Dica: segure Ctrl (ou Cmd) para escolher vários arquivos de uma
+              vez. Eles ficam agrupados nesta competência.
+            </p>
+          ) : null}
         </div>
       </div>
 
