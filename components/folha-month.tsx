@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDown, Download, Eye, FileText } from "lucide-react";
+import { ChevronDown, Download, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { FilePreviewButton } from "@/components/file-preview-button";
 import type { DocumentWithCompany } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -57,21 +58,7 @@ export function FolhaMonth({
                 <span className="truncate text-sm">{nomeArquivo(d)}</span>
               </div>
               <div className="flex shrink-0 items-center gap-2">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  nativeButton={false}
-                  render={
-                    <a
-                      href={`/api/documents/${d.id}/download?view=1`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      <Eye />
-                      <span className="hidden sm:inline">Visualizar</span>
-                    </a>
-                  }
-                />
+                <FilePreviewButton docId={d.id} fileName={nomeArquivo(d)} />
                 <Button
                   variant="outline"
                   size="sm"

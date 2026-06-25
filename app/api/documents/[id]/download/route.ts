@@ -34,7 +34,10 @@ export async function GET(
 
   const { data: signed, error } = await supabase.storage
     .from("boletos")
-    .createSignedUrl(doc.file_path, 60, inline ? {} : { download: doc.file_name });
+    // Mais tempo na visualização (fica aberto na tela); download é rápido.
+    .createSignedUrl(doc.file_path, inline ? 600 : 60, {
+      ...(inline ? {} : { download: doc.file_name }),
+    });
 
   if (error || !signed) {
     return new NextResponse(
