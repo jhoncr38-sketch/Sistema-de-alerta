@@ -22,6 +22,7 @@ export default async function MeusBoletosPage() {
       <div className="p-6">
         <DocumentsTable
           documents={docs}
+          showPreview
           showDownload
           showPaid
           emptyMessage="Nenhum boleto disponível no momento."

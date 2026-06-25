@@ -1,6 +1,7 @@
 import { Download, FileText } from "lucide-react";
 import { deleteDocument } from "@/app/actions/documents";
 import { ConfirmDeleteButton } from "@/components/confirm-delete-button";
+import { FilePreviewButton } from "@/components/file-preview-button";
 import { Button } from "@/components/ui/button";
 import { PaidToggle } from "@/components/paid-toggle";
 import { StatusBadge } from "@/components/status-badge";
@@ -13,6 +14,7 @@ export function DocumentsTable({
   documents,
   showClient = false,
   showDownload = false,
+  showPreview = false,
   showPaid = false,
   showDelete = false,
   emptyMessage = "Nenhum boleto encontrado.",
@@ -20,12 +22,14 @@ export function DocumentsTable({
   documents: DocumentWithCompany[];
   showClient?: boolean;
   showDownload?: boolean;
+  /** Botão "Visualizar": abre o arquivo num preview dentro da página (modal). */
+  showPreview?: boolean;
   showPaid?: boolean;
   /** Só nas telas do contador: botão de apagar o documento do sistema. */
   showDelete?: boolean;
   emptyMessage?: string;
 }) {
-  const showActions = showDownload || showDelete;
+  const showActions = showDownload || showPreview || showDelete;
 
   if (documents.length === 0) {
     return (
@@ -55,6 +59,12 @@ export function DocumentsTable({
         Informativo
       </span>
     );
+  }
+
+  function previewButton(doc: DocumentWithCompany) {
+    const nome =
+      docTypeLabel(doc.type) + (doc.competencia ? ` · ${doc.competencia}` : "");
+    return <FilePreviewButton docId={doc.id} fileName={nome} />;
   }
 
   function downloadButton(doc: DocumentWithCompany) {
@@ -152,6 +162,7 @@ export function DocumentsTable({
                   {showPaid && isBoleto ? (
                     <PaidToggle docId={doc.id} paid={doc.status === "paid"} />
                   ) : null}
+                  {showPreview ? previewButton(doc) : null}
                   {showDownload ? downloadButton(doc) : null}
                   {showDelete ? (
                     <div className="ml-auto">{deleteButton(doc)}</div>
@@ -234,6 +245,7 @@ export function DocumentsTable({
                   {showActions ? (
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-end gap-1">
+                        {showPreview ? previewButton(doc) : null}
                         {showDownload ? downloadButton(doc) : null}
                         {showDelete ? deleteButton(doc) : null}
                       </div>

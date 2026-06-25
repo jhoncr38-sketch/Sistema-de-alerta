@@ -24,14 +24,16 @@ export default async function PortalDocumentosPage() {
       <div className="space-y-4 p-6">
         <DocumentsTable
           documents={docs}
+          showPreview
           showDownload
           emptyMessage="Nenhum documento disponível. Aqui ficam os documentos da empresa publicados pelo seu contador."
         />
 
         <div className="flex items-center gap-2 rounded-lg bg-muted px-4 py-3 text-xs text-muted-foreground">
           <Info className="size-4 shrink-0" />
-          Documentos da empresa são apenas para baixar. Boletos ficam em “Meus
-          boletos” e a folha mensal em “Folha de pagamento”.
+          Use “Visualizar” para abrir o documento na tela ou “Baixar” para
+          salvar. Boletos ficam em “Meus boletos” e a folha mensal em “Folha de
+          pagamento”.
         </div>
       </div>
     </>
