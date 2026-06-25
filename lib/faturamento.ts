@@ -17,13 +17,69 @@ export interface MonthlyPoint {
   carga: number | null; // % (tributos / faturamento); null se não há faturamento
 }
 
-export interface FaturamentoSummary {
-  data: MonthlyPoint[];
+/** Indicadores derivados de um intervalo de meses (usado pelo filtro de período). */
+export interface PeriodSummary {
   totalFaturamento: number;
   totalTributos: number;
   cargaMedia: number | null; // % no período
   crescimento: number | null; // % do último mês com faturamento vs. o anterior
   periodoLabel: string | null; // intervalo real coberto, ex. "abr/26 – jun/26"
+  mediaMensal: number | null; // faturamento médio dos meses faturados
+  melhorMes: MonthlyPoint | null; // mês de maior faturamento no período
+}
+
+export interface FaturamentoSummary extends PeriodSummary {
+  data: MonthlyPoint[];
+}
+
+/**
+ * Deriva totais e indicadores de pontos mensais já agregados.
+ * É puro (não mexe em datas), então roda tanto no servidor quanto no cliente —
+ * é o que permite o filtro de período recalcular os cards na hora.
+ */
+export function summarizePoints(data: MonthlyPoint[]): PeriodSummary {
+  const totalFaturamento = data.reduce((s, d) => s + d.faturamento, 0);
+  const totalTributos = data.reduce((s, d) => s + d.tributos, 0);
+  const cargaMedia =
+    totalFaturamento > 0 ? (totalTributos / totalFaturamento) * 100 : null;
+
+  const comFaturamento = data.filter((d) => d.faturamento > 0);
+  let crescimento: number | null = null;
+  if (comFaturamento.length >= 2) {
+    const ultimo = comFaturamento[comFaturamento.length - 1].faturamento;
+    const anterior = comFaturamento[comFaturamento.length - 2].faturamento;
+    if (anterior > 0) crescimento = ((ultimo - anterior) / anterior) * 100;
+  }
+
+  const mediaMensal =
+    comFaturamento.length > 0 ? totalFaturamento / comFaturamento.length : null;
+
+  let melhorMes: MonthlyPoint | null = null;
+  for (const d of data) {
+    if (
+      d.faturamento > 0 &&
+      (melhorMes === null || d.faturamento > melhorMes.faturamento)
+    ) {
+      melhorMes = d;
+    }
+  }
+
+  const periodoLabel =
+    data.length === 0
+      ? null
+      : data.length === 1
+        ? data[0].label
+        : `${data[0].label} – ${data[data.length - 1].label}`;
+
+  return {
+    totalFaturamento,
+    totalTributos,
+    cargaMedia,
+    crescimento,
+    periodoLabel,
+    mediaMensal,
+    melhorMes,
+  };
 }
 
 export interface DocInput {
@@ -100,32 +156,5 @@ export function buildFaturamento(
         agg.faturamento > 0 ? (agg.tributos / agg.faturamento) * 100 : null,
     }));
 
-  const totalFaturamento = data.reduce((s, d) => s + d.faturamento, 0);
-  const totalTributos = data.reduce((s, d) => s + d.tributos, 0);
-  const cargaMedia =
-    totalFaturamento > 0 ? (totalTributos / totalFaturamento) * 100 : null;
-
-  const comFaturamento = data.filter((d) => d.faturamento > 0);
-  let crescimento: number | null = null;
-  if (comFaturamento.length >= 2) {
-    const ultimo = comFaturamento[comFaturamento.length - 1].faturamento;
-    const anterior = comFaturamento[comFaturamento.length - 2].faturamento;
-    if (anterior > 0) crescimento = ((ultimo - anterior) / anterior) * 100;
-  }
-
-  const periodoLabel =
-    data.length === 0
-      ? null
-      : data.length === 1
-        ? data[0].label
-        : `${data[0].label} – ${data[data.length - 1].label}`;
-
-  return {
-    data,
-    totalFaturamento,
-    totalTributos,
-    cargaMedia,
-    crescimento,
-    periodoLabel,
-  };
+  return { data, ...summarizePoints(data) };
 }

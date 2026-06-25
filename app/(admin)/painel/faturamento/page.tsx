@@ -1,15 +1,12 @@
-import { TrendingDown, TrendingUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { MetricCard } from "@/components/metric-card";
+import { FaturamentoDashboard } from "@/components/faturamento-dashboard";
 import { PageHeader } from "@/components/page-header";
-import { RevenueCharts } from "@/components/revenue-charts";
 import {
   buildFaturamento,
   type DocInput,
   type RevenueInput,
 } from "@/lib/faturamento";
-import { formatCurrency } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
 import type { Company } from "@/lib/types";
 
@@ -17,10 +14,6 @@ const selectClass =
   "h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
 
 const CARTEIRA = "all";
-
-function formatPct(v: number): string {
-  return `${v.toFixed(1).replace(".", ",")}%`;
-}
 
 export default async function FaturamentoPage({
   searchParams,
@@ -75,19 +68,13 @@ export default async function FaturamentoPage({
     revQuery,
   ]);
 
-  const {
-    data,
-    totalFaturamento,
-    totalTributos,
-    cargaMedia,
-    crescimento,
-    periodoLabel,
-  } = buildFaturamento(
+  // 24 meses de histórico para o filtro de período ter o que recortar.
+  const { data } = buildFaturamento(
     (docsRaw ?? []) as DocInput[],
     (revenuesRaw ?? []) as RevenueInput[],
+    24,
   );
 
-  const hasData = data.length > 0;
   const subtitleAlvo = isCarteira
     ? "carteira (todos os clientes)"
     : selected!.nome_fantasia || selected!.razao_social;
@@ -114,64 +101,10 @@ export default async function FaturamentoPage({
       </PageHeader>
 
       <div className="space-y-6 p-6">
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <MetricCard
-            label="Faturamento no período"
-            value={formatCurrency(totalFaturamento)}
-            sub={periodoLabel ?? "sem lançamentos"}
-          />
-          <MetricCard
-            label="Tributos no período"
-            value={formatCurrency(totalTributos)}
-            sub="DAS, DARF, INSS, ISS"
-          />
-          <MetricCard
-            label="Carga tributária média"
-            value={cargaMedia === null ? "—" : formatPct(cargaMedia)}
-            sub="imposto / faturamento"
-            tone={
-              cargaMedia === null
-                ? "muted"
-                : cargaMedia >= 20
-                  ? "danger"
-                  : cargaMedia >= 12
-                    ? "warning"
-                    : "success"
-            }
-          />
-          <MetricCard
-            label="Crescimento no último mês"
-            value={
-              crescimento === null
-                ? "—"
-                : `${crescimento >= 0 ? "+" : ""}${formatPct(crescimento)}`
-            }
-            sub="vs. mês anterior"
-            tone={
-              crescimento === null
-                ? "muted"
-                : crescimento >= 0
-                  ? "success"
-                  : "danger"
-            }
-            icon={
-              crescimento === null ? undefined : crescimento >= 0 ? (
-                <TrendingUp className="size-4" />
-              ) : (
-                <TrendingDown className="size-4" />
-              )
-            }
-          />
-        </div>
-
-        {hasData ? (
-          <RevenueCharts data={data} />
-        ) : (
-          <Card className="px-6 py-10 text-center text-sm text-muted-foreground">
-            Nenhum faturamento lançado ainda. Informe o faturamento do mês ao
-            enviar um documento em “Enviar documento”.
-          </Card>
-        )}
+        <FaturamentoDashboard
+          data={data}
+          emptyMessage="Nenhum faturamento lançado ainda. Informe o faturamento do mês ao enviar um documento em “Enviar documento”."
+        />
       </div>
     </>
   );
