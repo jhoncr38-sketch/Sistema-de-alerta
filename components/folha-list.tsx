@@ -1,5 +1,4 @@
-import { Download, FileText } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { FolhaMonth } from "@/components/folha-month";
 import type { DocumentWithCompany } from "@/lib/types";
 
 const MESES_LONGOS = [
@@ -24,15 +23,9 @@ function mesLabel(competencia: string | null): string {
   return `${MESES_LONGOS[Number(m[1]) - 1] ?? m[1]} / ${m[2]}`;
 }
 
-/** Nome do arquivo sem a extensão, para exibir limpo. */
-function nomeArquivo(d: DocumentWithCompany): string {
-  return d.file_name.replace(/\.[^.]+$/, "");
-}
-
 /**
- * Lista a folha agrupada por mês (competência): um cartão por mês com os
- * arquivos daquele mês dentro. Mantém a tela do cliente limpa mesmo com
- * vários anexos (folha, recibo, frequência...).
+ * Lista a folha agrupada por mês (competência): um cartão recolhível por mês
+ * com os arquivos daquele mês dentro. O mês mais recente já vem aberto.
  */
 export function FolhaList({
   documents,
@@ -48,8 +41,7 @@ export function FolhaList({
     );
   }
 
-  // Agrupa por competência preservando a ordem recebida (já vem mais recente
-  // primeiro).
+  // Agrupa por competência preservando a ordem recebida (mais recente primeiro).
   const grupos: { competencia: string | null; docs: DocumentWithCompany[] }[] =
     [];
   const indexByKey = new Map<string, number>();
@@ -66,42 +58,13 @@ export function FolhaList({
 
   return (
     <div className="space-y-3">
-      {grupos.map((g) => (
-        <div
+      {grupos.map((g, i) => (
+        <FolhaMonth
           key={g.competencia ?? "—"}
-          className="overflow-hidden rounded-xl border bg-card"
-        >
-          <div className="flex items-center justify-between gap-3 border-b bg-muted/40 px-4 py-3">
-            <div className="font-medium">{mesLabel(g.competencia)}</div>
-            <div className="text-xs text-muted-foreground">
-              {g.docs.length} {g.docs.length === 1 ? "arquivo" : "arquivos"}
-            </div>
-          </div>
-          <ul className="divide-y">
-            {g.docs.map((d) => (
-              <li
-                key={d.id}
-                className="flex items-center justify-between gap-3 px-4 py-3"
-              >
-                <div className="flex min-w-0 items-center gap-2">
-                  <FileText className="size-4 shrink-0 text-muted-foreground" />
-                  <span className="truncate text-sm">{nomeArquivo(d)}</span>
-                </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  nativeButton={false}
-                  render={
-                    <a href={`/api/documents/${d.id}/download`}>
-                      <Download />
-                      Baixar
-                    </a>
-                  }
-                />
-              </li>
-            ))}
-          </ul>
-        </div>
+          titulo={mesLabel(g.competencia)}
+          docs={g.docs}
+          defaultOpen={i === 0}
+        />
       ))}
     </div>
   );

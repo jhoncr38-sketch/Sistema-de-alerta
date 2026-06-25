@@ -11,6 +11,8 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
+  // ?view=1 abre o arquivo no navegador (inline); sem isso, força o download.
+  const inline = new URL(request.url).searchParams.get("view") === "1";
   const supabase = await createClient();
 
   const {
@@ -32,7 +34,7 @@ export async function GET(
 
   const { data: signed, error } = await supabase.storage
     .from("boletos")
-    .createSignedUrl(doc.file_path, 60, { download: doc.file_name });
+    .createSignedUrl(doc.file_path, 60, inline ? {} : { download: doc.file_name });
 
   if (error || !signed) {
     return new NextResponse(
