@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { TrendingDown, TrendingUp } from "lucide-react";
+import { CalendarRange, TrendingDown, TrendingUp } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { MetricCard } from "@/components/metric-card";
 import { RevenueCharts } from "@/components/revenue-charts";
@@ -34,12 +34,14 @@ export function FaturamentoDashboard({
   data: MonthlyPoint[];
   emptyMessage: string;
 }) {
-  // Só oferece uma faixa numérica quando há mais meses do que ela mostraria
-  // (assim "12 meses" não aparece se o cliente só tem 5 meses lançados).
+  // Mostra "Tudo", a menor faixa (3 meses) como piso e qualquer faixa que
+  // realmente recorte o histórico — evita botões redundantes (ex.: "12 meses"
+  // igual a "Tudo" quando há poucos meses) sem nunca esconder o filtro.
   const ranges = RANGES.filter(
-    (r) => r.months === null || r.months < data.length,
+    (r) => r.months === null || r.key === "3" || r.months < data.length,
   );
-  const showFilter = ranges.length > 1;
+  // Some só quando não há o que comparar (0 ou 1 mês lançado).
+  const showFilter = data.length >= 2;
   const defaultKey: RangeKey = data.length > 12 ? "12" : "all";
   const [rangeKey, setRangeKey] = useState<RangeKey>(defaultKey);
 
@@ -61,11 +63,12 @@ export function FaturamentoDashboard({
   return (
     <div className="space-y-6">
       {showFilter ? (
-        <div className="flex items-center justify-between gap-3">
-          <span className="hidden text-sm font-medium text-muted-foreground sm:inline">
-            Período
-          </span>
-          <div className="flex flex-1 gap-1 rounded-lg bg-muted/60 p-1 sm:flex-none">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground">
+            <CalendarRange className="size-4" />
+            <span>Período</span>
+          </div>
+          <div className="flex gap-1 rounded-lg border bg-muted/40 p-1">
             {ranges.map((r) => {
               const active = r.key === rangeKey;
               return (
@@ -75,10 +78,10 @@ export function FaturamentoDashboard({
                   onClick={() => setRangeKey(r.key)}
                   aria-pressed={active}
                   className={cn(
-                    "flex-1 rounded-md px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors sm:flex-none",
+                    "rounded-md px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors",
                     active
-                      ? "bg-card text-foreground shadow-sm"
-                      : "text-muted-foreground hover:text-foreground",
+                      ? "bg-card text-foreground shadow-sm ring-1 ring-border"
+                      : "text-muted-foreground hover:bg-card/60 hover:text-foreground",
                   )}
                 >
                   {r.label}
