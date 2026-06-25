@@ -2,6 +2,7 @@ import { Info } from "lucide-react";
 import { FaturamentoDashboard } from "@/components/faturamento-dashboard";
 import { PageHeader } from "@/components/page-header";
 import { getUserAndProfile } from "@/lib/auth";
+import { getClientCompanyContext } from "@/lib/companies";
 import {
   buildFaturamento,
   type DocInput,
@@ -12,11 +13,19 @@ import { createClient } from "@/lib/supabase/server";
 export default async function PortalFaturamentoPage() {
   const { profile } = await getUserAndProfile();
   const supabase = await createClient();
+  const { active } = await getClientCompanyContext();
+  const activeId = active?.id ?? "00000000-0000-0000-0000-000000000000";
 
-  // RLS limita documents/revenues à empresa do próprio cliente.
+  // RLS limita às empresas do cliente; aqui filtramos a empresa ativa.
   const [{ data: docsRaw }, { data: revenuesRaw }] = await Promise.all([
-    supabase.from("documents").select("type, competencia, amount"),
-    supabase.from("revenues").select("competencia, amount"),
+    supabase
+      .from("documents")
+      .select("type, competencia, amount")
+      .eq("company_id", activeId),
+    supabase
+      .from("revenues")
+      .select("competencia, amount")
+      .eq("company_id", activeId),
   ]);
 
   // 24 meses de histórico para o filtro de período ter o que recortar.
@@ -27,7 +36,11 @@ export default async function PortalFaturamentoPage() {
   );
 
   const companyName =
-    profile?.company?.nome_fantasia || profile?.company?.razao_social || "";
+    active?.nome_fantasia ||
+    active?.razao_social ||
+    profile?.company?.nome_fantasia ||
+    profile?.company?.razao_social ||
+    "";
 
   return (
     <>

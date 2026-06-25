@@ -4,6 +4,7 @@ import { DocumentsTable } from "@/components/documents-table";
 import { MetricCard } from "@/components/metric-card";
 import { PageHeader } from "@/components/page-header";
 import { getUserAndProfile } from "@/lib/auth";
+import { getClientCompanyContext } from "@/lib/companies";
 import { getUrgency } from "@/lib/dates";
 import { createClient } from "@/lib/supabase/server";
 import type { DocumentWithCompany } from "@/lib/types";
@@ -11,9 +12,12 @@ import type { DocumentWithCompany } from "@/lib/types";
 export default async function PortalHome() {
   const { profile } = await getUserAndProfile();
   const supabase = await createClient();
+  const { active } = await getClientCompanyContext();
+  const activeId = active?.id ?? "00000000-0000-0000-0000-000000000000";
   const { data } = await supabase
     .from("documents")
     .select("*, company:companies(id,razao_social,nome_fantasia,email)")
+    .eq("company_id", activeId)
     .order("due_date", { ascending: true });
 
   const docs = (data ?? []) as DocumentWithCompany[];
@@ -33,7 +37,11 @@ export default async function PortalHome() {
   const pagos = boletos.filter((d) => d.status === "paid").length;
 
   const companyName =
-    profile?.company?.nome_fantasia || profile?.company?.razao_social || "";
+    active?.nome_fantasia ||
+    active?.razao_social ||
+    profile?.company?.nome_fantasia ||
+    profile?.company?.razao_social ||
+    "";
 
   return (
     <>

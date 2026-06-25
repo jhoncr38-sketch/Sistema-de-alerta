@@ -1,5 +1,6 @@
 import { Bell } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
+import { getActiveCompanyId } from "@/lib/companies";
 import { docTypeLabel } from "@/lib/constants";
 import { formatDate } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
@@ -16,18 +17,22 @@ interface NotificationJoined {
   channel: "email" | "portal";
   kind: string;
   sent_at: string;
-  document: { type: DocType; competencia: string } | null;
+  document: { type: DocType; competencia: string; company_id: string } | null;
 }
 
 export default async function NotificacoesPage() {
   const supabase = await createClient();
+  const activeCompanyId = await getActiveCompanyId();
   const { data } = await supabase
     .from("notifications")
-    .select("id,channel,kind,sent_at,document:documents(type,competencia)")
+    .select("id,channel,kind,sent_at,document:documents(type,competencia,company_id)")
     .order("sent_at", { ascending: false })
-    .limit(100);
+    .limit(200);
 
-  const items = (data ?? []) as unknown as NotificationJoined[];
+  // RLS já restringe às empresas do cliente; aqui mantemos só a empresa ativa.
+  const items = ((data ?? []) as unknown as NotificationJoined[]).filter(
+    (n) => n.document?.company_id === activeCompanyId,
+  );
 
   return (
     <>

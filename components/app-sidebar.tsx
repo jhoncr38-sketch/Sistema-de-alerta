@@ -22,8 +22,9 @@ import {
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Brand } from "@/components/brand";
+import { CompanySwitcher } from "@/components/company-switcher";
 import { createClient } from "@/lib/supabase/client";
-import type { Role } from "@/lib/types";
+import type { Company, Role } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 interface NavItem {
@@ -67,6 +68,8 @@ export function AppSidebar({
   brandSubtitle,
   brandName,
   brandLogoUrl,
+  companies = [],
+  activeCompanyId = null,
 }: {
   role: Role;
   userName: string;
@@ -74,6 +77,9 @@ export function AppSidebar({
   brandSubtitle?: string;
   brandName?: string | null;
   brandLogoUrl?: string | null;
+  /** Empresas que o cliente pode ver (o seletor só aparece com 2+). */
+  companies?: Company[];
+  activeCompanyId?: string | null;
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -164,6 +170,7 @@ export function AppSidebar({
         <div className="border-b px-4 py-4">
           <Brand subtitle={brandSubtitle} name={brandName} logoUrl={brandLogoUrl} />
         </div>
+        <CompanySwitcher companies={companies} activeId={activeCompanyId} />
         <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto p-2">
           {navLinks()}
         </nav>
@@ -196,6 +203,7 @@ export function AppSidebar({
                 <X />
               </Button>
             </div>
+            <CompanySwitcher companies={companies} activeId={activeCompanyId} />
             <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto p-2">
               {navLinks(() => setOpen(false))}
             </nav>

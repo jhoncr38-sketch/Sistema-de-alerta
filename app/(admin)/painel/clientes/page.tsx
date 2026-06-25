@@ -5,6 +5,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PageHeader } from "@/components/page-header";
 import { ConfirmDeleteButton } from "@/components/confirm-delete-button";
+import { EditClientButton } from "@/components/edit-client-button";
+import { EditCompanyButton } from "@/components/edit-company-button";
 import { NewCompanyButton } from "@/components/new-company-button";
 import { createClient } from "@/lib/supabase/server";
 import type { Company, ProfileWithCompany } from "@/lib/types";
@@ -15,34 +17,58 @@ const selectClass =
 
 export default async function ClientesPage() {
   const supabase = await createClient();
-  const [{ data: clientsRaw }, { data: companiesRaw }] = await Promise.all([
-    supabase
-      .from("profiles")
-      .select("*, company:companies(*)")
-      .eq("role", "client")
-      .order("created_at", { ascending: false }),
-    supabase.from("companies").select("*").order("razao_social"),
-  ]);
+  const [{ data: clientsRaw }, { data: companiesRaw }, { data: linksRaw }] =
+    await Promise.all([
+      supabase
+        .from("profiles")
+        .select("*, company:companies(*)")
+        .eq("role", "client")
+        .order("created_at", { ascending: false }),
+      supabase.from("companies").select("*").order("razao_social"),
+      supabase.from("client_companies").select("profile_id, company_id"),
+    ]);
 
   const clients = (clientsRaw ?? []) as ProfileWithCompany[];
   const companies = (companiesRaw ?? []) as Company[];
+  const links = (linksRaw ?? []) as { profile_id: string; company_id: string }[];
   const pending = clients.filter((c) => c.status === "pending");
   const approved = clients.filter((c) => c.status === "approved");
 
-  // Clientes (logins) aprovados vinculados a cada empresa.
+  const companyById = new Map(companies.map((co) => [co.id, co]));
+
+  // Vínculos N-para-N (definidos pelo contador): empresas por cliente e vice-versa.
+  const companyIdsByClient = new Map<string, string[]>();
   const clientsByCompany = new Map<string, ProfileWithCompany[]>();
-  for (const c of approved) {
-    if (!c.company_id) continue;
-    const arr = clientsByCompany.get(c.company_id) ?? [];
-    arr.push(c);
-    clientsByCompany.set(c.company_id, arr);
+  const clientById = new Map(approved.map((c) => [c.id, c]));
+  for (const l of links) {
+    const ids = companyIdsByClient.get(l.profile_id) ?? [];
+    ids.push(l.company_id);
+    companyIdsByClient.set(l.profile_id, ids);
+
+    const client = clientById.get(l.profile_id);
+    if (client) {
+      const arr = clientsByCompany.get(l.company_id) ?? [];
+      arr.push(client);
+      clientsByCompany.set(l.company_id, arr);
+    }
+  }
+
+  // Empresas (objetos) que cada cliente pode ver, para exibir na lista.
+  const companiesByClient = new Map<string, Company[]>();
+  for (const [pid, ids] of companyIdsByClient) {
+    companiesByClient.set(
+      pid,
+      ids
+        .map((id) => companyById.get(id))
+        .filter((c): c is Company => !!c),
+    );
   }
 
   return (
     <>
       <PageHeader
         title="Clientes"
-        subtitle="Aprove cadastros e vincule cada cliente à empresa (CNPJ)"
+        subtitle="Aprove cadastros, edite empresas e escolha quais empresas cada cliente pode ver"
       >
         <NewCompanyButton />
       </PageHeader>
@@ -183,7 +209,8 @@ export default async function ClientesPage() {
                           )}
                         </td>
                         <td className="px-4 py-3">
-                          <div className="flex justify-end">
+                          <div className="flex justify-end gap-1">
+                            <EditCompanyButton company={co} />
                             <ConfirmDeleteButton
                               action={deleteCompany.bind(null, co.id)}
                               title="Apagar empresa?"
@@ -220,8 +247,8 @@ export default async function ClientesPage() {
                 <tr className="border-b bg-muted/50 text-left text-xs text-muted-foreground uppercase">
                   <th className="px-4 py-2.5 font-medium">Nome</th>
                   <th className="px-4 py-2.5 font-medium">E-mail</th>
-                  <th className="px-4 py-2.5 font-medium">Empresa</th>
-                  <th className="px-4 py-2.5 font-medium">CNPJ</th>
+                  <th className="px-4 py-2.5 font-medium">Empresas que pode ver</th>
+                  <th className="px-4 py-2.5 font-medium" />
                 </tr>
               </thead>
               <tbody>
@@ -236,17 +263,40 @@ export default async function ClientesPage() {
                   </tr>
                 ) : (
                   approved.map((c) => {
-                    const companyName =
-                      c.company?.nome_fantasia || c.company?.razao_social;
+                    const cos = companiesByClient.get(c.id) ?? [];
+                    const linkedIds = companyIdsByClient.get(c.id) ?? [];
                     return (
                       <tr key={c.id} className="border-b last:border-0">
                         <td className="px-4 py-3 font-medium">{c.name}</td>
                         <td className="px-4 py-3 text-muted-foreground">
                           {c.email ?? "—"}
                         </td>
-                        <td className="px-4 py-3">{companyName || "—"}</td>
-                        <td className="px-4 py-3 text-muted-foreground">
-                          {c.company?.cnpj ?? "—"}
+                        <td className="px-4 py-3">
+                          {cos.length === 0 ? (
+                            <span className="text-muted-foreground/60">
+                              Nenhuma empresa
+                            </span>
+                          ) : (
+                            <div className="flex flex-wrap gap-1">
+                              {cos.map((co) => (
+                                <span
+                                  key={co.id}
+                                  className="inline-flex items-center rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset ring-border"
+                                >
+                                  {co.nome_fantasia || co.razao_social}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex justify-end">
+                            <EditClientButton
+                              client={c}
+                              companies={companies}
+                              linkedIds={linkedIds}
+                            />
+                          </div>
                         </td>
                       </tr>
                     );

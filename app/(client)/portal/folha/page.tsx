@@ -1,16 +1,19 @@
 import { Info } from "lucide-react";
 import { FolhaList } from "@/components/folha-list";
 import { PageHeader } from "@/components/page-header";
+import { getActiveCompanyId } from "@/lib/companies";
 import { createClient } from "@/lib/supabase/server";
 import type { DocumentWithCompany } from "@/lib/types";
 
 export default async function PortalFolhaPage() {
   const supabase = await createClient();
-  // RLS limita os documentos à empresa do próprio cliente.
+  // RLS limita às empresas do cliente; aqui filtramos a empresa ativa.
+  const activeCompanyId = await getActiveCompanyId();
   const { data } = await supabase
     .from("documents")
     .select("*, company:companies(id,razao_social,nome_fantasia,email)")
     .eq("categoria", "folha")
+    .eq("company_id", activeCompanyId ?? "00000000-0000-0000-0000-000000000000")
     .order("competencia_month", { ascending: false, nullsFirst: false });
 
   const docs = (data ?? []) as DocumentWithCompany[];

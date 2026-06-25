@@ -10,6 +10,18 @@ export interface CompanyFormState {
   ok?: boolean;
 }
 
+export interface ClientFormState {
+  error?: string;
+  ok?: boolean;
+}
+
+function revalidateClientes() {
+  revalidatePath("/painel/clientes");
+  revalidatePath("/painel/faturamento");
+  revalidatePath("/painel/documentos");
+  revalidatePath("/painel/enviar");
+}
+
 /**
  * Cadastra uma empresa avulsa (sem depender de um cadastro de cliente).
  * Útil para pré-cadastrar empresas que o contador já atende e enviar
@@ -47,10 +59,93 @@ export async function createCompany(
     return { error: error.message };
   }
 
-  revalidatePath("/painel/clientes");
-  revalidatePath("/painel/faturamento");
-  revalidatePath("/painel/documentos");
-  revalidatePath("/painel/enviar");
+  revalidateClientes();
+  return { ok: true };
+}
+
+/** Edita os dados cadastrais de uma empresa. */
+export async function updateCompany(
+  _prev: CompanyFormState,
+  formData: FormData,
+): Promise<CompanyFormState> {
+  await requireAdmin();
+  const supabase = await createClient();
+
+  const id = String(formData.get("id") ?? "");
+  const razao = String(formData.get("razao_social") ?? "").trim();
+  const fantasia = String(formData.get("nome_fantasia") ?? "").trim();
+  const cnpj = String(formData.get("cnpj") ?? "").trim();
+  const email = String(formData.get("email") ?? "").trim();
+  const phone = String(formData.get("phone") ?? "").trim();
+
+  if (!id) return { error: "Empresa inválida." };
+  if (!razao || !cnpj) {
+    return { error: "Informe ao menos a razão social e o CNPJ." };
+  }
+
+  const { error } = await supabase
+    .from("companies")
+    .update({
+      razao_social: razao,
+      nome_fantasia: fantasia || null,
+      cnpj,
+      email: email || null,
+      phone: phone || null,
+    })
+    .eq("id", id);
+
+  if (error) {
+    if (error.code === "23505") {
+      return { error: "Já existe uma empresa com esse CNPJ." };
+    }
+    return { error: error.message };
+  }
+
+  revalidateClientes();
+  revalidatePath("/painel");
+  return { ok: true };
+}
+
+/**
+ * Edita um cliente: nome e o CONJUNTO de empresas que ele pode ver.
+ * Só o contador faz isso. A primeira empresa marcada vira a "principal"
+ * (company_id) usada como padrão; o cliente apenas alterna entre elas.
+ */
+export async function updateClient(
+  _prev: ClientFormState,
+  formData: FormData,
+): Promise<ClientFormState> {
+  await requireAdmin();
+  const supabase = await createClient();
+
+  const userId = String(formData.get("userId") ?? "");
+  const name = String(formData.get("name") ?? "").trim();
+  const companyIds = formData
+    .getAll("companyIds")
+    .map((v) => String(v))
+    .filter(Boolean);
+
+  if (!userId) return { error: "Cliente inválido." };
+  if (!name) return { error: "Informe o nome do cliente." };
+
+  const primary = companyIds[0] ?? null;
+
+  const { error: profErr } = await supabase
+    .from("profiles")
+    .update({ name, company_id: primary })
+    .eq("id", userId);
+  if (profErr) return { error: profErr.message };
+
+  // Substitui o conjunto de vínculos pelo informado.
+  await supabase.from("client_companies").delete().eq("profile_id", userId);
+  if (companyIds.length > 0) {
+    const { error: linkErr } = await supabase
+      .from("client_companies")
+      .insert(companyIds.map((cid) => ({ profile_id: userId, company_id: cid })));
+    if (linkErr) return { error: linkErr.message };
+  }
+
+  revalidateClientes();
   return { ok: true };
 }
 
@@ -84,7 +179,15 @@ export async function approveClient(formData: FormData) {
     .update({ status: "approved", company_id: linkedCompanyId })
     .eq("id", userId);
 
-  revalidatePath("/painel/clientes");
+  // Registra o vínculo N-para-N (o contador pode adicionar mais empresas depois).
+  await supabase
+    .from("client_companies")
+    .upsert(
+      { profile_id: userId, company_id: linkedCompanyId },
+      { onConflict: "profile_id,company_id" },
+    );
+
+  revalidateClientes();
 }
 
 /** Recusa um cadastro pendente. */
@@ -102,9 +205,11 @@ export async function rejectClient(formData: FormData) {
  * Apaga uma empresa e TUDO ligado a ela, de todo o sistema:
  *  - boletos, documentos, faturamento e notificações (cascata no banco);
  *  - os arquivos (PDFs) no bucket 'boletos';
- *  - os logins dos clientes vinculados (o admin/contador nunca é apagado).
- * Usa o service-role porque apagar usuários do Auth exige privilégio.
- * Irreversível.
+ *  - os vínculos cliente↔empresa (cascata).
+ * Com multi-empresa: um cliente que ficar SEM nenhuma empresa tem o login
+ * apagado (era exclusivo desta empresa); quem ainda tiver outra empresa é
+ * mantido, só perde o acesso a esta. O admin/contador nunca é apagado.
+ * Usa o service-role porque apagar usuários do Auth exige privilégio. Irreversível.
  */
 export async function deleteCompany(companyId: string) {
   await requireAdmin();
@@ -112,25 +217,14 @@ export async function deleteCompany(companyId: string) {
 
   const admin = createAdminClient();
 
-  // 1) Identifica os clientes vinculados ANTES de apagar a empresa
-  //    (depois disso o vínculo viraria null por `on delete set null`).
+  // 1) Clientes vinculados a esta empresa ANTES de apagar (o vínculo some na cascata).
   const { data: linked } = await admin
-    .from("profiles")
-    .select("id")
-    .eq("company_id", companyId)
-    .eq("role", "client");
+    .from("client_companies")
+    .select("profile_id")
+    .eq("company_id", companyId);
+  const profileIds = [...new Set((linked ?? []).map((r) => r.profile_id))];
 
-  // 2) Apaga cada login de cliente. O profile some por cascata
-  //    (profiles.id -> auth.users on delete cascade). Best-effort por usuário.
-  for (const p of linked ?? []) {
-    try {
-      await admin.auth.admin.deleteUser(p.id);
-    } catch {
-      // segue apagando os demais e a empresa mesmo se um usuário falhar
-    }
-  }
-
-  // 3) Remove os arquivos do storage sob o prefixo {companyId}/...
+  // 2) Remove os arquivos do storage sob o prefixo {companyId}/...
   const { data: files } = await admin.storage
     .from("boletos")
     .list(companyId, { limit: 1000 });
@@ -140,9 +234,39 @@ export async function deleteCompany(companyId: string) {
       .remove(files.map((f) => `${companyId}/${f.name}`));
   }
 
-  // 4) Apaga a empresa — cascata leva documentos, faturamento e notificações.
+  // 3) Apaga a empresa — cascata leva documentos, faturamento, notificações e vínculos.
   const { error } = await admin.from("companies").delete().eq("id", companyId);
   if (error) throw new Error(error.message);
+
+  // 4) Acerta cada cliente que estava vinculado.
+  for (const pid of profileIds) {
+    const { data: remaining } = await admin
+      .from("client_companies")
+      .select("company_id")
+      .eq("profile_id", pid);
+
+    if (!remaining || remaining.length === 0) {
+      // Sem nenhuma empresa: login era exclusivo desta empresa -> apaga.
+      try {
+        await admin.auth.admin.deleteUser(pid);
+      } catch {
+        // segue mesmo se um usuário falhar
+      }
+    } else {
+      // Ainda tem empresa: garante que a "principal" aponte para uma válida.
+      const { data: prof } = await admin
+        .from("profiles")
+        .select("company_id")
+        .eq("id", pid)
+        .single();
+      if (!prof?.company_id) {
+        await admin
+          .from("profiles")
+          .update({ company_id: remaining[0].company_id })
+          .eq("id", pid);
+      }
+    }
+  }
 
   revalidatePath("/painel/clientes");
   revalidatePath("/painel/documentos");

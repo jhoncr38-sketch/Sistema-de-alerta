@@ -1,16 +1,19 @@
 import { Info } from "lucide-react";
 import { DocumentsTable } from "@/components/documents-table";
 import { PageHeader } from "@/components/page-header";
+import { getActiveCompanyId } from "@/lib/companies";
 import { createClient } from "@/lib/supabase/server";
 import type { DocumentWithCompany } from "@/lib/types";
 
 export default async function PortalDocumentosPage() {
   const supabase = await createClient();
-  // RLS limita os documentos à empresa do próprio cliente.
+  // RLS limita aos documentos das empresas do cliente; aqui filtramos a empresa ativa.
+  const activeCompanyId = await getActiveCompanyId();
   const { data } = await supabase
     .from("documents")
     .select("*, company:companies(id,razao_social,nome_fantasia,email)")
     .eq("categoria", "documento")
+    .eq("company_id", activeCompanyId ?? "00000000-0000-0000-0000-000000000000")
     .order("created_at", { ascending: false });
 
   const docs = (data ?? []) as DocumentWithCompany[];
