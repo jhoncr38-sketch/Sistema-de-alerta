@@ -7,25 +7,18 @@ import { MetricCard } from "@/components/metric-card";
 import { RevenueCharts } from "@/components/revenue-charts";
 import { summarizePoints, type MonthlyPoint } from "@/lib/faturamento";
 import { formatCurrency } from "@/lib/format";
-import { cn } from "@/lib/utils";
 
 function formatPct(v: number): string {
   return `${v.toFixed(1).replace(".", ",")}%`;
 }
 
-const RANGES = [
-  { key: "3", label: "3 meses", months: 3 },
-  { key: "6", label: "6 meses", months: 6 },
-  { key: "12", label: "12 meses", months: 12 },
-  { key: "all", label: "Tudo", months: null },
-] as const;
-
-type RangeKey = (typeof RANGES)[number]["key"];
+const selectClass =
+  "h-8 rounded-lg border border-input bg-card px-2 text-sm font-medium outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
 
 /**
- * Painel de faturamento com filtro de período interativo: o controle segmentado
- * fatia os meses no próprio cliente, recalculando cards e gráficos na hora (sem
- * recarregar a página). `data` vem do servidor em ordem cronológica crescente.
+ * Painel de faturamento com filtro de período interativo: o intervalo "De … até"
+ * recorta qualquer janela de meses no próprio cliente, recalculando cards e
+ * gráficos na hora (sem recarregar). `data` vem do servidor em ordem crescente.
  */
 export function FaturamentoDashboard({
   data,
@@ -34,19 +27,37 @@ export function FaturamentoDashboard({
   data: MonthlyPoint[];
   emptyMessage: string;
 }) {
-  // Mostra "Tudo", a menor faixa (3 meses) como piso e qualquer faixa que
-  // realmente recorte o histórico — evita botões redundantes (ex.: "12 meses"
-  // igual a "Tudo" quando há poucos meses) sem nunca esconder o filtro.
-  const ranges = RANGES.filter(
-    (r) => r.months === null || r.key === "3" || r.months < data.length,
-  );
+  // Filtro por mês/ano: o usuário escolhe a competência inicial e a final.
   // Some só quando não há o que comparar (0 ou 1 mês lançado).
   const showFilter = data.length >= 2;
-  const defaultKey: RangeKey = data.length > 12 ? "12" : "all";
-  const [rangeKey, setRangeKey] = useState<RangeKey>(defaultKey);
+  const lastIdx = data.length - 1;
+  const keys = data.map((d) => d.key);
+  const idxOf = (k: string) => keys.indexOf(k);
 
-  const months = RANGES.find((r) => r.key === rangeKey)?.months ?? null;
-  const shown = months === null ? data : data.slice(-months);
+  const [startKey, setStartKey] = useState(data[0]?.key ?? "");
+  const [endKey, setEndKey] = useState(data[lastIdx]?.key ?? "");
+
+  // Índices válidos, sempre ordenados (início ≤ fim), tolerando estado inicial.
+  const rawStart = idxOf(startKey) === -1 ? 0 : idxOf(startKey);
+  const rawEnd = idxOf(endKey) === -1 ? lastIdx : idxOf(endKey);
+  const a = Math.min(rawStart, rawEnd);
+  const b = Math.max(rawStart, rawEnd);
+  const isFull = a === 0 && b === lastIdx;
+  const shown = data.slice(a, b + 1);
+
+  // Ao mexer numa ponta, empurra a outra se passar dela (mantém início ≤ fim).
+  const handleStart = (k: string) => {
+    setStartKey(k);
+    if (idxOf(k) > idxOf(endKey)) setEndKey(k);
+  };
+  const handleEnd = (k: string) => {
+    setEndKey(k);
+    if (idxOf(k) < idxOf(startKey)) setStartKey(k);
+  };
+  const resetAll = () => {
+    setStartKey(data[0].key);
+    setEndKey(data[lastIdx].key);
+  };
 
   const {
     totalFaturamento,
@@ -68,26 +79,41 @@ export function FaturamentoDashboard({
             <CalendarRange className="size-4" />
             <span>Período</span>
           </div>
-          <div className="flex gap-1 rounded-lg border bg-muted/40 p-1">
-            {ranges.map((r) => {
-              const active = r.key === rangeKey;
-              return (
-                <button
-                  key={r.key}
-                  type="button"
-                  onClick={() => setRangeKey(r.key)}
-                  aria-pressed={active}
-                  className={cn(
-                    "rounded-md px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors",
-                    active
-                      ? "bg-card text-foreground shadow-sm ring-1 ring-border"
-                      : "text-muted-foreground hover:bg-card/60 hover:text-foreground",
-                  )}
-                >
-                  {r.label}
-                </button>
-              );
-            })}
+          <div className="flex flex-wrap items-center gap-1.5">
+            <select
+              aria-label="Mês inicial"
+              value={data[a]?.key}
+              onChange={(e) => handleStart(e.target.value)}
+              className={selectClass}
+            >
+              {data.map((d) => (
+                <option key={d.key} value={d.key}>
+                  {d.label}
+                </option>
+              ))}
+            </select>
+            <span className="text-xs text-muted-foreground">até</span>
+            <select
+              aria-label="Mês final"
+              value={data[b]?.key}
+              onChange={(e) => handleEnd(e.target.value)}
+              className={selectClass}
+            >
+              {data.map((d) => (
+                <option key={d.key} value={d.key}>
+                  {d.label}
+                </option>
+              ))}
+            </select>
+            {!isFull ? (
+              <button
+                type="button"
+                onClick={resetAll}
+                className="rounded-md px-2 py-1 text-xs font-medium text-primary hover:underline"
+              >
+                Tudo
+              </button>
+            ) : null}
           </div>
         </div>
       ) : null}
