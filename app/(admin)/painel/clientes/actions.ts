@@ -223,6 +223,77 @@ export async function deleteClient(userId: string) {
   revalidatePath("/painel");
 }
 
+/**
+ * Promove um cliente a CONTADOR (admin): ele passa a enxergar o painel
+ * completo — TODOS os clientes, empresas e documentos do escritório (o
+ * sistema é de um escritório só; os admins compartilham os mesmos dados).
+ * Use para sócios/assistentes de confiança. Reversível via demoteToClient.
+ */
+export async function promoteToAdmin(userId: string) {
+  await requireAdmin();
+  if (!userId) return;
+
+  const admin = createAdminClient();
+
+  const { data: prof } = await admin
+    .from("profiles")
+    .select("role")
+    .eq("id", userId)
+    .single();
+  if (!prof) throw new Error("Usuário não encontrado.");
+  if (prof.role === "admin") return; // já é contador
+
+  const { error } = await admin
+    .from("profiles")
+    .update({ role: "admin", status: "approved" })
+    .eq("id", userId);
+  if (error) throw new Error(error.message);
+
+  revalidateClientes();
+  revalidatePath("/painel");
+}
+
+/**
+ * Remove o acesso de contador de alguém, voltando o perfil para CLIENTE.
+ * Travas de segurança: ninguém remove o próprio acesso (evita se trancar pra
+ * fora) e o sistema nunca fica sem nenhum contador.
+ */
+export async function demoteToClient(userId: string) {
+  const { user } = await requireAdmin();
+  if (!userId) return;
+  if (userId === user.id) {
+    throw new Error("Você não pode remover o seu próprio acesso de contador.");
+  }
+
+  const admin = createAdminClient();
+
+  const { data: prof } = await admin
+    .from("profiles")
+    .select("role")
+    .eq("id", userId)
+    .single();
+  if (!prof || prof.role !== "admin") {
+    throw new Error("Este usuário não é contador.");
+  }
+
+  const { count } = await admin
+    .from("profiles")
+    .select("id", { count: "exact", head: true })
+    .eq("role", "admin");
+  if ((count ?? 0) <= 1) {
+    throw new Error("Não é possível remover o último contador do sistema.");
+  }
+
+  const { error } = await admin
+    .from("profiles")
+    .update({ role: "client", status: "approved" })
+    .eq("id", userId);
+  if (error) throw new Error(error.message);
+
+  revalidateClientes();
+  revalidatePath("/painel");
+}
+
 /** Recusa um cadastro pendente. */
 export async function rejectClient(formData: FormData) {
   await requireAdmin();

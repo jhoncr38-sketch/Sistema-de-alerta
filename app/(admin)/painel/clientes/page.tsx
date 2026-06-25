@@ -1,19 +1,22 @@
-import { Building2, UserCheck, Users } from "lucide-react";
+import { Building2, ShieldCheck, ShieldOff, UserCheck, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PageHeader } from "@/components/page-header";
+import { ConfirmActionButton } from "@/components/confirm-action-button";
 import { ConfirmDeleteButton } from "@/components/confirm-delete-button";
 import { EditClientButton } from "@/components/edit-client-button";
 import { EditCompanyButton } from "@/components/edit-company-button";
 import { NewCompanyButton } from "@/components/new-company-button";
 import { createClient } from "@/lib/supabase/server";
-import type { Company, ProfileWithCompany } from "@/lib/types";
+import type { Company, Profile, ProfileWithCompany } from "@/lib/types";
 import {
   approveClient,
   deleteClient,
   deleteCompany,
+  demoteToClient,
+  promoteToAdmin,
   rejectClient,
 } from "./actions";
 
@@ -22,19 +25,32 @@ const selectClass =
 
 export default async function ClientesPage() {
   const supabase = await createClient();
-  const [{ data: clientsRaw }, { data: companiesRaw }, { data: linksRaw }] =
-    await Promise.all([
-      supabase
-        .from("profiles")
-        // Desambigua: profiles tem 2 caminhos até companies (FK direta + N-para-N).
-        .select("*, company:companies!profiles_company_id_fkey(*)")
-        .eq("role", "client")
-        .order("created_at", { ascending: false }),
-      supabase.from("companies").select("*").order("razao_social"),
-      supabase.from("client_companies").select("profile_id, company_id"),
-    ]);
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const [
+    { data: clientsRaw },
+    { data: companiesRaw },
+    { data: linksRaw },
+    { data: adminsRaw },
+  ] = await Promise.all([
+    supabase
+      .from("profiles")
+      // Desambigua: profiles tem 2 caminhos até companies (FK direta + N-para-N).
+      .select("*, company:companies!profiles_company_id_fkey(*)")
+      .eq("role", "client")
+      .order("created_at", { ascending: false }),
+    supabase.from("companies").select("*").order("razao_social"),
+    supabase.from("client_companies").select("profile_id, company_id"),
+    supabase
+      .from("profiles")
+      .select("*")
+      .eq("role", "admin")
+      .order("created_at", { ascending: true }),
+  ]);
 
   const clients = (clientsRaw ?? []) as ProfileWithCompany[];
+  const admins = (adminsRaw ?? []) as Profile[];
   const companies = (companiesRaw ?? []) as Company[];
   const links = (linksRaw ?? []) as { profile_id: string; company_id: string }[];
   const pending = clients.filter((c) => c.status === "pending");
@@ -296,11 +312,30 @@ export default async function ClientesPage() {
                           )}
                         </td>
                         <td className="px-4 py-3">
-                          <div className="flex justify-end gap-1">
+                          <div className="flex flex-wrap justify-end gap-1">
                             <EditClientButton
                               client={c}
                               companies={companies}
                               linkedIds={linkedIds}
+                            />
+                            <ConfirmActionButton
+                              action={promoteToAdmin.bind(null, c.id)}
+                              icon={ShieldCheck}
+                              triggerLabel="Tornar contador"
+                              triggerVariant="ghost"
+                              confirmLabel="Tornar contador"
+                              successMessage="Cliente agora tem acesso de contador."
+                              title="Dar acesso de contador?"
+                              description={
+                                <>
+                                  <strong>{c.name}</strong> passará a ver o{" "}
+                                  <strong>painel completo do contador</strong>,
+                                  com todos os clientes, empresas e documentos do
+                                  escritório. Use apenas para sócios ou
+                                  assistentes de confiança. Você pode remover o
+                                  acesso depois.
+                                </>
+                              }
                             />
                             <ConfirmDeleteButton
                               action={deleteClient.bind(null, c.id)}
@@ -324,6 +359,73 @@ export default async function ClientesPage() {
                     );
                   })
                 )}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section className="space-y-3">
+          <h2 className="flex items-center gap-2 text-sm font-semibold">
+            <ShieldCheck className="size-4" /> Contadores (acesso ao painel)
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            Quem está aqui enxerga o painel completo — todos os clientes,
+            empresas e documentos do escritório. Para dar acesso a alguém, use
+            “Tornar contador” na lista de clientes ativos.
+          </p>
+          <div className="overflow-x-auto rounded-xl border bg-card">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b bg-muted/50 text-left text-xs text-muted-foreground uppercase">
+                  <th className="px-4 py-2.5 font-medium">Nome</th>
+                  <th className="px-4 py-2.5 font-medium">E-mail</th>
+                  <th className="px-4 py-2.5 font-medium" />
+                </tr>
+              </thead>
+              <tbody>
+                {admins.map((a) => {
+                  const isMe = a.id === user?.id;
+                  return (
+                    <tr key={a.id} className="border-b last:border-0">
+                      <td className="px-4 py-3 font-medium">
+                        {a.name}
+                        {isMe ? (
+                          <span className="ml-2 rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                            você
+                          </span>
+                        ) : null}
+                      </td>
+                      <td className="px-4 py-3 text-muted-foreground">
+                        {a.email ?? "—"}
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex justify-end">
+                          {isMe ? null : (
+                            <ConfirmActionButton
+                              action={demoteToClient.bind(null, a.id)}
+                              icon={ShieldOff}
+                              triggerLabel="Remover acesso"
+                              triggerVariant="ghost"
+                              confirmVariant="destructive"
+                              confirmLabel="Remover acesso"
+                              successMessage="Acesso de contador removido."
+                              title="Remover acesso de contador?"
+                              description={
+                                <>
+                                  <strong>{a.name}</strong> deixará de ver o
+                                  painel do contador e voltará a ser um cliente
+                                  comum. As empresas e documentos não são
+                                  afetados. Você pode promover de novo quando
+                                  quiser.
+                                </>
+                              }
+                            />
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
