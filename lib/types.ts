@@ -6,6 +6,7 @@ export type DocType =
   | "das"
   | "darf_irpj"
   | "darf_piscofins"
+  | "darf_csll"
   | "gps_inss"
   | "iss"
   | "fgts"

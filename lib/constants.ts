@@ -7,6 +7,7 @@ export const DOC_TYPE_LABELS: Record<DocType, string> = {
   das: "DAS - Simples Nacional",
   darf_irpj: "DARF - IRPJ",
   darf_piscofins: "DARF - PIS/COFINS",
+  darf_csll: "DARF - CSLL",
   gps_inss: "GPS - INSS",
   iss: "ISS",
   fgts: "FGTS",
@@ -37,6 +38,7 @@ const BOLETO_TYPES: DocType[] = [
   "das",
   "darf_irpj",
   "darf_piscofins",
+  "darf_csll",
   "gps_inss",
   "iss",
   "fgts",
@@ -77,6 +79,7 @@ export const TRIBUTO_TYPES: ReadonlySet<DocType> = new Set<DocType>([
   "das",
   "darf_irpj",
   "darf_piscofins",
+  "darf_csll",
   "gps_inss",
   "iss",
 ]);
