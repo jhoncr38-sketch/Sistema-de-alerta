@@ -7,6 +7,42 @@ import {
 } from "@/lib/dates";
 import type { DocType } from "@/lib/types";
 
+/**
+ * Agrupamento das guias para o gráfico "Tributos por tipo".
+ * Inclui TODAS as guias com valor (boletos a pagar): os tributos da carga
+ * (DAS, DARFs, ISS, ICMS) e também os encargos/retenções lançados — GPS-INSS,
+ * FGTS, ISS-RPA e Outro. Os 3 DARFs entram juntos em "DARF". Tipos sem valor
+ * de guia (documentos institucionais, folha) ficam de fora.
+ * (A carga tributária dos cards continua usando só isTributo/TRIBUTO_TYPES.)
+ */
+export interface TributoGroup {
+  key: string;
+  label: string;
+  types: DocType[];
+}
+
+/** Grupo de uma guia sem mapeamento explícito (raro; cai em "Outro"). */
+export const OUTROS_GROUP_KEY = "outro";
+
+export const TRIBUTO_GROUPS: readonly TributoGroup[] = [
+  { key: "das", label: "DAS", types: ["das"] },
+  {
+    key: "darf",
+    label: "DARF",
+    types: ["darf_irpj", "darf_piscofins", "darf_csll"],
+  },
+  { key: "iss", label: "ISS", types: ["iss"] },
+  { key: "iss_rpa", label: "ISS - RPA", types: ["iss_rpa"] },
+  { key: "icms", label: "ICMS", types: ["icms"] },
+  { key: "inss", label: "INSS", types: ["gps_inss"] },
+  { key: "fgts", label: "FGTS", types: ["fgts"] },
+  { key: "outro", label: "Outro", types: ["outro"] },
+];
+
+const TYPE_TO_GROUP = new Map<DocType, string>(
+  TRIBUTO_GROUPS.flatMap((g) => g.types.map((t) => [t, g.key] as const)),
+);
+
 /** Um ponto mensal do dashboard de faturamento. */
 export interface MonthlyPoint {
   key: string; // "2026-06" (ordenável cronologicamente)
@@ -14,6 +50,7 @@ export interface MonthlyPoint {
   competencia: string; // "06/2026"
   faturamento: number;
   tributos: number;
+  porTipo: Record<string, number>; // guias por grupo: das/darf/iss/iss_rpa/icms/inss/fgts/outro
   carga: number | null; // % (tributos / faturamento); null se não há faturamento
 }
 
@@ -98,13 +135,16 @@ interface Agg {
   competencia: string;
   faturamento: number;
   tributos: number;
+  porTipo: Record<string, number>;
 }
 
 export const MONTHS_SHOWN = 12;
 
 /**
  * Agrega documentos (tributos) e faturamento por competência (mês/ano).
- * Tributos somam só DAS/DARF/INSS/ISS (ver isTributo); FGTS e folha ficam fora.
+ * `tributos`/carga somam só os de isTributo (DAS/DARFs/ISS/ICMS); INSS, FGTS e
+ * folha ficam fora. Já `porTipo` quebra TODAS as guias com valor por tipo
+ * (inclui INSS/FGTS) para o gráfico "Tributos por tipo".
  * Passe os dados de uma empresa (visão por cliente) ou de todas (carteira).
  */
 export function buildFaturamento(
@@ -127,6 +167,7 @@ export function buildFaturamento(
         competencia: normalizeCompetencia(competenciaRaw),
         faturamento: 0,
         tributos: 0,
+        porTipo: {},
       };
       byMonth.set(key, agg);
     }
@@ -134,9 +175,17 @@ export function buildFaturamento(
   };
 
   for (const d of docs) {
-    if (!isTributo(d.type)) continue;
+    const group = TYPE_TO_GROUP.get(d.type);
+    const conta = isTributo(d.type); // entra na carga tributária?
+    // Documento/folha sem grupo e fora da carga: não interessa aqui.
+    if (!group && !conta) continue;
     const agg = ensure(d.competencia);
-    if (agg) agg.tributos += Number(d.amount ?? 0);
+    if (!agg) continue;
+    const amount = Number(d.amount ?? 0);
+    if (conta) agg.tributos += amount; // carga: só isTributo
+    // Gráfico por tipo: todas as guias com valor (inclui INSS, FGTS...).
+    const gkey = group ?? OUTROS_GROUP_KEY;
+    agg.porTipo[gkey] = (agg.porTipo[gkey] ?? 0) + amount;
   }
   for (const r of revenues) {
     const agg = ensure(r.competencia);
@@ -152,6 +201,7 @@ export function buildFaturamento(
       competencia: agg.competencia,
       faturamento: agg.faturamento,
       tributos: agg.tributos,
+      porTipo: agg.porTipo,
       carga:
         agg.faturamento > 0 ? (agg.tributos / agg.faturamento) * 100 : null,
     }));

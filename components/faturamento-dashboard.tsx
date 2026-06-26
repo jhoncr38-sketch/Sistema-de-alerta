@@ -138,7 +138,7 @@ export function FaturamentoDashboard({
         <MetricCard
           label="Tributos no período"
           value={formatCurrency(totalTributos)}
-          sub="DAS, DARF, INSS, ISS"
+          sub="DAS, DARF, ISS, ICMS"
           tone="danger"
           icon={<Receipt />}
         />

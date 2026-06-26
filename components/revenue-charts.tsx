@@ -2,8 +2,25 @@
 
 import { useEffect, useState } from "react";
 import { Card } from "@/components/ui/card";
-import type { MonthlyPoint } from "@/lib/faturamento";
+import { TRIBUTO_GROUPS, type MonthlyPoint } from "@/lib/faturamento";
 import { formatCurrency } from "@/lib/format";
+
+/** Cor de cada grupo de guia (paleta do tema + extras; clara/escura). */
+const GROUP_COLOR: Record<string, string> = {
+  das: "bg-chart-1",
+  darf: "bg-chart-5",
+  iss: "bg-chart-2",
+  iss_rpa: "bg-teal-500",
+  icms: "bg-chart-3",
+  inss: "bg-chart-4",
+  fgts: "bg-pink-500",
+  outro: "bg-slate-400",
+};
+
+/** Grupos na ordem de empilhamento (de baixo p/ cima) e da legenda. */
+const STACK_GROUPS: { key: string; label: string }[] = TRIBUTO_GROUPS.map(
+  (g) => ({ key: g.key, label: g.label }),
+);
 
 export type { MonthlyPoint };
 
@@ -229,6 +246,135 @@ function CargaLine({
   );
 }
 
+/** Barras empilhadas: todas as guias do mês por tipo (inclui INSS, FGTS...). */
+function TributosPorTipo({
+  data,
+  hovered,
+  onHover,
+}: {
+  data: MonthlyPoint[];
+  hovered: number | null;
+  onHover: (i: number | null) => void;
+}) {
+  // Total de guias do mês = soma de todos os tipos lançados (inclui INSS, FGTS;
+  // por isso ≠ d.tributos, que é só a carga tributária).
+  const monthTotal = (d: MonthlyPoint) =>
+    STACK_GROUPS.reduce((s, g) => s + (d.porTipo[g.key] ?? 0), 0);
+  const max = Math.max(...data.map(monthTotal), 1);
+  const hasGuias = data.some((d) => monthTotal(d) > 0);
+
+  // Só mostra na legenda/pilha os grupos que têm algum valor no período.
+  const groups = STACK_GROUPS.filter((g) =>
+    data.some((d) => (d.porTipo[g.key] ?? 0) > 0),
+  );
+
+  // Mês em foco (ou o período inteiro, quando nada está sob o cursor/toque).
+  const point = hovered === null ? null : (data[hovered] ?? null);
+  const groupValue = (key: string) =>
+    point
+      ? (point.porTipo[key] ?? 0)
+      : data.reduce((s, d) => s + (d.porTipo[key] ?? 0), 0);
+
+  return (
+    <Card className="gap-3 p-4">
+      <div className="flex items-baseline justify-between">
+        <h3 className="text-sm font-semibold">Tributos por tipo</h3>
+        <span className="text-xs text-muted-foreground">R$</span>
+      </div>
+
+      {hasGuias ? (
+        <>
+          <div
+            className="flex h-44 items-end gap-1.5"
+            onMouseLeave={() => onHover(null)}
+          >
+            {data.map((d, i) => {
+              const active = hovered === i;
+              const total = monthTotal(d);
+              const barPct = total > 0 ? Math.max(2, (total / max) * 88) : 0;
+              return (
+                <div
+                  key={d.key}
+                  className="flex h-full flex-1 cursor-default flex-col items-center justify-end gap-1"
+                  onPointerEnter={() => onHover(i)}
+                  onClick={() => onHover(i)}
+                >
+                  <span className="text-[10px] tabular-nums text-muted-foreground">
+                    {total > 0 ? compact(total) : ""}
+                  </span>
+                  <div
+                    className={`flex w-full flex-col-reverse overflow-hidden rounded-t transition-opacity ${
+                      hovered !== null && !active ? "opacity-60" : "opacity-100"
+                    }`}
+                    style={{ height: `${barPct}%` }}
+                  >
+                    {groups.map((g) => {
+                      const v = d.porTipo[g.key] ?? 0;
+                      if (v <= 0 || total <= 0) return null;
+                      return (
+                        <div
+                          key={g.key}
+                          className={`shrink-0 ${GROUP_COLOR[g.key] ?? "bg-muted-foreground"}`}
+                          style={{ height: `${(v / total) * 100}%` }}
+                        />
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="flex gap-1.5">
+            {data.map((d) => (
+              <div
+                key={d.key}
+                className="flex-1 text-center text-[10px] text-muted-foreground"
+              >
+                {d.label}
+              </div>
+            ))}
+          </div>
+
+          {/* Legenda que vira leitura do mês em foco (valor por tributo). */}
+          <div className="space-y-1">
+            <p className="text-[11px] text-muted-foreground">
+              {point ? (
+                <>
+                  <strong className="text-foreground">{point.label}</strong> · por
+                  tributo
+                </>
+              ) : (
+                "Total do período por tributo"
+              )}
+            </p>
+            <div className="flex flex-wrap gap-x-3 gap-y-1">
+              {groups.map((g) => (
+                <span
+                  key={g.key}
+                  className="flex items-center gap-1.5 text-[11px] text-muted-foreground"
+                >
+                  <span
+                    className={`size-2.5 shrink-0 rounded-sm ${GROUP_COLOR[g.key] ?? "bg-muted-foreground"}`}
+                  />
+                  {g.label}
+                  <span className="tabular-nums text-foreground">
+                    {formatCurrency(groupValue(g.key))}
+                  </span>
+                </span>
+              ))}
+            </div>
+          </div>
+        </>
+      ) : (
+        <div className="flex h-44 items-center justify-center text-center text-xs text-muted-foreground">
+          Nenhum tributo lançado no período.
+        </div>
+      )}
+    </Card>
+  );
+}
+
 export function RevenueCharts({ data }: { data: MonthlyPoint[] }) {
   const maxMonths = useMaxMonths();
   const shown = data.slice(-maxMonths);
@@ -243,6 +389,7 @@ export function RevenueCharts({ data }: { data: MonthlyPoint[] }) {
         <FaturamentoBars data={shown} hovered={hovered} onHover={setHovered} />
         <CargaLine data={shown} hovered={hovered} onHover={setHovered} />
       </div>
+      <TributosPorTipo data={shown} hovered={hovered} onHover={setHovered} />
       <HoverCaption point={point} />
     </div>
   );
