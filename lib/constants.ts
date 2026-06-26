@@ -77,14 +77,15 @@ export function docTypeLabel(type: DocType): string {
 
 /**
  * Tributos que entram na carga tributária (imposto/faturamento).
- * Exclui FGTS e folha de pagamento, que são encargos, não impostos.
+ * Inclui DAS, DARFs, ISS e ICMS.
+ * Exclui GPS-INSS, FGTS, folha e ISS-RPA — encargos/retenções que não
+ * compõem a carga tributária da empresa.
  */
 export const TRIBUTO_TYPES: ReadonlySet<DocType> = new Set<DocType>([
   "das",
   "darf_irpj",
   "darf_piscofins",
   "darf_csll",
-  "gps_inss",
   "iss",
   "icms",
 ]);
