@@ -10,6 +10,8 @@ export const DOC_TYPE_LABELS: Record<DocType, string> = {
   darf_csll: "DARF - CSLL",
   gps_inss: "GPS - INSS",
   iss: "ISS",
+  iss_rpa: "ISS - RPA",
+  icms: "ICMS",
   fgts: "FGTS",
   folha: "Folha de Pagamento",
   relatorio_fiscal: "Relatório Fiscal",
@@ -41,6 +43,8 @@ const BOLETO_TYPES: DocType[] = [
   "darf_csll",
   "gps_inss",
   "iss",
+  "iss_rpa",
+  "icms",
   "fgts",
   "outro",
 ];
@@ -82,6 +86,7 @@ export const TRIBUTO_TYPES: ReadonlySet<DocType> = new Set<DocType>([
   "darf_csll",
   "gps_inss",
   "iss",
+  "icms",
 ]);
 
 /** True se o tipo de documento for um tributo (conta na carga tributária). */

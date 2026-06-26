@@ -9,6 +9,8 @@ export type DocType =
   | "darf_csll"
   | "gps_inss"
   | "iss"
+  | "iss_rpa"
+  | "icms"
   | "fgts"
   | "folha"
   | "relatorio_fiscal"
