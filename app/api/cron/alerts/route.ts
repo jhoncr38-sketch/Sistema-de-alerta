@@ -10,16 +10,19 @@ export const dynamic = "force-dynamic";
 interface DocRow {
   id: string;
   type: DocType;
-  competencia: string;
+  categoria: "boleto" | "parcelamento";
+  competencia: string | null;
   amount: number;
   due_date: string;
   status: "open" | "paid";
   company_id: string;
+  parcela_num: number | null;
   company: {
     razao_social: string;
     nome_fantasia: string | null;
     email: string | null;
   } | null;
+  plan: { nome: string; total: number } | null;
 }
 
 /**
@@ -47,10 +50,10 @@ export async function GET(request: Request) {
     supabase
       .from("documents")
       .select(
-        "id,type,competencia,amount,due_date,status,company_id,company:companies(razao_social,nome_fantasia,email)",
+        "id,type,categoria,competencia,amount,due_date,status,company_id,parcela_num,company:companies(razao_social,nome_fantasia,email),plan:installment_plans(nome,total)",
       )
       .eq("status", "open")
-      .eq("categoria", "boleto"), // documentos informativos não têm vencimento/alerta
+      .in("categoria", ["boleto", "parcelamento"]), // guias a pagar (informativos não alertam)
     supabase
       .from("profiles")
       .select("email,company_id")
@@ -104,16 +107,24 @@ export async function GET(request: Request) {
     const companyName =
       d.company?.nome_fantasia || d.company?.razao_social || "Cliente";
 
+    // Parcela de parcelamento: identifica pelo nº (1/33) e leva à aba certa.
+    const isParcela = d.categoria === "parcelamento";
+    const competenciaLabel =
+      isParcela && d.plan
+        ? `${d.plan.nome} — parcela ${d.parcela_num}/${d.plan.total}`
+        : (d.competencia ?? "");
+    const portalPath = isParcela ? "/portal/parcelamentos" : "/portal/boletos";
+
     let channel: "email" | "portal" = "portal";
     if (recipients.length > 0) {
       const { subject, html } = alertEmail({
         companyName,
         type: d.type,
-        competencia: d.competencia,
+        competencia: competenciaLabel,
         amount: Number(d.amount),
         dueDate: d.due_date,
         kind,
-        portalUrl: `${portalBase}/portal/boletos`,
+        portalUrl: `${portalBase}${portalPath}`,
       });
       await sendEmail({ to: recipients, subject, html });
       channel = "email";

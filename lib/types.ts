@@ -20,7 +20,7 @@ export type DocType =
   | "alvara"
   | "outro";
 export type DocStatus = "open" | "paid";
-export type DocCategoria = "boleto" | "documento" | "folha";
+export type DocCategoria = "boleto" | "documento" | "folha" | "parcelamento";
 
 export interface Company {
   id: string;
@@ -57,6 +57,8 @@ export interface DocumentRow {
   due_date: string | null; // ISO date (YYYY-MM-DD); null em documentos informativos
   status: DocStatus;
   paid_at: string | null;
+  plan_id: string | null; // parcelamento ao qual a parcela pertence (categoria 'parcelamento')
+  parcela_num: number | null; // número da parcela dentro do plano (1..total)
   file_path: string;
   file_name: string;
   uploaded_by: string | null;
@@ -65,6 +67,20 @@ export interface DocumentRow {
 
 export interface DocumentWithCompany extends DocumentRow {
   company: Pick<Company, "id" | "razao_social" | "nome_fantasia" | "email"> | null;
+}
+
+export interface InstallmentPlan {
+  id: string;
+  company_id: string;
+  nome: string; // título do card (ex.: "Parcelamento Simples Nacional")
+  modalidade: string; // modalidade do parcelamento (simples_nacional, inss, pgfn...)
+  total: number; // total de parcelas do parcelamento (fixo)
+  created_at: string;
+  uploaded_by: string | null;
+}
+
+export interface InstallmentPlanWithCompany extends InstallmentPlan {
+  company: Pick<Company, "id" | "razao_social" | "nome_fantasia"> | null;
 }
 
 export interface RevenueRow {

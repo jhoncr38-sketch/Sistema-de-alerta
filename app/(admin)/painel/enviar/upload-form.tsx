@@ -6,7 +6,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { CompetenciaInput, CurrencyInput } from "@/components/masked-inputs";
-import { CATEGORIA_LABELS, docTypeOptionsFor } from "@/lib/constants";
+import {
+  CATEGORIA_LABELS,
+  UPLOAD_CATEGORIAS,
+  docTypeOptionsFor,
+} from "@/lib/constants";
 import type { DocCategoria } from "@/lib/types";
 import { uploadDocument, type UploadState } from "./actions";
 
@@ -62,7 +66,7 @@ export function UploadForm({
               setType(c === "folha" ? "folha" : ""); // folha tem tipo único
             }}
           >
-            {(Object.keys(CATEGORIA_LABELS) as DocCategoria[]).map((c) => (
+            {UPLOAD_CATEGORIAS.map((c) => (
               <option key={c} value={c}>
                 {CATEGORIA_LABELS[c]}
               </option>
