@@ -22,8 +22,11 @@ export default async function PortalHome() {
     .order("due_date", { ascending: true });
 
   const docs = (data ?? []) as DocumentWithCompany[];
-  const boletos = docs.filter((d) => d.categoria === "boleto");
-  const open = boletos.filter((d) => d.status === "open");
+  // Boletos e parcelas de parcelamento são "guias a pagar" — entram no resumo.
+  const pagaveis = docs.filter(
+    (d) => d.categoria === "boleto" || d.categoria === "parcelamento",
+  );
+  const open = pagaveis.filter((d) => d.status === "open");
 
   let vencidos = 0;
   let venceHoje = 0;
@@ -43,9 +46,9 @@ export default async function PortalHome() {
       emBreveValor += d.amount ?? 0;
     }
   }
-  const pagosBoletos = boletos.filter((d) => d.status === "paid");
-  const pagos = pagosBoletos.length;
-  const pagosValor = pagosBoletos.reduce((s, d) => s + (d.amount ?? 0), 0);
+  const pagosPagaveis = pagaveis.filter((d) => d.status === "paid");
+  const pagos = pagosPagaveis.length;
+  const pagosValor = pagosPagaveis.reduce((s, d) => s + (d.amount ?? 0), 0);
 
   const companyName =
     active?.nome_fantasia ||
@@ -63,14 +66,14 @@ export default async function PortalHome() {
       <div className="space-y-6 p-6">
         {vencidos > 0 ? (
           <AlertBanner tone="danger" icon={<AlertTriangle className="size-4" />}>
-            <strong>Atenção:</strong> você tem {vencidos} boleto
-            {vencidos > 1 ? "s" : ""} vencido{vencidos > 1 ? "s" : ""}. Efetue o
-            pagamento para evitar multas.
+            <strong>Atenção:</strong> você tem {vencidos} conta
+            {vencidos > 1 ? "s" : ""} vencida{vencidos > 1 ? "s" : ""} (boletos
+            ou parcelas). Efetue o pagamento para evitar multas.
           </AlertBanner>
         ) : null}
         {venceHoje > 0 ? (
           <AlertBanner tone="warning" icon={<Clock className="size-4" />}>
-            {venceHoje} boleto{venceHoje > 1 ? "s" : ""} vence
+            {venceHoje} conta{venceHoje > 1 ? "s" : ""} vence
             {venceHoje > 1 ? "m" : ""} <strong>hoje</strong>.
           </AlertBanner>
         ) : null}
@@ -100,13 +103,13 @@ export default async function PortalHome() {
         </div>
 
         <section className="space-y-3">
-          <h2 className="text-sm font-semibold">Boletos em aberto</h2>
+          <h2 className="text-sm font-semibold">Boletos e parcelas em aberto</h2>
           <DocumentsTable
             documents={open}
             showPreview
             showDownload
             showPaid
-            emptyMessage="Você não tem boletos em aberto."
+            emptyMessage="Você não tem boletos ou parcelas em aberto."
           />
         </section>
 

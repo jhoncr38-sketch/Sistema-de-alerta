@@ -10,6 +10,19 @@ import { formatCurrency, formatDate } from "@/lib/format";
 import type { DocumentWithCompany } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
+/** "Guias a pagar" — têm valor, vencimento, status e podem ser marcadas pagas. */
+function isPagavel(d: DocumentWithCompany): boolean {
+  return d.categoria === "boleto" || d.categoria === "parcelamento";
+}
+
+/** Rótulo da coluna "Tipo": parcela mostra "Parcela N"; o resto, o tipo da guia. */
+function tipoLabel(d: DocumentWithCompany): string {
+  if (d.categoria === "parcelamento" && d.parcela_num) {
+    return `Parcela ${d.parcela_num}`;
+  }
+  return docTypeLabel(d.type);
+}
+
 export function DocumentsTable({
   documents,
   showClient = false,
@@ -41,16 +54,16 @@ export function DocumentsTable({
 
   // Esconde automaticamente as colunas que não se aplicam à lista atual:
   // folha e documentos não têm valor/vencimento; documentos da empresa também
-  // não têm competência; e só boletos têm status (vencido/pago).
+  // não têm competência; e só guias a pagar têm status (vencido/pago).
   const hasCompetencia = documents.some((d) => !!d.competencia);
   const hasAmount = documents.some((d) => d.amount != null);
   const hasDueDate = documents.some((d) => d.due_date != null);
-  const hasBoleto = documents.some((d) => d.categoria === "boleto");
-  const showPaidCol = showPaid && hasBoleto;
+  const hasPagavel = documents.some(isPagavel);
+  const showPaidCol = showPaid && hasPagavel;
 
-  // Selo de status (boleto com vencimento) ou "Informativo" — usado nos dois layouts.
+  // Selo de status (guia com vencimento) ou "Informativo" — usado nos dois layouts.
   function statusBadge(doc: DocumentWithCompany) {
-    if (doc.categoria === "boleto" && doc.due_date) {
+    if (isPagavel(doc) && doc.due_date) {
       return <StatusBadge dueDate={doc.due_date} status={doc.status} />;
     }
     return (
@@ -63,7 +76,7 @@ export function DocumentsTable({
 
   function previewButton(doc: DocumentWithCompany) {
     const nome =
-      docTypeLabel(doc.type) + (doc.competencia ? ` · ${doc.competencia}` : "");
+      tipoLabel(doc) + (doc.competencia ? ` · ${doc.competencia}` : "");
     return <FilePreviewButton docId={doc.id} fileName={nome} />;
   }
 
@@ -94,7 +107,7 @@ export function DocumentsTable({
           <>
             O documento{" "}
             <strong>
-              {docTypeLabel(doc.type)}
+              {tipoLabel(doc)}
               {doc.competencia ? ` · ${doc.competencia}` : ""}
             </strong>
             {doc.company
@@ -113,8 +126,8 @@ export function DocumentsTable({
       {/* ----- Celular: cartões empilhados (a tabela não cabe na largura) ----- */}
       <div className="space-y-2.5 md:hidden">
         {documents.map((doc) => {
-          const isBoleto = doc.categoria === "boleto";
-          const hasActions = (showPaid && isBoleto) || showActions;
+          const pagavel = isPagavel(doc);
+          const hasActions = (showPaid && pagavel) || showActions;
           return (
             <div key={doc.id} className="space-y-3 rounded-xl border bg-card p-4">
               <div className="flex items-start justify-between gap-3">
@@ -127,10 +140,10 @@ export function DocumentsTable({
                     </div>
                   ) : null}
                   <div className="font-medium leading-snug">
-                    {docTypeLabel(doc.type)}
+                    {tipoLabel(doc)}
                   </div>
                 </div>
-                {hasBoleto ? (
+                {hasPagavel ? (
                   <div className="shrink-0">{statusBadge(doc)}</div>
                 ) : null}
               </div>
@@ -159,7 +172,7 @@ export function DocumentsTable({
 
               {hasActions ? (
                 <div className="flex flex-wrap items-center gap-2 border-t pt-3">
-                  {showPaid && isBoleto ? (
+                  {showPaid && pagavel ? (
                     <PaidToggle docId={doc.id} paid={doc.status === "paid"} />
                   ) : null}
                   {showPreview ? previewButton(doc) : null}
@@ -192,7 +205,7 @@ export function DocumentsTable({
               {hasDueDate ? (
                 <th className="px-4 py-2.5 font-medium">Vencimento</th>
               ) : null}
-              {hasBoleto ? (
+              {hasPagavel ? (
                 <th className="px-4 py-2.5 font-medium">Status</th>
               ) : null}
               {showPaidCol ? (
@@ -203,7 +216,7 @@ export function DocumentsTable({
           </thead>
           <tbody>
             {documents.map((doc) => {
-              const isBoleto = doc.categoria === "boleto";
+              const pagavel = isPagavel(doc);
               return (
                 <tr
                   key={doc.id}
@@ -216,7 +229,7 @@ export function DocumentsTable({
                         "—"}
                     </td>
                   ) : null}
-                  <td className="px-4 py-3">{docTypeLabel(doc.type)}</td>
+                  <td className="px-4 py-3">{tipoLabel(doc)}</td>
                   {hasCompetencia ? (
                     <td className="px-4 py-3 text-muted-foreground">
                       {doc.competencia || "—"}
@@ -232,12 +245,12 @@ export function DocumentsTable({
                       {doc.due_date ? formatDate(doc.due_date) : "—"}
                     </td>
                   ) : null}
-                  {hasBoleto ? (
+                  {hasPagavel ? (
                     <td className="px-4 py-3">{statusBadge(doc)}</td>
                   ) : null}
                   {showPaidCol ? (
                     <td className="px-4 py-3">
-                      {isBoleto ? (
+                      {pagavel ? (
                         <PaidToggle docId={doc.id} paid={doc.status === "paid"} />
                       ) : null}
                     </td>
