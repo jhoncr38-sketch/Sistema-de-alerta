@@ -11,6 +11,7 @@ interface PlanRow {
   id: string;
   nome: string;
   total: number;
+  forma_pagamento: string;
   company: { id: string; razao_social: string; nome_fantasia: string | null } | null;
   parcelas: ParcelaLike[];
 }
@@ -20,7 +21,7 @@ export default async function ParcelamentosPage() {
   const { data } = await supabase
     .from("installment_plans")
     .select(
-      "id, nome, total, company:companies(id,razao_social,nome_fantasia), parcelas:documents(status,amount,due_date)",
+      "id, nome, total, forma_pagamento, company:companies(id,razao_social,nome_fantasia), parcelas:documents(status,amount,due_date)",
     )
     .order("created_at", { ascending: false });
 
@@ -66,6 +67,7 @@ export default async function ParcelamentosPage() {
                 companyName={
                   plan.company?.nome_fantasia || plan.company?.razao_social || undefined
                 }
+                formaPagamento={plan.forma_pagamento}
                 summary={summarizePlan(plan.total, plan.parcelas ?? [])}
               />
             ))}

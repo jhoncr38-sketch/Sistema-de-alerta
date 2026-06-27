@@ -96,6 +96,12 @@ export const PARCELAMENTO_MODALIDADES: ModalidadeOption[] = [
   { value: "outro", label: "Outros" },
 ];
 
+/** Como o parcelamento é pago: boleto mensal ou débito automático. */
+export const FORMA_PAGAMENTO_OPTIONS: { value: string; label: string }[] = [
+  { value: "boleto", label: "Boleto mensal" },
+  { value: "debito_automatico", label: "Débito automático" },
+];
+
 const MODALIDADE_LABELS: Record<string, string> = Object.fromEntries(
   PARCELAMENTO_MODALIDADES.map((m) => [m.value, m.label]),
 );

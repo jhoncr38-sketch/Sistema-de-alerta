@@ -6,7 +6,18 @@ import { Button } from "@/components/ui/button";
 import { toggleDocumentPaid } from "@/app/actions/documents";
 
 /** Botão de marcar/desmarcar boleto como pago (toggle). */
-export function PaidToggle({ docId, paid }: { docId: string; paid: boolean }) {
+export function PaidToggle({
+  docId,
+  paid,
+  labelPaid = "Pago",
+  labelUnpaid = "Marcar pago",
+}: {
+  docId: string;
+  paid: boolean;
+  /** Rótulos personalizados (ex.: débito automático usa "Confirmar pagamento"). */
+  labelPaid?: string;
+  labelUnpaid?: string;
+}) {
   const [pending, startTransition] = useTransition();
 
   return (
@@ -29,7 +40,7 @@ export function PaidToggle({ docId, paid }: { docId: string; paid: boolean }) {
       ) : (
         <Circle />
       )}
-      {paid ? "Pago" : "Marcar pago"}
+      {paid ? labelPaid : labelUnpaid}
     </Button>
   );
 }

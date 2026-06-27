@@ -5,8 +5,11 @@ import { UploadCloud, Wand2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { maskCurrency } from "@/components/masked-inputs";
-import { PARCELAMENTO_MODALIDADES } from "@/lib/constants";
+import { CurrencyInput, maskCurrency } from "@/components/masked-inputs";
+import {
+  FORMA_PAGAMENTO_OPTIONS,
+  PARCELAMENTO_MODALIDADES,
+} from "@/lib/constants";
 import { createInstallmentPlan, type PlanState } from "../actions";
 
 const selectClass =
@@ -43,6 +46,9 @@ export function ParcelamentoForm({
     createInstallmentPlan,
     {},
   );
+
+  const [forma, setForma] = useState("boleto");
+  const isDebito = forma === "debito_automatico";
 
   const [parcelas, setParcelas] = useState<Parcela[]>([]);
   const [valorPadrao, setValorPadrao] = useState("");
@@ -90,13 +96,16 @@ export function ParcelamentoForm({
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    // company_id, modalidade, nome e total vêm dos inputs com name.
+    // company_id, modalidade, nome, total e forma_pagamento vêm dos inputs.
     const fd = new FormData(e.currentTarget);
-    for (const p of parcelas) {
-      fd.append("file", p.file);
-      fd.append("num", p.num);
-      fd.append("amount", p.amount);
-      fd.append("due", p.due);
+    // Só o boleto envia arquivos de parcela; o débito gera tudo no servidor.
+    if (!isDebito) {
+      for (const p of parcelas) {
+        fd.append("file", p.file);
+        fd.append("num", p.num);
+        fd.append("amount", p.amount);
+        fd.append("due", p.due);
+      }
     }
     // useActionState exige que o dispatch rode dentro de uma transition.
     startTransition(() => formAction(fd));
@@ -161,35 +170,87 @@ export function ParcelamentoForm({
             Quantas parcelas o parcelamento tem no total (ex.: 22).
           </p>
         </div>
-      </div>
 
-      {/* Anexar parcelas que já tem (opcional) */}
-      <div className="space-y-1.5">
-        <Label htmlFor="file">
-          Parcelas disponíveis{" "}
-          <span className="text-muted-foreground">— opcional</span>
-        </Label>
-        <div className="rounded-xl border border-dashed bg-muted/30 p-6 text-center">
-          <UploadCloud className="mx-auto size-7 text-muted-foreground" />
-          <p className="mt-2 text-sm text-muted-foreground">
-            Anexe as guias que você já tem (pode ser só a 1ª). As próximas você
-            adiciona mês a mês depois.
-          </p>
-          <Input
-            id="file"
-            type="file"
-            accept="application/pdf,image/png,image/jpeg"
-            multiple
-            onChange={(e) => onPickFiles(e.target.files)}
-            className="mx-auto mt-3 max-w-xs"
-          />
-          <p className="mt-2 text-xs text-muted-foreground">
-            A numeração segue a ordem do nome do arquivo (ajustável abaixo).
+        <div className="space-y-1.5 sm:col-span-2">
+          <Label htmlFor="forma_pagamento">Forma de pagamento</Label>
+          <select
+            id="forma_pagamento"
+            name="forma_pagamento"
+            className={selectClass}
+            value={forma}
+            onChange={(e) => setForma(e.target.value)}
+          >
+            {FORMA_PAGAMENTO_OPTIONS.map((f) => (
+              <option key={f.value} value={f.value}>
+                {f.label}
+              </option>
+            ))}
+          </select>
+          <p className="text-xs text-muted-foreground">
+            {isDebito
+              ? "Débito automático: sem boleto. As parcelas são geradas automaticamente e você só confirma, mês a mês, se o débito ocorreu."
+              : "Boleto mensal: você anexa as guias (agora ou mês a mês) e o cliente baixa e marca como paga."}
           </p>
         </div>
       </div>
 
-      {parcelas.length > 0 ? (
+      {isDebito ? (
+        /* ----- Débito automático: valor + 1º vencimento (gera o resto) ----- */
+        <div className="rounded-xl border bg-card p-4">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="valor_parcela">Valor de cada parcela (R$)</Label>
+              <CurrencyInput
+                id="valor_parcela"
+                name="valor_parcela"
+                placeholder="660,00"
+                required
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="primeiro_venc">Vencimento da 1ª parcela</Label>
+              <Input
+                id="primeiro_venc"
+                name="primeiro_venc"
+                type="date"
+                required
+              />
+            </div>
+          </div>
+          <p className="mt-3 text-xs text-muted-foreground">
+            Serão geradas todas as parcelas mensais (mesmo valor), a partir do 1º
+            vencimento. Depois você ajusta uma ou outra se precisar.
+          </p>
+        </div>
+      ) : (
+        /* ----- Boleto: anexar parcelas que já tem (opcional) ----- */
+        <div className="space-y-1.5">
+          <Label htmlFor="file">
+            Parcelas disponíveis{" "}
+            <span className="text-muted-foreground">— opcional</span>
+          </Label>
+          <div className="rounded-xl border border-dashed bg-muted/30 p-6 text-center">
+            <UploadCloud className="mx-auto size-7 text-muted-foreground" />
+            <p className="mt-2 text-sm text-muted-foreground">
+              Anexe as guias que você já tem (pode ser só a 1ª). As próximas você
+              adiciona mês a mês depois.
+            </p>
+            <Input
+              id="file"
+              type="file"
+              accept="application/pdf,image/png,image/jpeg"
+              multiple
+              onChange={(e) => onPickFiles(e.target.files)}
+              className="mx-auto mt-3 max-w-xs"
+            />
+            <p className="mt-2 text-xs text-muted-foreground">
+              A numeração segue a ordem do nome do arquivo (ajustável abaixo).
+            </p>
+          </div>
+        </div>
+      )}
+
+      {!isDebito && parcelas.length > 0 ? (
         <>
           <div className="rounded-xl border bg-card p-4">
             <div className="flex items-center gap-2 text-sm font-medium">

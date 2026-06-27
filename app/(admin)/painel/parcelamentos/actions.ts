@@ -19,6 +19,16 @@ function parseAmount(raw: string): number {
   return Number(s);
 }
 
+/** "2026-06-20" + n meses -> "2026-08-20" (mantém o dia). */
+function addMonths(iso: string, n: number): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  if (!y || !m || !d) return iso;
+  const dt = new Date(y, m - 1 + n, d);
+  const mm = String(dt.getMonth() + 1).padStart(2, "0");
+  const dd = String(dt.getDate()).padStart(2, "0");
+  return `${dt.getFullYear()}-${mm}-${dd}`;
+}
+
 /** Sobe um PDF de parcela e devolve {path}. Lança em caso de erro. */
 async function uploadParcela(
   supabase: Awaited<ReturnType<typeof createClient>>,
@@ -65,6 +75,68 @@ export async function createInstallmentPlan(
     nome = modalidadeLabel(modalidade); // usa a modalidade como título
   }
 
+  const debito =
+    String(formData.get("forma_pagamento") ?? "boleto") === "debito_automatico";
+
+  // ===== Débito automático: sem boleto. Gera TODAS as parcelas de uma vez,
+  // a partir do valor e do 1º vencimento (mensal). =====
+  if (debito) {
+    const valor = parseAmount(String(formData.get("valor_parcela") ?? ""));
+    const primeiro = String(formData.get("primeiro_venc") ?? "");
+    if (Number.isNaN(valor) || valor <= 0) {
+      return { error: "Informe o valor da parcela (ex.: 660,00)." };
+    }
+    if (!primeiro) {
+      return { error: "Informe o vencimento da 1ª parcela." };
+    }
+
+    const supabase = await createClient();
+    const docType = modalidadeDocType(modalidade);
+
+    const { data: plan, error: planError } = await supabase
+      .from("installment_plans")
+      .insert({
+        company_id: companyId,
+        modalidade,
+        nome,
+        total,
+        forma_pagamento: "debito_automatico",
+        uploaded_by: profile.id,
+      })
+      .select("id")
+      .single();
+    if (planError || !plan) {
+      return { error: `Falha ao criar o parcelamento: ${planError?.message}` };
+    }
+
+    // Uma linha por parcela: mesmo valor, vencimentos mensais, sem arquivo.
+    const rows = Array.from({ length: total }, (_, i) => ({
+      company_id: companyId,
+      type: docType,
+      categoria: "parcelamento" as const,
+      competencia: null,
+      amount: valor,
+      due_date: addMonths(primeiro, i),
+      plan_id: plan.id,
+      parcela_num: i + 1,
+      file_path: null,
+      file_name: null,
+      uploaded_by: profile.id,
+    }));
+
+    const { error: insertError } = await supabase.from("documents").insert(rows);
+    if (insertError) {
+      await supabase.from("installment_plans").delete().eq("id", plan.id);
+      return { error: `Falha ao gerar as parcelas: ${insertError.message}` };
+    }
+
+    revalidatePath("/painel/parcelamentos");
+    revalidatePath("/painel");
+    revalidatePath("/portal/parcelamentos");
+    redirect(`/painel/parcelamentos/${plan.id}?ok=1`);
+  }
+
+  // ===== Boleto: fluxo com PDFs (abaixo) =====
   // Parcelas anexadas agora (opcional — pode criar vazio e adicionar depois).
   const files = formData
     .getAll("file")
@@ -108,7 +180,14 @@ export async function createInstallmentPlan(
   // 1) Cria o plano (pai).
   const { data: plan, error: planError } = await supabase
     .from("installment_plans")
-    .insert({ company_id: companyId, modalidade, nome, total, uploaded_by: profile.id })
+    .insert({
+      company_id: companyId,
+      modalidade,
+      nome,
+      total,
+      forma_pagamento: "boleto",
+      uploaded_by: profile.id,
+    })
     .select("id")
     .single();
   if (planError || !plan) {
@@ -187,10 +266,15 @@ export async function addParcela(
 
   const { data: plan } = await supabase
     .from("installment_plans")
-    .select("id, company_id, modalidade, total")
+    .select("id, company_id, modalidade, total, forma_pagamento")
     .eq("id", planId)
     .single();
   if (!plan) return { error: "Parcelamento não encontrado." };
+  if (plan.forma_pagamento === "debito_automatico") {
+    return {
+      error: "Débito automático já tem todas as parcelas geradas na criação.",
+    };
+  }
 
   if (!Number.isInteger(num) || num < 1 || num > plan.total) {
     return { error: `Número de parcela inválido (1 a ${plan.total}).` };

@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
 
 /** Nome do arquivo sem a extensão, para exibir limpo. */
 function nomeArquivo(d: DocumentWithCompany): string {
-  return d.file_name.replace(/\.[^.]+$/, "");
+  return (d.file_name ?? "").replace(/\.[^.]+$/, "");
 }
 
 /** Um mês da folha: cabeçalho clicável que recolhe/expande os arquivos. */

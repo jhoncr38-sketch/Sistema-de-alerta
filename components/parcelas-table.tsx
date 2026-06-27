@@ -9,17 +9,21 @@ import { cn } from "@/lib/utils";
 
 /**
  * Lista as parcelas de um parcelamento (página de detalhe).
- * Cada parcela tem número (N/total), valor, vencimento, status e ações
- * (baixar o PDF e marcar como paga — esta última só quando showPaid).
+ * Cada parcela tem número (N/total), valor, vencimento, status e ações.
+ * No débito automático não há boleto para baixar; a ação vira "confirmar
+ * pagamento" (se o débito ocorreu naquele mês).
  */
 export function ParcelasTable({
   parcelas,
   total,
   showPaid = false,
+  debitoAutomatico = false,
 }: {
   parcelas: DocumentRow[];
   total: number;
   showPaid?: boolean;
+  /** Débito automático: sem PDF para baixar; toggle = confirmar pagamento. */
+  debitoAutomatico?: boolean;
 }) {
   if (parcelas.length === 0) {
     return (
@@ -33,7 +37,12 @@ export function ParcelasTable({
     (a, b) => (a.parcela_num ?? 0) - (b.parcela_num ?? 0),
   );
 
+  // Débito automático não tem boleto: a ação confirma que o débito ocorreu.
+  const labelUnpaid = debitoAutomatico ? "Confirmar pagamento" : "Marcar pago";
+
   function downloadButton(doc: DocumentRow) {
+    // Parcela de débito automático não tem arquivo — nada para baixar.
+    if (!doc.file_path) return null;
     return (
       <Button
         variant="outline"
@@ -77,7 +86,11 @@ export function ParcelasTable({
             </div>
             <div className="flex flex-wrap items-center gap-2 border-t pt-3">
               {showPaid ? (
-                <PaidToggle docId={p.id} paid={p.status === "paid"} />
+                <PaidToggle
+                  docId={p.id}
+                  paid={p.status === "paid"}
+                  labelUnpaid={labelUnpaid}
+                />
               ) : null}
               {showPaid ? (
                 <ComprovanteButton
@@ -133,7 +146,11 @@ export function ParcelasTable({
                 {showPaid ? (
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1">
-                      <PaidToggle docId={p.id} paid={p.status === "paid"} />
+                      <PaidToggle
+                        docId={p.id}
+                        paid={p.status === "paid"}
+                        labelUnpaid={labelUnpaid}
+                      />
                       <ComprovanteButton
                         docId={p.id}
                         paid={p.status === "paid"}

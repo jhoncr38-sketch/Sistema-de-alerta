@@ -9,6 +9,7 @@ interface PlanRow {
   id: string;
   nome: string;
   total: number;
+  forma_pagamento: string;
   parcelas: ParcelaLike[];
 }
 
@@ -17,7 +18,7 @@ export default async function PortalParcelamentosPage() {
   const activeCompanyId = await getActiveCompanyId();
   const { data } = await supabase
     .from("installment_plans")
-    .select("id, nome, total, parcelas:documents(status,amount,due_date)")
+    .select("id, nome, total, forma_pagamento, parcelas:documents(status,amount,due_date)")
     .eq("company_id", activeCompanyId ?? "00000000-0000-0000-0000-000000000000")
     .order("created_at", { ascending: false });
 
@@ -41,6 +42,7 @@ export default async function PortalParcelamentosPage() {
                 key={plan.id}
                 nome={plan.nome}
                 href={`/portal/parcelamentos/${plan.id}`}
+                formaPagamento={plan.forma_pagamento}
                 summary={summarizePlan(plan.total, plan.parcelas ?? [])}
               />
             ))}

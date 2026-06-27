@@ -62,8 +62,8 @@ export interface DocumentRow {
   comprovante_at: string | null; // ISO timestamp de quando o comprovante foi anexado
   plan_id: string | null; // parcelamento ao qual a parcela pertence (categoria 'parcelamento')
   parcela_num: number | null; // número da parcela dentro do plano (1..total)
-  file_path: string;
-  file_name: string;
+  file_path: string | null; // null em parcela de débito automático (sem boleto)
+  file_name: string | null;
   uploaded_by: string | null;
   created_at: string;
 }
@@ -77,6 +77,7 @@ export interface InstallmentPlan {
   company_id: string;
   nome: string; // título do card (ex.: "Parcelamento Simples Nacional")
   modalidade: string; // modalidade do parcelamento (simples_nacional, inss, pgfn...)
+  forma_pagamento: "boleto" | "debito_automatico"; // boleto mensal ou débito automático
   total: number; // total de parcelas do parcelamento (fixo)
   created_at: string;
   uploaded_by: string | null;

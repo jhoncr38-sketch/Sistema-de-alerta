@@ -46,7 +46,7 @@ export default async function ParcelamentoDetalheAdminPage({
         title={plan.nome}
         subtitle={`${companyName ?? "Cliente"} · ${modalidadeLabel(plan.modalidade)} · ${parcelas.length}/${plan.total} guias`}
       >
-        {podeAdicionar ? (
+        {podeAdicionar && plan.forma_pagamento !== "debito_automatico" ? (
           <AddParcelaButton planId={plan.id} nextNum={nextNum} total={plan.total} />
         ) : null}
         <DeletePlanButton planId={plan.id} nome={plan.nome} companyName={companyName} />
@@ -56,6 +56,7 @@ export default async function ParcelamentoDetalheAdminPage({
           summary={summarizePlan(plan.total, parcelas)}
           parcelas={parcelas}
           showPaid
+          formaPagamento={plan.forma_pagamento}
         />
       </div>
     </>

@@ -55,6 +55,7 @@ export default async function PortalParcelamentoDetalhePage({
           summary={summarizePlan(plan.total, parcelas)}
           parcelas={parcelas}
           showPaid
+          formaPagamento={plan.forma_pagamento}
         />
       </div>
     </>
