@@ -1,10 +1,13 @@
 "use server";
 
+import { after } from "next/server";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { normalizeCompetencia } from "@/lib/dates";
+import { notifyNewDocument } from "@/lib/email/notify";
+import type { DocType } from "@/lib/types";
 
 export interface UploadState {
   error?: string;
@@ -157,6 +160,21 @@ export async function uploadDocument(
       };
     }
   }
+
+  // Avisa o cliente que há um novo documento disponível (depois da resposta).
+  const firstDocId = rows[0].id;
+  after(() =>
+    notifyNewDocument({
+      companyId,
+      documentId: firstDocId,
+      categoria,
+      type: type as DocType,
+      competencia: competencia || null,
+      amount,
+      dueDate,
+      count: rows.length,
+    }).catch((err) => console.error("[notify] novo documento:", err)),
+  );
 
   revalidatePath("/painel/documentos");
   revalidatePath("/painel/faturamento");

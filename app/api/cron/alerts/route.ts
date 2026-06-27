@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server";
-import { alertKind } from "@/lib/dates";
+import { alertKind, getUrgency } from "@/lib/dates";
 import { sendEmail } from "@/lib/email/resend";
-import { alertEmail } from "@/lib/email/templates";
+import {
+  adminDigestEmail,
+  alertEmail,
+  parcelaRiscoEmail,
+  type AdminDigestCompany,
+} from "@/lib/email/templates";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { DocType } from "@/lib/types";
 
@@ -86,12 +91,16 @@ export async function GET(request: Request) {
     const kind = alertKind(d.due_date, d.status);
     if (!kind) continue;
 
+    // Parcela de parcelamento vencida vira um alerta dedicado (risco de exclusão).
+    const isParcela = d.categoria === "parcelamento";
+    const notifKind = isParcela && kind === "vencido" ? "parcela_risco" : kind;
+
     // já notificado para esse documento + tipo de alerta?
     const { data: existing } = await supabase
       .from("notifications")
       .select("id")
       .eq("document_id", d.id)
-      .eq("kind", kind)
+      .eq("kind", notifKind)
       .maybeSingle();
     if (existing) {
       alreadySent++;
@@ -108,7 +117,6 @@ export async function GET(request: Request) {
       d.company?.nome_fantasia || d.company?.razao_social || "Cliente";
 
     // Parcela de parcelamento: identifica pelo nº (1/33) e leva à aba certa.
-    const isParcela = d.categoria === "parcelamento";
     const competenciaLabel =
       isParcela && d.plan
         ? `${d.plan.nome} — parcela ${d.parcela_num}/${d.plan.total}`
@@ -117,15 +125,27 @@ export async function GET(request: Request) {
 
     let channel: "email" | "portal" = "portal";
     if (recipients.length > 0) {
-      const { subject, html } = alertEmail({
-        companyName,
-        type: d.type,
-        competencia: competenciaLabel,
-        amount: Number(d.amount),
-        dueDate: d.due_date,
-        kind,
-        portalUrl: `${portalBase}${portalPath}`,
-      });
+      const { subject, html } =
+        notifKind === "parcela_risco"
+          ? parcelaRiscoEmail({
+              companyName,
+              type: d.type,
+              planNome: d.plan?.nome ?? "Parcelamento",
+              parcelaNum: d.parcela_num,
+              total: d.plan?.total ?? null,
+              amount: Number(d.amount),
+              dueDate: d.due_date,
+              portalUrl: `${portalBase}/portal/parcelamentos`,
+            })
+          : alertEmail({
+              companyName,
+              type: d.type,
+              competencia: competenciaLabel,
+              amount: Number(d.amount),
+              dueDate: d.due_date,
+              kind,
+              portalUrl: `${portalBase}${portalPath}`,
+            });
       await sendEmail({ to: recipients, subject, html });
       channel = "email";
       emailed++;
@@ -133,8 +153,16 @@ export async function GET(request: Request) {
 
     await supabase
       .from("notifications")
-      .insert({ document_id: d.id, channel, kind });
+      .insert({ document_id: d.id, channel, kind: notifKind });
     processed++;
+  }
+
+  // Resumo diário para o contador (panorama de pendências de todos os clientes).
+  let adminDigest: "sent" | "skipped" = "skipped";
+  try {
+    if (await sendAdminDigest(supabase, docs, portalBase)) adminDigest = "sent";
+  } catch (e) {
+    console.error("[cron] falha no resumo do contador:", e);
   }
 
   return NextResponse.json({
@@ -143,5 +171,64 @@ export async function GET(request: Request) {
     processed,
     emailed,
     alreadySent,
+    adminDigest,
   });
+}
+
+/** Agrupa as pendências por empresa e envia o resumo diário ao(s) admin(s). */
+async function sendAdminDigest(
+  supabase: ReturnType<typeof createAdminClient>,
+  docs: DocRow[],
+  portalBase: string,
+): Promise<boolean> {
+  const byCompany = new Map<string, AdminDigestCompany>();
+  for (const d of docs) {
+    const { urgency } = getUrgency(d.due_date, d.status);
+    if (
+      urgency !== "vencido" &&
+      urgency !== "vence_hoje" &&
+      urgency !== "proximos_3" &&
+      urgency !== "proximos_7"
+    ) {
+      continue;
+    }
+    const name = d.company?.nome_fantasia || d.company?.razao_social || "—";
+    const e: AdminDigestCompany = byCompany.get(d.company_id) ?? {
+      companyName: name,
+      vencido: 0,
+      venceHoje: 0,
+      proximos: 0,
+      totalAberto: 0,
+    };
+    if (urgency === "vencido") e.vencido++;
+    else if (urgency === "vence_hoje") e.venceHoje++;
+    else e.proximos++;
+    e.totalAberto += Number(d.amount) || 0;
+    byCompany.set(d.company_id, e);
+  }
+
+  const companies = Array.from(byCompany.values()).sort(
+    (a, b) => b.vencido - a.vencido || b.venceHoje - a.venceHoje,
+  );
+  if (companies.length === 0) return false;
+
+  const { data: admins } = await supabase
+    .from("profiles")
+    .select("email")
+    .eq("role", "admin");
+  const adminEmails = Array.from(
+    new Set(
+      (admins ?? [])
+        .map((a) => a.email as string | null)
+        .filter((e): e is string => !!e),
+    ),
+  );
+  if (adminEmails.length === 0) return false;
+
+  const { subject, html } = adminDigestEmail({
+    companies,
+    portalUrl: `${portalBase}/painel`,
+  });
+  await sendEmail({ to: adminEmails, subject, html });
+  return true;
 }

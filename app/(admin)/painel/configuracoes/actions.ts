@@ -3,6 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { sendEmail } from "@/lib/email/resend";
+import { testEmail } from "@/lib/email/templates";
 import type { AppSettingsRow } from "@/lib/types";
 
 export interface BrandFormState {
@@ -74,4 +76,39 @@ export async function updateBranding(
   revalidatePath("/login");
   revalidatePath("/painel/configuracoes");
   return { ok: true };
+}
+
+export interface TestEmailState {
+  ok?: boolean;
+  skipped?: boolean;
+  error?: string;
+  to?: string;
+}
+
+/**
+ * Envia um e-mail de teste para o próprio contador, para validar o Resend.
+ * Distingue os três cenários: enviado, pulado (sem RESEND_API_KEY) e erro
+ * (ex.: domínio do remetente não verificado).
+ */
+export async function sendTestEmail(
+  _prev: TestEmailState,
+  _formData: FormData,
+): Promise<TestEmailState> {
+  const { user } = await requireAdmin();
+  const to = user.email;
+  if (!to) {
+    return { error: "Sua conta não tem um e-mail para receber o teste." };
+  }
+
+  const { subject, html } = testEmail();
+  const result = await sendEmail({ to, subject, html });
+
+  if ("skipped" in result) return { skipped: true, to };
+  if ("error" in result) {
+    const err = result.error as { message?: string } | string;
+    const message =
+      typeof err === "string" ? err : (err?.message ?? "erro desconhecido");
+    return { error: message };
+  }
+  return { ok: true, to };
 }

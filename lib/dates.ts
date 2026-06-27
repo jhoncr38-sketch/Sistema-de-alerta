@@ -130,11 +130,12 @@ export function alertKind(
   dueDate: string | Date,
   status: DocStatus = "open",
   today: Date = new Date(),
-): "vencido" | "vence_hoje" | "dias_3" | null {
+): "vencido" | "vence_hoje" | "dias_3" | "dias_7" | null {
   if (status === "paid") return null;
   const { urgency } = getUrgency(dueDate, status, today);
   if (urgency === "vencido") return "vencido";
   if (urgency === "vence_hoje") return "vence_hoje";
   if (urgency === "proximos_3") return "dias_3";
+  if (urgency === "proximos_7") return "dias_7";
   return null;
 }

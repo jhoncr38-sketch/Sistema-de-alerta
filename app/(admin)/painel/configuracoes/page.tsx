@@ -2,6 +2,7 @@ import { Info } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { PageHeader } from "@/components/page-header";
 import { BrandSettingsForm } from "@/components/brand-settings-form";
+import { TestEmailButton } from "@/components/test-email-button";
 import { getUserAndProfile } from "@/lib/auth";
 import { getBranding } from "@/lib/branding";
 
@@ -33,6 +34,19 @@ export default async function ConfiguracoesPage() {
             todos os dias. Configure o remetente e a chave do Resend nas
             variáveis de ambiente.
           </p>
+        </Card>
+
+        <Card className="max-w-xl gap-4 px-6 py-6">
+          <div>
+            <h2 className="text-sm font-semibold">E-mails (Resend)</h2>
+            <p className="text-xs text-muted-foreground">
+              Os alertas de vencimento e os resumos são enviados por e-mail via
+              Resend. Use o botão abaixo para confirmar que o envio está
+              funcionando de verdade.
+            </p>
+          </div>
+
+          <TestEmailButton to={user?.email ?? null} />
         </Card>
 
         <Card className="max-w-xl gap-4 px-6 py-6">

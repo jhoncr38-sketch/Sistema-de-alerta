@@ -10,6 +10,10 @@ const KIND_LABEL: Record<string, string> = {
   vencido: "Boleto vencido",
   vence_hoje: "Boleto vence hoje",
   dias_3: "Boleto vence em 3 dias",
+  dias_7: "Boleto vence em 7 dias",
+  parcela_risco: "Parcela em atraso (risco de exclusão)",
+  novo_doc: "Novo documento disponível",
+  pago: "Pagamento confirmado",
 };
 
 interface NotificationJoined {
