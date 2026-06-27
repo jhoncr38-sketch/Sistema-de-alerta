@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { ChevronDown, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ComprovanteButton } from "@/components/comprovante-button";
 import { FilePreviewButton } from "@/components/file-preview-button";
 import { PaidToggle } from "@/components/paid-toggle";
 import { docTypeLabel } from "@/lib/constants";
@@ -108,6 +109,12 @@ function MesBoletos({ grupo, defaultOpen }: { grupo: Grupo; defaultOpen: boolean
                       <span className="hidden sm:inline">Baixar</span>
                     </a>
                   }
+                />
+                <ComprovanteButton
+                  docId={d.id}
+                  paid
+                  hasComprovante={!!d.comprovante_path}
+                  fileName={d.comprovante_name}
                 />
                 <PaidToggle docId={d.id} paid />
               </div>

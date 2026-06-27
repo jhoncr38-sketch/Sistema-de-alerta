@@ -1,5 +1,6 @@
 import { Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ComprovanteButton } from "@/components/comprovante-button";
 import { PaidToggle } from "@/components/paid-toggle";
 import { StatusBadge } from "@/components/status-badge";
 import { formatCurrency, formatDate } from "@/lib/format";
@@ -78,6 +79,14 @@ export function ParcelasTable({
               {showPaid ? (
                 <PaidToggle docId={p.id} paid={p.status === "paid"} />
               ) : null}
+              {showPaid ? (
+                <ComprovanteButton
+                  docId={p.id}
+                  paid={p.status === "paid"}
+                  hasComprovante={!!p.comprovante_path}
+                  fileName={p.comprovante_name}
+                />
+              ) : null}
               {downloadButton(p)}
             </div>
           </div>
@@ -123,7 +132,15 @@ export function ParcelasTable({
                 </td>
                 {showPaid ? (
                   <td className="px-4 py-3">
-                    <PaidToggle docId={p.id} paid={p.status === "paid"} />
+                    <div className="flex items-center gap-1">
+                      <PaidToggle docId={p.id} paid={p.status === "paid"} />
+                      <ComprovanteButton
+                        docId={p.id}
+                        paid={p.status === "paid"}
+                        hasComprovante={!!p.comprovante_path}
+                        fileName={p.comprovante_name}
+                      />
+                    </div>
                   </td>
                 ) : null}
                 <td className="px-4 py-3">

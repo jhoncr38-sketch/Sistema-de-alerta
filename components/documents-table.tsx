@@ -1,5 +1,6 @@
 import { Download, FileText } from "lucide-react";
 import { deleteDocument } from "@/app/actions/documents";
+import { ComprovanteButton } from "@/components/comprovante-button";
 import { ConfirmDeleteButton } from "@/components/confirm-delete-button";
 import { FilePreviewButton } from "@/components/file-preview-button";
 import { Button } from "@/components/ui/button";
@@ -175,6 +176,14 @@ export function DocumentsTable({
                   {showPaid && pagavel ? (
                     <PaidToggle docId={doc.id} paid={doc.status === "paid"} />
                   ) : null}
+                  {showPaid && pagavel ? (
+                    <ComprovanteButton
+                      docId={doc.id}
+                      paid={doc.status === "paid"}
+                      hasComprovante={!!doc.comprovante_path}
+                      fileName={doc.comprovante_name}
+                    />
+                  ) : null}
                   {showPreview ? previewButton(doc) : null}
                   {showDownload ? downloadButton(doc) : null}
                   {showDelete ? (
@@ -251,7 +260,18 @@ export function DocumentsTable({
                   {showPaidCol ? (
                     <td className="px-4 py-3">
                       {pagavel ? (
-                        <PaidToggle docId={doc.id} paid={doc.status === "paid"} />
+                        <div className="flex items-center gap-1">
+                          <PaidToggle
+                            docId={doc.id}
+                            paid={doc.status === "paid"}
+                          />
+                          <ComprovanteButton
+                            docId={doc.id}
+                            paid={doc.status === "paid"}
+                            hasComprovante={!!doc.comprovante_path}
+                            fileName={doc.comprovante_name}
+                          />
+                        </div>
                       ) : null}
                     </td>
                   ) : null}
