@@ -8,19 +8,44 @@ import { formatCurrency } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
 import type { DocumentWithCompany } from "@/lib/types";
 
+/** Documento com a forma de pagamento do parcelamento (quando for parcela). */
+type PainelDoc = DocumentWithCompany & {
+  plan: { forma_pagamento: string } | null;
+};
+
+/**
+ * Parcela de débito automático que vence a mais de 7 dias. Como o débito gera
+ * todas as parcelas de uma vez, escondemos as futuras da lista "em aberto" —
+ * elas continuam no detalhe do parcelamento. Só aparecem aqui as vencidas ou a
+ * vencer em ≤7 dias (as acionáveis). Mesma regra do portal do cliente.
+ */
+function ehDebitoAutomaticoFuturo(d: PainelDoc): boolean {
+  if (d.categoria !== "parcelamento") return false;
+  if (d.plan?.forma_pagamento !== "debito_automatico") return false;
+  if (!d.due_date) return false;
+  return getUrgency(d.due_date, d.status).urgency === "em_dia";
+}
+
 export default async function PainelPage() {
   const supabase = await createClient();
   const [{ data: companies }, { data: docsRaw }] = await Promise.all([
     supabase.from("companies").select("id").eq("active", true),
     supabase
       .from("documents")
-      .select("*, company:companies(id,razao_social,nome_fantasia,email)")
+      .select(
+        "*, company:companies(id,razao_social,nome_fantasia,email), plan:installment_plans(forma_pagamento)",
+      )
       .order("due_date", { ascending: true }),
   ]);
 
-  const docs = (docsRaw ?? []) as DocumentWithCompany[];
-  const boletos = docs.filter((d) => d.categoria === "boleto");
+  const docs = (docsRaw ?? []) as PainelDoc[];
+  // Boletos e parcelas de parcelamento são "guias a pagar" — entram no resumo.
+  const boletos = docs.filter(
+    (d) => d.categoria === "boleto" || d.categoria === "parcelamento",
+  );
   const open = boletos.filter((d) => d.status === "open");
+  // Lista "em aberto": oculta as parcelas futuras de débito automático.
+  const openList = open.filter((d) => !ehDebitoAutomaticoFuturo(d));
 
   let vencidosHoje = 0;
   let vencendo = 0;
@@ -101,7 +126,7 @@ export default async function PainelPage() {
         <section className="space-y-3">
           <h2 className="text-sm font-semibold">Próximas obrigações</h2>
           <DocumentsTable
-            documents={open.slice(0, 10)}
+            documents={openList.slice(0, 10)}
             showClient
             showDownload
             showPaid
