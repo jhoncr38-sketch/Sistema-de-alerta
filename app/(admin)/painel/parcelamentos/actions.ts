@@ -328,6 +328,45 @@ export async function addParcela(
 }
 
 /**
+ * Apaga UMA parcela de um parcelamento: o registro, suas notificações (cascata
+ * no banco) e os arquivos no storage (PDF da guia e comprovante, se houver). Útil
+ * para retificar uma parcela enviada errada sem mexer no parcelamento inteiro.
+ * Só o contador (admin). Irreversível. NÃO redireciona — o componente atualiza.
+ */
+export async function deleteParcela(docId: string) {
+  await requireAdmin();
+  const supabase = await createClient();
+
+  // Confere que é mesmo uma parcela (não um boleto avulso) e pega os arquivos
+  // e o plano antes de remover, para revalidar a página de detalhe certa.
+  const { data: doc } = await supabase
+    .from("documents")
+    .select("id, categoria, plan_id, file_path, comprovante_path")
+    .eq("id", docId)
+    .single();
+  if (!doc) throw new Error("Parcela não encontrada ou sem permissão.");
+  if (doc.categoria !== "parcelamento" || !doc.plan_id) {
+    throw new Error("Este documento não é uma parcela de parcelamento.");
+  }
+
+  const { error } = await supabase.from("documents").delete().eq("id", docId);
+  if (error) throw new Error(error.message);
+
+  const paths = [doc.file_path, doc.comprovante_path].filter(
+    (p): p is string => !!p,
+  );
+  if (paths.length) {
+    await supabase.storage.from("boletos").remove(paths);
+  }
+
+  revalidatePath(`/painel/parcelamentos/${doc.plan_id}`);
+  revalidatePath("/painel/parcelamentos");
+  revalidatePath("/painel");
+  revalidatePath("/portal/parcelamentos");
+  revalidatePath("/portal");
+}
+
+/**
  * Apaga um parcelamento inteiro: o plano, suas parcelas (cascata no banco) e os
  * PDFs no storage. Só o contador (admin). NÃO redireciona — quem chama navega.
  */

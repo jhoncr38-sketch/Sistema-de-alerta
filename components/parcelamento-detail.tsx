@@ -17,12 +17,15 @@ export function ParcelamentoDetail({
   parcelas,
   showPaid = false,
   formaPagamento,
+  showDelete = false,
 }: {
   summary: PlanSummary;
   parcelas: DocumentRow[];
   showPaid?: boolean;
   /** "boleto" | "debito_automatico" — define o rótulo "Forma de pagamento". */
   formaPagamento?: string;
+  /** Permite excluir parcela individual (só no painel do contador). */
+  showDelete?: boolean;
 }) {
   const {
     pagas,
@@ -110,6 +113,7 @@ export function ParcelamentoDetail({
         total={total}
         showPaid={showPaid}
         debitoAutomatico={formaPagamento === "debito_automatico"}
+        showDelete={showDelete}
       />
     </div>
   );

@@ -1,6 +1,7 @@
 import { Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ComprovanteButton } from "@/components/comprovante-button";
+import { DeleteParcelaButton } from "@/components/delete-parcela-button";
 import { PaidToggle } from "@/components/paid-toggle";
 import { StatusBadge } from "@/components/status-badge";
 import { formatCurrency, formatDate } from "@/lib/format";
@@ -18,12 +19,15 @@ export function ParcelasTable({
   total,
   showPaid = false,
   debitoAutomatico = false,
+  showDelete = false,
 }: {
   parcelas: DocumentRow[];
   total: number;
   showPaid?: boolean;
   /** Débito automático: sem PDF para baixar; toggle = confirmar pagamento. */
   debitoAutomatico?: boolean;
+  /** Mostra o botão de excluir parcela individual (só no painel do contador). */
+  showDelete?: boolean;
 }) {
   if (parcelas.length === 0) {
     return (
@@ -101,6 +105,13 @@ export function ParcelasTable({
                 />
               ) : null}
               {downloadButton(p)}
+              {showDelete ? (
+                <DeleteParcelaButton
+                  docId={p.id}
+                  parcelaNum={p.parcela_num}
+                  total={total}
+                />
+              ) : null}
             </div>
           </div>
         ))}
@@ -163,6 +174,13 @@ export function ParcelasTable({
                 <td className="px-4 py-3">
                   <div className="flex items-center justify-end gap-1">
                     {downloadButton(p)}
+                    {showDelete ? (
+                      <DeleteParcelaButton
+                        docId={p.id}
+                        parcelaNum={p.parcela_num}
+                        total={total}
+                      />
+                    ) : null}
                   </div>
                 </td>
               </tr>

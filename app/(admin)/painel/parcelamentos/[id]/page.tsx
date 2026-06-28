@@ -57,6 +57,7 @@ export default async function ParcelamentoDetalheAdminPage({
           parcelas={parcelas}
           showPaid
           formaPagamento={plan.forma_pagamento}
+          showDelete
         />
       </div>
     </>
