@@ -31,6 +31,8 @@ export function DocumentsTable({
   showPreview = false,
   showPaid = false,
   showDelete = false,
+  hideCompetencia = false,
+  flush = false,
   emptyMessage = "Nenhum boleto encontrado.",
 }: {
   documents: DocumentWithCompany[];
@@ -41,6 +43,10 @@ export function DocumentsTable({
   showPaid?: boolean;
   /** Só nas telas do contador: botão de apagar o documento do sistema. */
   showDelete?: boolean;
+  /** Oculta a coluna Competência (ex.: quando já está agrupado por mês). */
+  hideCompetencia?: boolean;
+  /** Sem borda/cartão externo no desktop — para usar dentro de outro cartão. */
+  flush?: boolean;
   emptyMessage?: string;
 }) {
   const showActions = showDownload || showPreview || showDelete;
@@ -56,7 +62,8 @@ export function DocumentsTable({
   // Esconde automaticamente as colunas que não se aplicam à lista atual:
   // folha e documentos não têm valor/vencimento; documentos da empresa também
   // não têm competência; e só guias a pagar têm status (vencido/pago).
-  const hasCompetencia = documents.some((d) => !!d.competencia);
+  const hasCompetencia =
+    !hideCompetencia && documents.some((d) => !!d.competencia);
   const hasAmount = documents.some((d) => d.amount != null);
   const hasDueDate = documents.some((d) => d.due_date != null);
   const hasPagavel = documents.some(isPagavel);
@@ -125,7 +132,7 @@ export function DocumentsTable({
   return (
     <>
       {/* ----- Celular: cartões empilhados (a tabela não cabe na largura) ----- */}
-      <div className="space-y-2.5 md:hidden">
+      <div className={cn("space-y-2.5 md:hidden", flush ? "p-2.5" : "")}>
         {documents.map((doc) => {
           const pagavel = isPagavel(doc);
           const hasActions = (showPaid && pagavel) || showActions;
@@ -197,7 +204,12 @@ export function DocumentsTable({
       </div>
 
       {/* ----- Desktop: tabela (só com as colunas que fazem sentido) ----- */}
-      <div className="hidden overflow-x-auto rounded-xl border bg-card md:block">
+      <div
+        className={cn(
+          "hidden overflow-x-auto md:block",
+          flush ? "" : "rounded-xl border bg-card",
+        )}
+      >
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b bg-muted/50 text-left text-xs text-muted-foreground uppercase">
