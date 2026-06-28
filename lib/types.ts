@@ -60,6 +60,7 @@ export interface DocumentRow {
   comprovante_path: string | null; // comprovante de pagamento (opcional), no bucket 'boletos'
   comprovante_name: string | null; // nome original do arquivo do comprovante
   comprovante_at: string | null; // ISO timestamp de quando o comprovante foi anexado
+  exige_comprovante: boolean; // quando true, o cliente só marca pago com comprovante anexado
   plan_id: string | null; // parcelamento ao qual a parcela pertence (categoria 'parcelamento')
   parcela_num: number | null; // número da parcela dentro do plano (1..total)
   file_path: string | null; // null em parcela de débito automático (sem boleto)

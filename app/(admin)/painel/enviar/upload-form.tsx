@@ -144,6 +144,22 @@ export function UploadForm({
                 dashboard de faturamento × carga tributária.
               </p>
             </div>
+
+            <label className="flex items-start gap-2.5 rounded-lg border bg-muted/30 p-3 sm:col-span-2">
+              <input
+                type="checkbox"
+                name="exige_comprovante"
+                value="1"
+                className="mt-0.5 size-4 accent-primary"
+              />
+              <span className="text-sm">
+                Exigir comprovante para o cliente marcar como pago
+                <span className="mt-0.5 block text-xs text-muted-foreground">
+                  Com isso ligado, o cliente só consegue quitar este boleto
+                  anexando o comprovante. Você (contador) pode marcar sem.
+                </span>
+              </span>
+            </label>
           </>
         ) : (
           <p className="text-xs text-muted-foreground sm:col-span-2">

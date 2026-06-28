@@ -49,6 +49,7 @@ export default async function MeusBoletosPage() {
             showPreview
             showDownload
             showPaid
+            enforceProof
             emptyMessage="Tudo em dia! Você não tem boletos em aberto."
           />
         </section>

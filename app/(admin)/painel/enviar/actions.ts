@@ -39,6 +39,8 @@ export async function uploadDocument(
         ? "folha"
         : "boleto";
   const isBoleto = categoria === "boleto";
+  // Só boleto pode exigir comprovante para o cliente marcar como pago.
+  const exigeComprovante = isBoleto && formData.get("exige_comprovante") === "1";
   // Boleto e folha têm mês de referência; documento da empresa, não.
   const precisaCompetencia = categoria !== "documento";
   const competencia = normalizeCompetencia(
@@ -127,6 +129,7 @@ export async function uploadDocument(
       competencia: competencia || null, // documento da empresa pode não ter mês
       amount,
       due_date: dueDate,
+      exige_comprovante: exigeComprovante,
       file_path: path,
       file_name: file.name,
       uploaded_by: profile.id,

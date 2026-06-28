@@ -116,6 +116,7 @@ export default async function DocumentosPage({
             showDownload
             showPaid
             showDelete
+            showRequireProof
             emptyMessage="Nenhum documento. Publique um boleto em “Enviar documento”."
           />
         ) : docs.length === 0 ? (
@@ -137,6 +138,7 @@ export default async function DocumentosPage({
                   showDownload
                   showPaid
                   showDelete
+                  showRequireProof
                   hideCompetencia
                   flush
                   emptyMessage="Nenhum documento neste mês."

@@ -5,6 +5,7 @@ import { ConfirmDeleteButton } from "@/components/confirm-delete-button";
 import { FilePreviewButton } from "@/components/file-preview-button";
 import { Button } from "@/components/ui/button";
 import { PaidToggle } from "@/components/paid-toggle";
+import { RequireProofToggle } from "@/components/require-proof-toggle";
 import { StatusBadge } from "@/components/status-badge";
 import { docTypeLabel } from "@/lib/constants";
 import { formatCurrency, formatDate } from "@/lib/format";
@@ -31,6 +32,8 @@ export function DocumentsTable({
   showPreview = false,
   showPaid = false,
   showDelete = false,
+  showRequireProof = false,
+  enforceProof = false,
   hideCompetencia = false,
   flush = false,
   emptyMessage = "Nenhum boleto encontrado.",
@@ -43,6 +46,10 @@ export function DocumentsTable({
   showPaid?: boolean;
   /** Só nas telas do contador: botão de apagar o documento do sistema. */
   showDelete?: boolean;
+  /** Só do contador: botão de exigir/dispensar comprovante por guia. */
+  showRequireProof?: boolean;
+  /** Telas do cliente: aplica a exigência de comprovante no botão "marcar pago". */
+  enforceProof?: boolean;
   /** Oculta a coluna Competência (ex.: quando já está agrupado por mês). */
   hideCompetencia?: boolean;
   /** Sem borda/cartão externo no desktop — para usar dentro de outro cartão. */
@@ -181,7 +188,12 @@ export function DocumentsTable({
               {hasActions ? (
                 <div className="flex flex-wrap items-center gap-2 border-t pt-3">
                   {showPaid && pagavel ? (
-                    <PaidToggle docId={doc.id} paid={doc.status === "paid"} />
+                    <PaidToggle
+                      docId={doc.id}
+                      paid={doc.status === "paid"}
+                      requireComprovante={enforceProof && doc.exige_comprovante}
+                      hasComprovante={!!doc.comprovante_path}
+                    />
                   ) : null}
                   {showPaid && pagavel ? (
                     <ComprovanteButton
@@ -189,6 +201,12 @@ export function DocumentsTable({
                       paid={doc.status === "paid"}
                       hasComprovante={!!doc.comprovante_path}
                       fileName={doc.comprovante_name}
+                    />
+                  ) : null}
+                  {showRequireProof && pagavel ? (
+                    <RequireProofToggle
+                      docId={doc.id}
+                      value={doc.exige_comprovante}
                     />
                   ) : null}
                   {showPreview ? previewButton(doc) : null}
@@ -278,6 +296,10 @@ export function DocumentsTable({
                           <PaidToggle
                             docId={doc.id}
                             paid={doc.status === "paid"}
+                            requireComprovante={
+                              enforceProof && doc.exige_comprovante
+                            }
+                            hasComprovante={!!doc.comprovante_path}
                           />
                           <ComprovanteButton
                             docId={doc.id}
@@ -285,6 +307,12 @@ export function DocumentsTable({
                             hasComprovante={!!doc.comprovante_path}
                             fileName={doc.comprovante_name}
                           />
+                          {showRequireProof ? (
+                            <RequireProofToggle
+                              docId={doc.id}
+                              value={doc.exige_comprovante}
+                            />
+                          ) : null}
                         </div>
                       ) : null}
                     </td>

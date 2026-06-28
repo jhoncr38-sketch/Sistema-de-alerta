@@ -131,6 +131,7 @@ export default async function PortalHome() {
             showPreview
             showDownload
             showPaid
+            enforceProof
             emptyMessage="Você não tem boletos ou parcelas em aberto."
           />
         </section>

@@ -65,15 +65,15 @@ const COMPROVANTE_TIPOS = new Set([
 ]);
 
 /**
- * Anexa (ou substitui) o comprovante de pagamento de uma guia paga. É OPCIONAL:
- * só roda quando o cliente escolhe um arquivo. A permissão é checada duas vezes —
- * aqui, lendo o documento pela RLS (só aparece se o usuário pode acessá-lo), e no
- * banco, pela função set_document_comprovante. O upload usa a service role porque
- * o bucket 'boletos' é de escrita restrita ao admin; por isso validamos o dono antes.
+ * Núcleo do anexo de comprovante: valida dono/arquivo, sobe ao bucket e grava o
+ * vínculo. Não revalida nem mexe em status — quem chama decide o resto. Usado por
+ * attachComprovante (anexo avulso) e por payWithComprovante (anexar + marcar pago).
  */
-export async function attachComprovante(docId: string, formData: FormData) {
-  const supabase = await createClient();
-
+async function uploadComprovanteCore(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  docId: string,
+  file: unknown,
+) {
   // Dono? A RLS só deixa o usuário SELECIONAR guias das empresas que acessa
   // (cliente) ou todas (admin). Se a linha vier, ele tem permissão.
   const { data: doc } = await supabase
@@ -86,7 +86,6 @@ export async function attachComprovante(docId: string, formData: FormData) {
     throw new Error("Só boletos e parcelas aceitam comprovante.");
   }
 
-  const file = formData.get("file");
   if (!(file instanceof File) || file.size === 0) {
     throw new Error("Selecione um arquivo.");
   }
@@ -124,7 +123,71 @@ export async function attachComprovante(docId: string, formData: FormData) {
   if (doc.comprovante_path && doc.comprovante_path !== path) {
     await admin.storage.from("boletos").remove([doc.comprovante_path]);
   }
+}
 
+/**
+ * Anexa (ou substitui) o comprovante de pagamento de uma guia paga. É OPCIONAL:
+ * só roda quando o cliente escolhe um arquivo. A permissão é checada duas vezes —
+ * pela RLS ao ler o documento e no banco, pela função set_document_comprovante.
+ */
+export async function attachComprovante(docId: string, formData: FormData) {
+  const supabase = await createClient();
+  await uploadComprovanteCore(supabase, docId, formData.get("file"));
+  revalidatePagamentos();
+}
+
+/**
+ * Anexa o comprovante E marca a guia como paga, em um só passo. Usado quando a
+ * guia exige comprovante: o cliente não consegue quitar sem anexar, então o
+ * botão "marcar pago" vira este fluxo. Anexa primeiro (para passar na regra do
+ * banco) e só então marca pago.
+ */
+export async function payWithComprovante(docId: string, formData: FormData) {
+  const supabase = await createClient();
+
+  // Estado antes (para o e-mail de confirmação e para saber se houve transição).
+  const { data: before } = await supabase
+    .from("documents")
+    .select("status,type,categoria,competencia,amount,company_id")
+    .eq("id", docId)
+    .single();
+
+  await uploadComprovanteCore(supabase, docId, formData.get("file"));
+
+  const { error } = await supabase.rpc("set_document_paid", {
+    doc_id: docId,
+    paid: true,
+  });
+  if (error) throw new Error(error.message);
+
+  if (before?.status === "open") {
+    after(() =>
+      notifyPaid({
+        documentId: docId,
+        companyId: before.company_id,
+        categoria: before.categoria as DocCategoria,
+        type: before.type as DocType,
+        competencia: before.competencia,
+        amount: before.amount,
+      }).catch((err) => console.error("[notify] pagamento confirmado:", err)),
+    );
+  }
+
+  revalidatePagamentos();
+}
+
+/**
+ * Liga/desliga a exigência de comprovante de uma guia. Só o contador (admin) —
+ * a autorização é feita no banco por set_document_require_proof.
+ */
+export async function setDocumentRequireProof(docId: string, value: boolean) {
+  await requireAdmin();
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("set_document_require_proof", {
+    doc_id: docId,
+    value,
+  });
+  if (error) throw new Error(error.message);
   revalidatePagamentos();
 }
 
