@@ -220,7 +220,9 @@ export function DocumentsTable({
               {showPaidCol ? (
                 <th className="px-4 py-2.5 font-medium">Pagamento</th>
               ) : null}
-              {showActions ? <th className="px-4 py-2.5 font-medium" /> : null}
+              {showActions ? (
+                <th className="w-px px-4 py-2.5 font-medium" />
+              ) : null}
             </tr>
           </thead>
           <tbody>
@@ -276,7 +278,7 @@ export function DocumentsTable({
                     </td>
                   ) : null}
                   {showActions ? (
-                    <td className="px-4 py-3">
+                    <td className="w-px px-4 py-3 whitespace-nowrap">
                       <div className="flex items-center justify-end gap-1">
                         {showPreview ? previewButton(doc) : null}
                         {showDownload ? downloadButton(doc) : null}
