@@ -50,7 +50,7 @@ export function PaidToggle({
 
   if (precisaAnexar) {
     return (
-      <span className="inline-flex items-center gap-1">
+      <span className="inline-flex flex-col items-start gap-1">
         <input
           ref={inputRef}
           type="file"
@@ -69,9 +69,13 @@ export function PaidToggle({
             inputRef.current?.click();
           }}
         >
-          {pending ? <Loader2 className="animate-spin" /> : <Paperclip />}
+          {pending ? <Loader2 className="animate-spin" /> : <Circle />}
           {labelUnpaid}
         </Button>
+        <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700 ring-1 ring-amber-200 ring-inset dark:bg-amber-950/40 dark:text-amber-300 dark:ring-amber-900">
+          <Paperclip className="size-3 shrink-0" />
+          Comprovante obrigatório
+        </span>
         {error ? <span className="text-xs text-destructive">{error}</span> : null}
       </span>
     );
