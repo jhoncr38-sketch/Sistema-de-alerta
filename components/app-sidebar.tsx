@@ -40,6 +40,7 @@ const ADMIN_NAV: NavItem[] = [
   { label: "Clientes", href: "/painel/clientes", icon: Users },
   { label: "Faturamento", href: "/painel/faturamento", icon: TrendingUp },
   { label: "Parcelamentos", href: "/painel/parcelamentos", icon: Layers },
+  { label: "Folha de pagamento", href: "/painel/folha", icon: Wallet },
   { label: "Documentos", href: "/painel/documentos", icon: FileText },
   { label: "Enviar documento", href: "/painel/enviar", icon: Upload },
   { label: "Histórico", href: "/painel/historico", icon: History },
