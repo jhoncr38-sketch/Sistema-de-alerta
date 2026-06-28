@@ -81,7 +81,7 @@ export default async function FolhaPage({
 
       <div className="space-y-6 p-6">
         {sp.company ? (
-          <FolhaList documents={docs} />
+          <FolhaList documents={docs} showDelete />
         ) : docs.length === 0 ? (
           <div className="rounded-xl border border-dashed bg-card px-6 py-12 text-center text-sm text-muted-foreground">
             Nenhuma folha publicada. Envie a folha de um cliente em “Enviar
@@ -91,7 +91,7 @@ export default async function FolhaPage({
           porEmpresa.map((g) => (
             <section key={g.id} className="space-y-3">
               <h2 className="text-sm font-semibold">{g.nome}</h2>
-              <FolhaList documents={g.docs} />
+              <FolhaList documents={g.docs} showDelete />
             </section>
           ))
         )}

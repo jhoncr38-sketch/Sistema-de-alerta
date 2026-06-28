@@ -186,6 +186,8 @@ export async function deleteDocument(docId: string) {
   revalidatePath("/painel");
   revalidatePath("/painel/documentos");
   revalidatePath("/painel/faturamento");
+  revalidatePath("/painel/folha");
   revalidatePath("/portal");
   revalidatePath("/portal/boletos");
+  revalidatePath("/portal/folha");
 }

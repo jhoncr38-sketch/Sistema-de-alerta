@@ -2,7 +2,9 @@
 
 import { useState } from "react";
 import { ChevronDown, Download, FileText } from "lucide-react";
+import { deleteDocument } from "@/app/actions/documents";
 import { Button } from "@/components/ui/button";
+import { ConfirmDeleteButton } from "@/components/confirm-delete-button";
 import { FilePreviewButton } from "@/components/file-preview-button";
 import type { DocumentWithCompany } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -17,10 +19,13 @@ export function FolhaMonth({
   titulo,
   docs,
   defaultOpen = false,
+  showDelete = false,
 }: {
   titulo: string;
   docs: DocumentWithCompany[];
   defaultOpen?: boolean;
+  /** Mostra o botão de excluir cada arquivo (só no painel do contador). */
+  showDelete?: boolean;
 }) {
   const [open, setOpen] = useState(defaultOpen);
 
@@ -70,6 +75,22 @@ export function FolhaMonth({
                     </a>
                   }
                 />
+                {showDelete ? (
+                  <ConfirmDeleteButton
+                    action={deleteDocument.bind(null, d.id)}
+                    title="Apagar arquivo da folha?"
+                    confirmLabel="Apagar arquivo"
+                    successMessage="Arquivo apagado."
+                    description={
+                      <>
+                        O arquivo <strong>{nomeArquivo(d)}</strong>
+                        {d.competencia ? ` (${d.competencia})` : ""} será
+                        removido do sistema junto com o documento. Esta ação não
+                        pode ser desfeita.
+                      </>
+                    }
+                  />
+                ) : null}
               </div>
             </li>
           ))}

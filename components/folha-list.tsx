@@ -29,8 +29,11 @@ function mesLabel(competencia: string | null): string {
  */
 export function FolhaList({
   documents,
+  showDelete = false,
 }: {
   documents: DocumentWithCompany[];
+  /** Mostra o botão de excluir cada arquivo (só no painel do contador). */
+  showDelete?: boolean;
 }) {
   if (documents.length === 0) {
     return (
@@ -64,6 +67,7 @@ export function FolhaList({
           titulo={mesLabel(g.competencia)}
           docs={g.docs}
           defaultOpen={i === 0}
+          showDelete={showDelete}
         />
       ))}
     </div>
