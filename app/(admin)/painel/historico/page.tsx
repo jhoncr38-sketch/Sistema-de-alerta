@@ -8,6 +8,7 @@ import type { DocType } from "@/lib/types";
 const KIND_LABEL: Record<string, string> = {
   vencido: "Boleto vencido",
   vence_hoje: "Vence hoje",
+  dias_1: "Vence amanhã",
   dias_3: "Faltam 3 dias",
 };
 

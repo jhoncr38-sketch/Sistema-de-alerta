@@ -105,6 +105,7 @@ export interface NotificationRow {
   channel: "email" | "portal";
   kind:
     | "vence_hoje"
+    | "dias_1"
     | "dias_3"
     | "dias_7"
     | "vencido"

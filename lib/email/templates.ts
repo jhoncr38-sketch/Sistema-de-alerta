@@ -2,11 +2,12 @@ import { docTypeLabel, APP_NAME } from "@/lib/constants";
 import { formatCurrency, formatDate } from "@/lib/format";
 import type { DocCategoria, DocType } from "@/lib/types";
 
-export type AlertKind = "vencido" | "vence_hoje" | "dias_3" | "dias_7";
+export type AlertKind = "vencido" | "vence_hoje" | "dias_1" | "dias_3" | "dias_7";
 
 const TITLE: Record<AlertKind, string> = {
   vencido: "Você tem um boleto vencido",
   vence_hoje: "Seu boleto vence hoje",
+  dias_1: "Seu boleto vence amanhã",
   dias_3: "Seu boleto vence em 3 dias",
   dias_7: "Seu boleto vence em 7 dias",
 };
@@ -41,6 +42,7 @@ const INFO = "#2563a8";
 const ACCENT: Record<AlertKind, string> = {
   vencido: DANGER,
   vence_hoje: WARN,
+  dias_1: WARN,
   dias_3: INFO,
   dias_7: INFO,
 };
