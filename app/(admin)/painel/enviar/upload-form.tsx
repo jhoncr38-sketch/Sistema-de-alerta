@@ -27,6 +27,9 @@ import { uploadDocument, type UploadState } from "./actions";
 const selectClass =
   "h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
 
+/** Tipos de imposto que não usam o "Faturamento do mês" (encargos + mensalidade). */
+const TIPOS_SEM_FATURAMENTO = new Set(["gps_inss", "fgts", "mensalidade"]);
+
 /** "1.240,00" / "1240.50" / "1240" -> número (espelha o parseAmount do back-end). */
 function parseBrl(raw: string): number {
   let s = raw.trim().replace(/\s|R\$/g, "");
@@ -72,6 +75,10 @@ export function UploadForm({
   // Boleto e folha têm mês de referência; documento da empresa, não.
   const precisaCompetencia = !isDocumento;
   const typeOptions = docTypeOptionsFor(categoria);
+  // INSS, FGTS e a mensalidade não compõem a carga tributária, então não faz
+  // sentido informar o faturamento do mês junto deles — esconde o campo.
+  const semFaturamento = TIPOS_SEM_FATURAMENTO.has(type);
+  const mostraFaturamento = isBoleto && !semFaturamento;
 
   // Faturamento já lançado para (cliente, competência), se houver.
   const revenueByKey = useMemo(() => {
@@ -88,9 +95,9 @@ export function UploadForm({
       : undefined;
   const novo = parseBrl(faturamento);
   const faturamentoFilled = faturamento.trim() !== "" && novo > 0;
-  // Só há o que confirmar se: é boleto, há valor digitado e o mês já tem faturamento.
+  // Só há o que confirmar se: o campo está visível, há valor digitado e o mês já tem faturamento.
   const hasDuplicate =
-    isBoleto && faturamentoFilled && existing != null;
+    mostraFaturamento && faturamentoFilled && existing != null;
 
   // Qualquer edição zera o modo: ele só vale para o envio confirmado no diálogo.
   const resetMode = () => {
@@ -175,7 +182,16 @@ export function UploadForm({
               className={selectClass}
               required
               value={type}
-              onChange={(e) => setType(e.target.value)}
+              onChange={(e) => {
+                const t = e.target.value;
+                setType(t);
+                // Ao trocar para INSS/FGTS/mensalidade o campo de faturamento
+                // some; zera o espelho pra não submeter um valor invisível.
+                if (TIPOS_SEM_FATURAMENTO.has(t)) {
+                  setFaturamento("");
+                  resetMode();
+                }
+              }}
             >
               <option value="" disabled>
                 Selecione...
@@ -219,32 +235,34 @@ export function UploadForm({
               <Input id="due_date" name="due_date" type="date" required />
             </div>
 
-            <div className="space-y-1.5 sm:col-span-2">
-              <Label htmlFor="faturamento">
-                Faturamento do mês (R$){" "}
-                <span className="text-muted-foreground">— opcional</span>
-              </Label>
-              <CurrencyInput
-                key={categoria}
-                id="faturamento"
-                name="faturamento"
-                placeholder="50.000,00"
-                onValueChange={(v) => {
-                  setFaturamento(v);
-                  resetMode();
-                }}
-              />
-              <input
-                type="hidden"
-                name="faturamento_mode"
-                ref={modeRef}
-                defaultValue="replace"
-              />
-              <p className="text-xs text-muted-foreground">
-                Faturamento bruto da empresa nesta competência. Alimenta o
-                dashboard de faturamento × carga tributária.
-              </p>
-            </div>
+            {mostraFaturamento ? (
+              <div className="space-y-1.5 sm:col-span-2">
+                <Label htmlFor="faturamento">
+                  Faturamento do mês (R$){" "}
+                  <span className="text-muted-foreground">— opcional</span>
+                </Label>
+                <CurrencyInput
+                  key={categoria}
+                  id="faturamento"
+                  name="faturamento"
+                  placeholder="50.000,00"
+                  onValueChange={(v) => {
+                    setFaturamento(v);
+                    resetMode();
+                  }}
+                />
+                <input
+                  type="hidden"
+                  name="faturamento_mode"
+                  ref={modeRef}
+                  defaultValue="replace"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Faturamento bruto da empresa nesta competência. Alimenta o
+                  dashboard de faturamento × carga tributária.
+                </p>
+              </div>
+            ) : null}
 
             {hasDuplicate ? (
               <Alert className="sm:col-span-2">
