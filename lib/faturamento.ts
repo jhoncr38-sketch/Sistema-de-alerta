@@ -11,8 +11,8 @@ import type { DocType } from "@/lib/types";
  * Agrupamento das guias para o gráfico "Tributos por tipo".
  * Inclui TODAS as guias com valor (boletos a pagar): os tributos da carga
  * (DAS, DARFs, ISS, ICMS) e também os encargos/retenções lançados — GPS-INSS,
- * FGTS, ISS-RPA e Outro. Os 3 DARFs entram juntos em "DARF". Tipos sem valor
- * de guia (documentos institucionais, folha) ficam de fora.
+ * FGTS, ISS-RPA e Outro. Os 3 DARFs aparecem separados (IRPJ, PIS/COFINS, CSLL).
+ * Tipos sem valor de guia (documentos institucionais, folha) ficam de fora.
  * (A carga tributária dos cards continua usando só isTributo/TRIBUTO_TYPES.)
  */
 export interface TributoGroup {
@@ -26,11 +26,9 @@ export const OUTROS_GROUP_KEY = "outro";
 
 export const TRIBUTO_GROUPS: readonly TributoGroup[] = [
   { key: "das", label: "DAS", types: ["das"] },
-  {
-    key: "darf",
-    label: "DARF",
-    types: ["darf_irpj", "darf_piscofins", "darf_csll"],
-  },
+  { key: "darf_irpj", label: "IRPJ", types: ["darf_irpj"] },
+  { key: "darf_piscofins", label: "PIS/COFINS", types: ["darf_piscofins"] },
+  { key: "darf_csll", label: "CSLL", types: ["darf_csll"] },
   { key: "iss", label: "ISS", types: ["iss"] },
   { key: "iss_rpa", label: "ISS - RPA", types: ["iss_rpa"] },
   { key: "icms", label: "ICMS", types: ["icms"] },
@@ -50,7 +48,7 @@ export interface MonthlyPoint {
   competencia: string; // "06/2026"
   faturamento: number;
   tributos: number;
-  porTipo: Record<string, number>; // guias por grupo: das/darf/iss/iss_rpa/icms/inss/fgts/outro
+  porTipo: Record<string, number>; // guias por grupo: das/darf_irpj/darf_piscofins/darf_csll/iss/iss_rpa/icms/inss/fgts/outro
   carga: number | null; // % (tributos / faturamento); null se não há faturamento
 }
 

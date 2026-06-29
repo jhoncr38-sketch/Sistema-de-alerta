@@ -8,7 +8,9 @@ import { formatCurrency } from "@/lib/format";
 /** Cor de cada grupo de guia (paleta do tema + extras; clara/escura). */
 const GROUP_COLOR: Record<string, string> = {
   das: "bg-chart-1",
-  darf: "bg-chart-5",
+  darf_irpj: "bg-cyan-500",
+  darf_piscofins: "bg-violet-500",
+  darf_csll: "bg-amber-500",
   iss: "bg-chart-2",
   iss_rpa: "bg-teal-500",
   icms: "bg-chart-3",
