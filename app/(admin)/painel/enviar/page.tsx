@@ -7,15 +7,31 @@ import { UploadForm } from "./upload-form";
 
 export default async function EnviarPage() {
   const supabase = await createClient();
-  const { data } = await supabase
-    .from("companies")
-    .select("*")
-    .eq("active", true)
-    .order("razao_social");
+  const [{ data }, { data: revData }] = await Promise.all([
+    supabase
+      .from("companies")
+      .select("*")
+      .eq("active", true)
+      .order("razao_social"),
+    // Faturamentos já lançados: usados para avisar duplicidade por mês/cliente.
+    supabase.from("revenues").select("company_id, competencia, amount"),
+  ]);
 
   const companies = ((data ?? []) as Company[]).map((c) => ({
     id: c.id,
     label: `${c.nome_fantasia || c.razao_social}${c.cnpj ? ` — ${c.cnpj}` : ""}`,
+  }));
+
+  const revenues = (
+    (revData ?? []) as {
+      company_id: string;
+      competencia: string;
+      amount: number;
+    }[]
+  ).map((r) => ({
+    companyId: r.company_id,
+    competencia: r.competencia,
+    amount: Number(r.amount),
   }));
 
   return (
@@ -35,7 +51,7 @@ export default async function EnviarPage() {
           </Card>
         ) : (
           <Card className="max-w-3xl px-6 py-6">
-            <UploadForm companies={companies} />
+            <UploadForm companies={companies} revenues={revenues} />
           </Card>
         )}
       </div>

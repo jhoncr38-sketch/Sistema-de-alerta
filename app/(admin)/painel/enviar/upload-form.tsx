@@ -1,8 +1,16 @@
 "use client";
 
-import { useActionState, useState } from "react";
-import { UploadCloud } from "lucide-react";
+import { useActionState, useMemo, useRef, useState } from "react";
+import { Info, UploadCloud } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { CompetenciaInput, CurrencyInput } from "@/components/masked-inputs";
@@ -11,16 +19,34 @@ import {
   UPLOAD_CATEGORIAS,
   docTypeOptionsFor,
 } from "@/lib/constants";
+import { normalizeCompetencia } from "@/lib/dates";
+import { formatCurrency } from "@/lib/format";
 import type { DocCategoria } from "@/lib/types";
 import { uploadDocument, type UploadState } from "./actions";
 
 const selectClass =
   "h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
 
+/** "1.240,00" / "1240.50" / "1240" -> número (espelha o parseAmount do back-end). */
+function parseBrl(raw: string): number {
+  let s = raw.trim().replace(/\s|R\$/g, "");
+  if (s.includes(",")) s = s.replace(/\./g, "").replace(",", ".");
+  const n = Number(s);
+  return Number.isFinite(n) ? n : 0;
+}
+
+export interface RevenueRef {
+  companyId: string;
+  competencia: string;
+  amount: number;
+}
+
 export function UploadForm({
   companies,
+  revenues,
 }: {
   companies: { id: string; label: string }[];
+  revenues: RevenueRef[];
 }) {
   const [state, action, pending] = useActionState<UploadState, FormData>(
     uploadDocument,
@@ -29,6 +55,17 @@ export function UploadForm({
 
   const [categoria, setCategoria] = useState<DocCategoria>("boleto");
   const [type, setType] = useState("");
+  // Espelho dos campos que definem a duplicidade do faturamento.
+  const [companyId, setCompanyId] = useState("");
+  const [competencia, setCompetencia] = useState("");
+  const [faturamento, setFaturamento] = useState("");
+  const [confirmOpen, setConfirmOpen] = useState(false);
+
+  const formRef = useRef<HTMLFormElement>(null);
+  // Modo do faturamento quando já existe um no mês: replace | add | skip.
+  // Imperativo (ref) para o valor estar no DOM antes do requestSubmit.
+  const modeRef = useRef<HTMLInputElement>(null);
+
   const isBoleto = categoria === "boleto";
   const isFolha = categoria === "folha";
   const isDocumento = categoria === "documento";
@@ -36,12 +73,52 @@ export function UploadForm({
   const precisaCompetencia = !isDocumento;
   const typeOptions = docTypeOptionsFor(categoria);
 
+  // Faturamento já lançado para (cliente, competência), se houver.
+  const revenueByKey = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const r of revenues) {
+      m.set(`${r.companyId}|${normalizeCompetencia(r.competencia)}`, r.amount);
+    }
+    return m;
+  }, [revenues]);
+
+  const existing =
+    companyId && competencia
+      ? revenueByKey.get(`${companyId}|${normalizeCompetencia(competencia)}`)
+      : undefined;
+  const novo = parseBrl(faturamento);
+  const faturamentoFilled = faturamento.trim() !== "" && novo > 0;
+  // Só há o que confirmar se: é boleto, há valor digitado e o mês já tem faturamento.
+  const hasDuplicate =
+    isBoleto && faturamentoFilled && existing != null;
+
+  // Qualquer edição zera o modo: ele só vale para o envio confirmado no diálogo.
+  const resetMode = () => {
+    if (modeRef.current) modeRef.current.value = "replace";
+  };
+
+  const submitWithMode = (mode: "replace" | "add" | "skip") => {
+    if (modeRef.current) modeRef.current.value = mode;
+    setConfirmOpen(false);
+    formRef.current?.requestSubmit();
+  };
+
   return (
-    <form action={action} className="space-y-5">
+    <form ref={formRef} action={action} className="space-y-5">
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-1.5">
           <Label htmlFor="company_id">Cliente</Label>
-          <select id="company_id" name="company_id" className={selectClass} required defaultValue="">
+          <select
+            id="company_id"
+            name="company_id"
+            className={selectClass}
+            required
+            value={companyId}
+            onChange={(e) => {
+              setCompanyId(e.target.value);
+              resetMode();
+            }}
+          >
             <option value="" disabled>
               Selecione o cliente...
             </option>
@@ -64,6 +141,10 @@ export function UploadForm({
               const c = e.target.value as DocCategoria;
               setCategoria(c);
               setType(c === "folha" ? "folha" : ""); // folha tem tipo único
+              // Os campos mascarados remontam (key={categoria}); zera o espelho.
+              setCompetencia("");
+              setFaturamento("");
+              resetMode();
             }}
           >
             {UPLOAD_CATEGORIAS.map((c) => (
@@ -113,7 +194,16 @@ export function UploadForm({
             <Label htmlFor="competencia">
               {isFolha ? "Competência da folha (mês/ano)" : "Competência (mês/ano)"}
             </Label>
-            <CompetenciaInput id="competencia" name="competencia" required />
+            <CompetenciaInput
+              key={categoria}
+              id="competencia"
+              name="competencia"
+              required
+              onValueChange={(v) => {
+                setCompetencia(v);
+                resetMode();
+              }}
+            />
           </div>
         ) : null}
 
@@ -135,15 +225,41 @@ export function UploadForm({
                 <span className="text-muted-foreground">— opcional</span>
               </Label>
               <CurrencyInput
+                key={categoria}
                 id="faturamento"
                 name="faturamento"
                 placeholder="50.000,00"
+                onValueChange={(v) => {
+                  setFaturamento(v);
+                  resetMode();
+                }}
+              />
+              <input
+                type="hidden"
+                name="faturamento_mode"
+                ref={modeRef}
+                defaultValue="replace"
               />
               <p className="text-xs text-muted-foreground">
                 Faturamento bruto da empresa nesta competência. Alimenta o
                 dashboard de faturamento × carga tributária.
               </p>
             </div>
+
+            {hasDuplicate ? (
+              <Alert className="sm:col-span-2">
+                <Info />
+                <AlertTitle>Faturamento deste mês já foi informado</AlertTitle>
+                <AlertDescription>
+                  {normalizeCompetencia(competencia)} deste cliente já tem{" "}
+                  <strong className="text-foreground">
+                    {formatCurrency(existing ?? 0)}
+                  </strong>{" "}
+                  lançado. Ao publicar, você escolhe se quer substituir, somar ou
+                  manter o valor atual.
+                </AlertDescription>
+              </Alert>
+            ) : null}
 
             <label className="flex items-start gap-2.5 rounded-lg border bg-muted/30 p-3 sm:col-span-2">
               <input
@@ -208,10 +324,60 @@ export function UploadForm({
       ) : null}
 
       <div className="flex justify-end gap-2">
-        <Button type="submit" disabled={pending}>
+        <Button
+          type={hasDuplicate ? "button" : "submit"}
+          disabled={pending}
+          onClick={hasDuplicate ? () => setConfirmOpen(true) : undefined}
+        >
           {pending ? "Enviando..." : "Publicar para o cliente"}
         </Button>
       </div>
+
+      <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <DialogContent showCloseButton={false}>
+          <DialogHeader>
+            <DialogTitle>Faturamento já informado neste mês</DialogTitle>
+            <DialogDescription>
+              {existing != null ? (
+                <>
+                  O faturamento de{" "}
+                  <strong className="text-foreground">
+                    {normalizeCompetencia(competencia)}
+                  </strong>{" "}
+                  deste cliente já é{" "}
+                  <strong className="text-foreground">
+                    {formatCurrency(existing)}
+                  </strong>
+                  . Você está lançando{" "}
+                  <strong className="text-foreground">
+                    {formatCurrency(novo)}
+                  </strong>
+                  . O que deseja fazer?
+                </>
+              ) : null}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-2">
+            <Button type="button" onClick={() => submitWithMode("replace")}>
+              Substituir pelo novo — {formatCurrency(novo)}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => submitWithMode("add")}
+            >
+              Somar ao atual — total {formatCurrency((existing ?? 0) + novo)}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => submitWithMode("skip")}
+            >
+              Não lançar — manter {formatCurrency(existing ?? 0)}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </form>
   );
 }

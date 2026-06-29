@@ -49,28 +49,37 @@ type MaskedProps = Omit<
 > & {
   /** Valor inicial (será formatado pela máscara). */
   defaultValue?: string;
+  /** Avisa o pai a cada digitação, já com o valor formatado pela máscara. */
+  onValueChange?: (value: string) => void;
 };
 
-function useMask(initial: string, format: (v: string) => string) {
+function useMask(
+  initial: string,
+  format: (v: string) => string,
+  onValueChange?: (value: string) => void,
+) {
   const [value, setValue] = useState(() => format(initial));
   return {
     value,
-    onChange: (e: React.ChangeEvent<HTMLInputElement>) =>
-      setValue(format(e.target.value)),
+    onChange: (e: React.ChangeEvent<HTMLInputElement>) => {
+      const next = format(e.target.value);
+      setValue(next);
+      onValueChange?.(next);
+    },
   };
 }
 
-export function CnpjInput({ defaultValue = "", ...props }: MaskedProps) {
-  const bind = useMask(defaultValue, maskCnpj);
+export function CnpjInput({ defaultValue = "", onValueChange, ...props }: MaskedProps) {
+  const bind = useMask(defaultValue, maskCnpj, onValueChange);
   return <Input inputMode="numeric" placeholder="00.000.000/0001-00" {...props} {...bind} />;
 }
 
-export function CurrencyInput({ defaultValue = "", ...props }: MaskedProps) {
-  const bind = useMask(defaultValue, maskCurrency);
+export function CurrencyInput({ defaultValue = "", onValueChange, ...props }: MaskedProps) {
+  const bind = useMask(defaultValue, maskCurrency, onValueChange);
   return <Input inputMode="decimal" {...props} {...bind} />;
 }
 
-export function CompetenciaInput({ defaultValue = "", ...props }: MaskedProps) {
-  const bind = useMask(defaultValue, maskCompetencia);
+export function CompetenciaInput({ defaultValue = "", onValueChange, ...props }: MaskedProps) {
+  const bind = useMask(defaultValue, maskCompetencia, onValueChange);
   return <Input inputMode="numeric" placeholder="06/2026" {...props} {...bind} />;
 }

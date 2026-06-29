@@ -145,13 +145,26 @@ export async function uploadDocument(
   }
 
   // Faturamento do mês (opcional): 1 valor por empresa/competência.
-  // Upsert pela chave única — reenviar outro boleto do mesmo mês atualiza.
-  if (faturamento !== null) {
+  // Quando já existe faturamento no mês, o formulário avisa e o contador
+  // escolhe o que fazer; o modo chega aqui:
+  //   replace (padrão) = substitui o valor; add = soma ao existente; skip = mantém.
+  const faturamentoMode = String(formData.get("faturamento_mode") ?? "replace");
+  if (faturamento !== null && faturamentoMode !== "skip") {
+    let amountToStore = faturamento;
+    if (faturamentoMode === "add") {
+      const { data: existing } = await supabase
+        .from("revenues")
+        .select("amount")
+        .eq("company_id", companyId)
+        .eq("competencia", competencia)
+        .maybeSingle();
+      if (existing) amountToStore = Number(existing.amount) + faturamento;
+    }
     const { error: revenueError } = await supabase.from("revenues").upsert(
       {
         company_id: companyId,
         competencia,
-        amount: faturamento,
+        amount: amountToStore,
         uploaded_by: profile.id,
       },
       { onConflict: "company_id,competencia" },
