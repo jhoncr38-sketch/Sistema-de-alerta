@@ -11,51 +11,154 @@ const TITLE: Record<AlertKind, string> = {
   dias_7: "Seu boleto vence em 7 dias",
 };
 
+// Marca do contador.
+const BRAND_NAME = "S J Contabilidade";
+const BRAND_TAGLINE = "Contabilidade com excelência, resultados com confiança";
+// Logo no bucket público `branding` do Supabase. Se trocar a logo no painel,
+// atualize este nome de arquivo (ou o e-mail mostra o texto alternativo).
+const LOGO_URL =
+  "https://qupsxlipqrsuyfeljlkm.supabase.co/storage/v1/object/public/branding/logo-1782297905570.png";
+
+// ----- Paleta (claro + dourado, rodapé escuro) -----
+const GOLD = "#c8a24a";
+const GOLD_LIGHT = "#e6c66e";
+const GOLD_DARK = "#9a7b2e";
+const BG_OUTER = "#e9e7e1";
+const CARD = "#ffffff";
+const BORDER = "#e7e3d8";
+const ROW_BORDER = "#efece4";
+const HEAD_DARK = "#1f2733";
+const TEXT = "#2b2f36";
+const MUTED = "#8a8f98";
+const FOOTER_BG = "#0e1320";
+
+const DANGER = "#c0392b";
+const WARN = "#c8821e";
+const SUCCESS = "#1a7f4b";
+const INFO = "#2563a8";
+
+// Cor de destaque por tipo de alerta (linha sob o cabeçalho e valor do vencimento).
 const ACCENT: Record<AlertKind, string> = {
-  vencido: "#A32D2D",
-  vence_hoje: "#854F0B",
-  dias_3: "#185FA5",
-  dias_7: "#185FA5",
+  vencido: DANGER,
+  vence_hoje: WARN,
+  dias_3: INFO,
+  dias_7: INFO,
 };
 
-const DANGER = "#A32D2D";
-const SUCCESS = "#1A7F4B";
-const INFO = "#185FA5";
-const BUTTON = "#185FA5";
+/** Data/hora atual no fuso de Brasília, ex.: "29/06/2026 às 05:39". */
+function geradoEm(): string {
+  const fmt = new Intl.DateTimeFormat("pt-BR", {
+    timeZone: "America/Sao_Paulo",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  return fmt.format(new Date()).replace(", ", " às ");
+}
 
-/** Cabeçalho colorido + cartão branco. Base visual de todos os e-mails. */
+/** Parágrafo (cor escura — fundo claro). */
+function p(html: string): string {
+  return `<p style="margin:0 0 12px;color:${TEXT};font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.6">${html}</p>`;
+}
+
+/** Destaque (nome do cliente) em dourado escuro, legível no branco. */
+function b(text: string): string {
+  return `<strong style="color:${GOLD_DARK}">${text}</strong>`;
+}
+
+/** Botão dourado (table-based; aparece com fundo até no Outlook). */
+function button(href: string, label: string): string {
+  return `
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:20px 0 4px">
+    <tr><td align="center" bgcolor="${GOLD}" style="border-radius:8px;background:${GOLD};background:linear-gradient(90deg,${GOLD_DARK},${GOLD_LIGHT})">
+      <a href="${href}" style="display:inline-block;padding:12px 26px;color:#ffffff;font-family:Arial,Helvetica,sans-serif;font-size:13px;font-weight:bold;text-decoration:none;letter-spacing:.5px;text-transform:uppercase">&#128202;&nbsp;&nbsp;${label}</a>
+    </td></tr>
+  </table>`;
+}
+
+/** Linha rótulo/valor das tabelas simples. */
+function row(label: string, value: string, valueColor: string = TEXT): string {
+  return `<tr>
+    <td style="padding:8px 0;border-bottom:1px solid ${ROW_BORDER};color:${MUTED};font-family:Arial,Helvetica,sans-serif;font-size:13px">${label}</td>
+    <td style="padding:8px 0;border-bottom:1px solid ${ROW_BORDER};text-align:right;font-weight:bold;color:${valueColor};font-family:Arial,Helvetica,sans-serif;font-size:13px">${value}</td>
+  </tr>`;
+}
+
+function infoTable(rowsHtml: string): string {
+  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:16px 0">${rowsHtml}</table>`;
+}
+
+/** Cabeçalho de coluna dourado (tabelas de resumo). */
+function th(label: string, align: "left" | "center" | "right" = "left"): string {
+  return `<th align="${align}" bgcolor="#faf6ec" style="padding:9px 10px;background:#faf6ec;font-family:Arial,Helvetica,sans-serif;font-size:11px;font-weight:bold;letter-spacing:.5px;text-transform:uppercase;color:${GOLD_DARK};border-bottom:2px solid #ead9b0">${label}</th>`;
+}
+
+/**
+ * Moldura de todos os e-mails: claro + dourado, logo da SJ no topo e no rodapé,
+ * e barra escura inferior com a tagline. `accent` colore a linha sob o cabeçalho
+ * (urgência). `generated` adiciona "Relatório gerado em ...".
+ */
 function shell(opts: {
   headline: string;
   accent: string;
   bodyHtml: string;
   footer?: string;
-}) {
+  generated?: boolean;
+}): string {
   const {
     headline,
     accent,
     bodyHtml,
     footer = `Você recebeu este e-mail porque tem acesso ao portal ${APP_NAME}.`,
+    generated = false,
   } = opts;
   return `
-  <div style="font-family:Arial,Helvetica,sans-serif;background:#f4f4f5;padding:24px">
-    <div style="max-width:560px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;border:1px solid #e4e4e7">
-      <div style="background:${accent};color:#fff;padding:16px 24px;font-size:16px;font-weight:600">
-        ${APP_NAME} · ${headline}
-      </div>
-      <div style="padding:24px;color:#27272a;font-size:14px;line-height:1.6">
-        ${bodyHtml}
-        <p style="color:#71717a;font-size:12px;margin-top:24px">${footer}</p>
-      </div>
-    </div>
-  </div>`;
-}
-
-function button(href: string, label: string) {
-  return `<a href="${href}" style="display:inline-block;background:${BUTTON};color:#fff;text-decoration:none;padding:10px 20px;border-radius:8px;font-weight:600">${label}</a>`;
-}
-
-function row(label: string, value: string, valueColor = "#27272a") {
-  return `<tr><td style="padding:6px 0;color:#71717a">${label}</td><td style="padding:6px 0;text-align:right;font-weight:600;color:${valueColor}">${value}</td></tr>`;
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:${BG_OUTER};margin:0;padding:24px 12px">
+  <tr><td align="center">
+    <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="width:600px;max-width:600px;background:${CARD};border:1px solid ${BORDER};border-radius:14px;overflow:hidden">
+      <!-- faixa dourada superior -->
+      <tr><td style="height:4px;line-height:4px;font-size:0;background:${GOLD};background:linear-gradient(90deg,${GOLD_DARK},${GOLD_LIGHT},${GOLD_DARK})">&nbsp;</td></tr>
+      <!-- cabeçalho: logo + ContAlert + subtítulo -->
+      <tr><td style="padding:22px 28px 14px">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+          <td width="62" valign="middle">
+            <img src="${LOGO_URL}" width="54" alt="${BRAND_NAME}" style="display:block;border:0;height:auto" />
+          </td>
+          <td valign="middle" style="padding-left:14px">
+            <div style="font-family:Georgia,'Times New Roman',serif;font-size:24px;font-weight:bold;letter-spacing:.3px"><span style="color:${HEAD_DARK}">Cont</span><span style="color:${GOLD}">Alert</span></div>
+            <div style="color:${MUTED};font-family:Arial,Helvetica,sans-serif;font-size:11px;letter-spacing:1.5px;text-transform:uppercase;margin-top:4px">${headline}</div>
+          </td>
+        </tr></table>
+      </td></tr>
+      <!-- linha de destaque (urgência) -->
+      <tr><td style="padding:0 28px"><div style="height:2px;background:${accent};border-radius:2px"></div></td></tr>
+      <!-- corpo -->
+      <tr><td style="padding:20px 28px 22px">${bodyHtml}</td></tr>
+      <!-- rodapé claro: logo + nota + data -->
+      <tr><td style="padding:14px 28px;border-top:1px solid ${ROW_BORDER}">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+          <td valign="middle">
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
+              <td valign="middle"><img src="${LOGO_URL}" width="26" alt="${BRAND_NAME}" style="display:block;border:0;height:auto" /></td>
+              <td valign="middle" style="padding-left:10px;color:${MUTED};font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:1.4">${footer}</td>
+            </tr></table>
+          </td>
+          ${
+            generated
+              ? `<td valign="middle" align="right" style="color:${MUTED};font-family:Arial,Helvetica,sans-serif;font-size:11px;line-height:1.4;white-space:nowrap">&#128197;&nbsp;Relatório gerado em:<br>${geradoEm()}</td>`
+              : ""
+          }
+        </tr></table>
+      </td></tr>
+      <!-- barra escura com a marca -->
+      <tr><td bgcolor="${FOOTER_BG}" style="background:${FOOTER_BG};padding:13px 24px;text-align:center">
+        <span style="color:${GOLD_LIGHT};font-family:Arial,Helvetica,sans-serif;font-size:11px;font-weight:bold;letter-spacing:.8px;text-transform:uppercase">${BRAND_NAME} &nbsp;|&nbsp; ${BRAND_TAGLINE}</span>
+      </td></tr>
+    </table>
+  </td></tr>
+</table>`;
 }
 
 /** Alerta de vencimento de boleto/guia (7 dias, 3 dias, hoje, vencido). */
@@ -73,16 +176,19 @@ export function alertEmail(opts: {
   const accent = ACCENT[kind];
   const subject = `${TITLE[kind]} — ${docTypeLabel(type)}`;
   const body = `
-        <p>Olá, <strong>${companyName}</strong>!</p>
-        <p>Este é um aviso sobre a seguinte obrigação:</p>
-        <table style="width:100%;border-collapse:collapse;margin:16px 0">
+        ${p(`Olá, ${b(companyName)}!`)}
+        ${p("Este é um aviso sobre a seguinte obrigação:")}
+        ${infoTable(`
           ${row("Imposto", docTypeLabel(type))}
           ${competencia ? row("Competência", competencia) : ""}
           ${row("Valor", formatCurrency(amount))}
           ${row("Vencimento", formatDate(dueDate), accent)}
-        </table>
+        `)}
         ${button(portalUrl, "Ver e baixar o boleto")}`;
-  return { subject, html: shell({ headline: TITLE[kind], accent, bodyHtml: body }) };
+  return {
+    subject,
+    html: shell({ headline: TITLE[kind], accent, bodyHtml: body }),
+  };
 }
 
 /** Parcela de parcelamento (REFIS) vencida — alerta com risco de exclusão. */
@@ -103,16 +209,16 @@ export function parcelaRiscoEmail(opts: {
   const parcelaLabel =
     parcelaNum && total ? `${parcelaNum}/${total}` : parcelaNum ? `${parcelaNum}` : "—";
   const body = `
-        <p>Olá, <strong>${companyName}</strong>!</p>
-        <p style="color:${DANGER};font-weight:600">Uma parcela do seu parcelamento venceu e ainda consta em aberto.</p>
-        <p>Parcelamentos podem ser <strong>cancelados/excluídos</strong> em caso de atraso no pagamento das parcelas. Regularize o quanto antes para não perder o acordo.</p>
-        <table style="width:100%;border-collapse:collapse;margin:16px 0">
+        ${p(`Olá, ${b(companyName)}!`)}
+        ${p(`<span style="color:${DANGER};font-weight:bold">Uma parcela do seu parcelamento venceu e ainda consta em aberto.</span>`)}
+        ${p("Parcelamentos podem ser <strong>cancelados/excluídos</strong> em caso de atraso. Regularize o quanto antes para não perder o acordo.")}
+        ${infoTable(`
           ${row("Parcelamento", planNome)}
           ${row("Guia", docTypeLabel(type))}
           ${row("Parcela", parcelaLabel)}
           ${row("Valor", formatCurrency(amount))}
           ${row("Vencimento", formatDate(dueDate), DANGER)}
-        </table>
+        `)}
         ${button(portalUrl, "Ver parcelamento e pagar")}`;
   return { subject, html: shell({ headline, accent: DANGER, bodyHtml: body }) };
 }
@@ -138,14 +244,14 @@ export function novoDocumentoEmail(opts: {
       ? `${count} novos arquivos foram disponibilizados no seu portal:`
       : "Um novo documento foi disponibilizado no seu portal:";
   const body = `
-        <p>Olá, <strong>${companyName}</strong>!</p>
-        <p>${intro}</p>
-        <table style="width:100%;border-collapse:collapse;margin:16px 0">
+        ${p(`Olá, ${b(companyName)}!`)}
+        ${p(intro)}
+        ${infoTable(`
           ${row("Tipo", docTypeLabel(type))}
           ${competencia ? row("Competência", competencia) : ""}
           ${amount != null ? row("Valor", formatCurrency(amount)) : ""}
           ${dueDate ? row("Vencimento", formatDate(dueDate), INFO) : ""}
-        </table>
+        `)}
         ${button(portalUrl, isBoleto ? "Ver e baixar o boleto" : "Ver no portal")}`;
   return { subject, html: shell({ headline, accent: INFO, bodyHtml: body }) };
 }
@@ -162,13 +268,13 @@ export function pagamentoConfirmadoEmail(opts: {
   const headline = "Pagamento confirmado";
   const subject = `Pagamento confirmado — ${docTypeLabel(type)}`;
   const body = `
-        <p>Olá, <strong>${companyName}</strong>!</p>
-        <p>Registramos o pagamento da seguinte obrigação. Obrigado!</p>
-        <table style="width:100%;border-collapse:collapse;margin:16px 0">
+        ${p(`Olá, ${b(companyName)}!`)}
+        ${p("Registramos o pagamento da seguinte obrigação. Obrigado!")}
+        ${infoTable(`
           ${row("Imposto", docTypeLabel(type))}
           ${competencia ? row("Competência", competencia) : ""}
-          ${amount != null ? row("Valor", formatCurrency(amount)) : ""}
-        </table>
+          ${amount != null ? row("Valor", formatCurrency(amount), SUCCESS) : ""}
+        `)}
         ${button(portalUrl, "Ver no portal")}`;
   return { subject, html: shell({ headline, accent: SUCCESS, bodyHtml: body }) };
 }
@@ -192,30 +298,27 @@ export function weeklyDigestEmail(opts: {
   const headline = "Resumo dos próximos vencimentos";
   const subject = `Resumo da semana — ${items.length} ${items.length === 1 ? "obrigação" : "obrigações"} a vencer`;
   const total = items.reduce((s, i) => s + (i.amount ?? 0), 0);
+  const cell = `padding:9px 10px;border-bottom:1px solid ${ROW_BORDER};font-family:Arial,Helvetica,sans-serif;font-size:13px;color:${TEXT}`;
   const rows = items
     .map(
       (i) => `
           <tr>
-            <td style="padding:8px 0;border-top:1px solid #f0f0f0">${docTypeLabel(i.type)}${i.isParcela ? " (parcela)" : ""}${i.competencia ? `<br><span style="color:#a1a1aa;font-size:12px">${i.competencia}</span>` : ""}</td>
-            <td style="padding:8px 0;border-top:1px solid #f0f0f0;text-align:right;white-space:nowrap">${i.amount != null ? formatCurrency(i.amount) : "—"}</td>
-            <td style="padding:8px 0;border-top:1px solid #f0f0f0;text-align:right;white-space:nowrap;color:#71717a">${formatDate(i.dueDate)}<br><span style="font-size:12px">${i.statusLabel}</span></td>
+            <td style="${cell}">${docTypeLabel(i.type)}${i.isParcela ? " (parcela)" : ""}${i.competencia ? `<br><span style="color:${MUTED};font-size:12px">${i.competencia}</span>` : ""}</td>
+            <td style="${cell};text-align:right;white-space:nowrap">${i.amount != null ? formatCurrency(i.amount) : "—"}</td>
+            <td style="${cell};text-align:right;white-space:nowrap;color:${MUTED}">${formatDate(i.dueDate)}<br><span style="font-size:12px">${i.statusLabel}</span></td>
           </tr>`,
     )
     .join("");
   const body = `
-        <p>Olá, <strong>${companyName}</strong>!</p>
-        <p>Estas são as obrigações que vencem nos próximos dias:</p>
-        <table style="width:100%;border-collapse:collapse;margin:16px 0">
-          <thead><tr>
-            <th style="text-align:left;font-size:12px;color:#a1a1aa;font-weight:600;padding-bottom:4px">Obrigação</th>
-            <th style="text-align:right;font-size:12px;color:#a1a1aa;font-weight:600;padding-bottom:4px">Valor</th>
-            <th style="text-align:right;font-size:12px;color:#a1a1aa;font-weight:600;padding-bottom:4px">Vencimento</th>
-          </tr></thead>
+        ${p(`Olá, ${b(companyName)}!`)}
+        ${p("Estas são as obrigações que vencem nos próximos dias:")}
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:16px 0;border:1px solid ${ROW_BORDER};border-radius:8px;overflow:hidden">
+          <thead><tr>${th("Obrigação")}${th("Valor", "right")}${th("Vencimento", "right")}</tr></thead>
           <tbody>${rows}</tbody>
           <tfoot><tr>
-            <td style="padding-top:10px;border-top:2px solid #e4e4e7;font-weight:700">Total</td>
-            <td style="padding-top:10px;border-top:2px solid #e4e4e7;text-align:right;font-weight:700">${formatCurrency(total)}</td>
-            <td style="border-top:2px solid #e4e4e7"></td>
+            <td style="padding:11px 10px;font-weight:bold;color:${HEAD_DARK};font-family:Arial,Helvetica,sans-serif;font-size:13px">Total</td>
+            <td style="padding:11px 10px;text-align:right;font-weight:bold;color:${GOLD_DARK};font-family:Arial,Helvetica,sans-serif;font-size:13px">${formatCurrency(total)}</td>
+            <td></td>
           </tr></tfoot>
         </table>
         ${button(portalUrl, "Ver tudo no portal")}`;
@@ -240,28 +343,29 @@ export function adminDigestEmail(opts: {
   const totVencido = companies.reduce((s, c) => s + c.vencido, 0);
   const totHoje = companies.reduce((s, c) => s + c.venceHoje, 0);
   const subject = `Resumo diário — ${totVencido} vencido(s), ${totHoje} vence(m) hoje`;
+  const cell = `padding:10px;border-bottom:1px solid ${ROW_BORDER};font-family:Arial,Helvetica,sans-serif;font-size:13px`;
   const rows = companies
     .map(
       (c) => `
           <tr>
-            <td style="padding:8px 0;border-top:1px solid #f0f0f0">${c.companyName}</td>
-            <td style="padding:8px 0;border-top:1px solid #f0f0f0;text-align:center;color:${DANGER};font-weight:700">${c.vencido || ""}</td>
-            <td style="padding:8px 0;border-top:1px solid #f0f0f0;text-align:center;color:#854F0B;font-weight:700">${c.venceHoje || ""}</td>
-            <td style="padding:8px 0;border-top:1px solid #f0f0f0;text-align:center">${c.proximos || ""}</td>
-            <td style="padding:8px 0;border-top:1px solid #f0f0f0;text-align:right;white-space:nowrap">${formatCurrency(c.totalAberto)}</td>
+            <td style="${cell};color:${TEXT}">${c.companyName}</td>
+            <td style="${cell};text-align:center;color:${DANGER};font-weight:bold">${c.vencido || ""}</td>
+            <td style="${cell};text-align:center;color:${WARN};font-weight:bold">${c.venceHoje || ""}</td>
+            <td style="${cell};text-align:center;color:${MUTED}">${c.proximos || ""}</td>
+            <td style="${cell};text-align:right;white-space:nowrap;color:${HEAD_DARK};font-weight:bold">${formatCurrency(c.totalAberto)}</td>
           </tr>`,
     )
     .join("");
   const body = `
-        <p>Bom dia! Panorama das obrigações em aberto dos seus clientes:</p>
-        <table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:13px">
-          <thead><tr>
-            <th style="text-align:left;font-size:12px;color:#a1a1aa;padding-bottom:4px">Cliente</th>
-            <th style="text-align:center;font-size:12px;color:#a1a1aa;padding-bottom:4px">Venc.</th>
-            <th style="text-align:center;font-size:12px;color:#a1a1aa;padding-bottom:4px">Hoje</th>
-            <th style="text-align:center;font-size:12px;color:#a1a1aa;padding-bottom:4px">7 dias</th>
-            <th style="text-align:right;font-size:12px;color:#a1a1aa;padding-bottom:4px">Em aberto</th>
-          </tr></thead>
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 14px"><tr>
+          <td width="40" valign="middle">
+            <div style="width:36px;height:36px;background:#faf6ec;border:1px solid #ead9b0;border-radius:50%;text-align:center;line-height:36px;color:${GOLD_DARK};font-size:16px">&#128276;</div>
+          </td>
+          <td valign="middle" style="padding-left:11px;color:${HEAD_DARK};font-family:Arial,Helvetica,sans-serif;font-size:17px;font-weight:bold">Bom dia!</td>
+        </tr></table>
+        ${p("Panorama das obrigações em aberto dos seus clientes:")}
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:8px 0 4px;border:1px solid ${ROW_BORDER};border-radius:8px;overflow:hidden">
+          <thead><tr>${th("Cliente")}${th("Venc.", "center")}${th("Hoje", "center")}${th("7 dias", "center")}${th("Em aberto", "right")}</tr></thead>
           <tbody>${rows}</tbody>
         </table>
         ${button(portalUrl, "Abrir o painel")}`;
@@ -269,9 +373,10 @@ export function adminDigestEmail(opts: {
     subject,
     html: shell({
       headline,
-      accent: INFO,
+      accent: GOLD,
       bodyHtml: body,
       footer: `Resumo automático do ${APP_NAME} para o contador.`,
+      generated: true,
     }),
   };
 }
@@ -281,8 +386,8 @@ export function testEmail() {
   const headline = "E-mail de teste";
   const subject = `${APP_NAME} — e-mail de teste`;
   const body = `
-        <p>Tudo certo! ✅</p>
-        <p>Se você está lendo isto, a integração de e-mail do ${APP_NAME} (Resend) está <strong>funcionando</strong> e o remetente está autorizado a enviar.</p>
-        <p style="color:#71717a">Este é apenas um disparo de teste feito a partir das Configurações do painel.</p>`;
+        ${p("Tudo certo! ✅")}
+        ${p(`Se você está lendo isto, a integração de e-mail do ${APP_NAME} (Resend) está <strong>funcionando</strong> e o remetente está autorizado a enviar.`)}
+        ${p(`<span style="color:${MUTED}">Este é apenas um disparo de teste feito a partir das Configurações do painel.</span>`)}`;
   return { subject, html: shell({ headline, accent: INFO, bodyHtml: body }) };
 }
