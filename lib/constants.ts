@@ -13,6 +13,7 @@ export const DOC_TYPE_LABELS: Record<DocType, string> = {
   iss_rpa: "ISS - RPA",
   icms: "ICMS",
   fgts: "FGTS",
+  mensalidade: "Mensalidade da Contabilidade",
   folha: "Folha de Pagamento",
   relatorio_fiscal: "Relatório Fiscal",
   cartao_cnpj: "Cartão CNPJ",
@@ -50,6 +51,7 @@ const BOLETO_TYPES: DocType[] = [
   "iss_rpa",
   "icms",
   "fgts",
+  "mensalidade",
   "outro",
 ];
 const DOCUMENTO_TYPES: DocType[] = [

@@ -12,6 +12,7 @@ export type DocType =
   | "iss_rpa"
   | "icms"
   | "fgts"
+  | "mensalidade"
   | "folha"
   | "relatorio_fiscal"
   | "cartao_cnpj"
