@@ -18,6 +18,7 @@ export function ParcelamentoDetail({
   showPaid = false,
   formaPagamento,
   showDelete = false,
+  showEdit = false,
 }: {
   summary: PlanSummary;
   parcelas: DocumentRow[];
@@ -26,6 +27,8 @@ export function ParcelamentoDetail({
   formaPagamento?: string;
   /** Permite excluir parcela individual (só no painel do contador). */
   showDelete?: boolean;
+  /** Permite editar valor/vencimento da parcela (débito automático, painel). */
+  showEdit?: boolean;
 }) {
   const {
     pagas,
@@ -114,6 +117,7 @@ export function ParcelamentoDetail({
         showPaid={showPaid}
         debitoAutomatico={formaPagamento === "debito_automatico"}
         showDelete={showDelete}
+        showEdit={showEdit}
       />
     </div>
   );

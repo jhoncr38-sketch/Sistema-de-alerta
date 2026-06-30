@@ -58,6 +58,7 @@ export default async function ParcelamentoDetalheAdminPage({
           showPaid
           formaPagamento={plan.forma_pagamento}
           showDelete
+          showEdit={plan.forma_pagamento === "debito_automatico"}
         />
       </div>
     </>

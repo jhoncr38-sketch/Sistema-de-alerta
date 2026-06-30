@@ -328,6 +328,73 @@ export async function addParcela(
 }
 
 /**
+ * Edita o VALOR e/ou o VENCIMENTO de uma parcela já lançada. Pensado para o
+ * débito automático (parcelas sem boleto), onde o valor pode ser recalculado.
+ * Com `apply_forward`, replica o novo valor para as próximas parcelas ainda em
+ * aberto (o vencimento só muda na parcela editada). Só o contador (admin).
+ * NÃO redireciona — o componente fecha e atualiza a página.
+ */
+export async function editParcela(
+  _prev: PlanState,
+  formData: FormData,
+): Promise<PlanState> {
+  await requireAdmin();
+
+  const docId = String(formData.get("doc_id") ?? "");
+  const amountRaw = String(formData.get("amount") ?? "").trim();
+  const due = String(formData.get("due") ?? "");
+  const applyForward = formData.get("apply_forward") === "1";
+
+  if (!docId) return { error: "Parcela não informada." };
+  const amount = parseAmount(amountRaw);
+  if (Number.isNaN(amount) || amount <= 0) {
+    return { error: "Valor inválido. Ex.: 1.240,00" };
+  }
+  if (!due) return { error: "Informe o vencimento." };
+
+  const supabase = await createClient();
+
+  // Confere que é mesmo uma parcela de parcelamento antes de mexer.
+  const { data: doc } = await supabase
+    .from("documents")
+    .select("id, categoria, plan_id, parcela_num")
+    .eq("id", docId)
+    .single();
+  if (!doc) return { error: "Parcela não encontrada ou sem permissão." };
+  if (doc.categoria !== "parcelamento" || !doc.plan_id) {
+    return { error: "Este documento não é uma parcela de parcelamento." };
+  }
+
+  const { error: updErr } = await supabase
+    .from("documents")
+    .update({ amount, due_date: due })
+    .eq("id", docId);
+  if (updErr) return { error: `Falha ao salvar: ${updErr.message}` };
+
+  // Opcional: replica o novo valor para as próximas parcelas EM ABERTO.
+  if (applyForward && doc.parcela_num != null) {
+    const { error: fwdErr } = await supabase
+      .from("documents")
+      .update({ amount })
+      .eq("plan_id", doc.plan_id)
+      .eq("status", "open")
+      .gt("parcela_num", doc.parcela_num);
+    if (fwdErr) {
+      return {
+        error: `Parcela salva, mas falhou ao aplicar às próximas: ${fwdErr.message}`,
+      };
+    }
+  }
+
+  revalidatePath(`/painel/parcelamentos/${doc.plan_id}`);
+  revalidatePath("/painel/parcelamentos");
+  revalidatePath("/painel");
+  revalidatePath("/portal/parcelamentos");
+  revalidatePath("/portal");
+  return {};
+}
+
+/**
  * Apaga UMA parcela de um parcelamento: o registro, suas notificações (cascata
  * no banco) e os arquivos no storage (PDF da guia e comprovante, se houver). Útil
  * para retificar uma parcela enviada errada sem mexer no parcelamento inteiro.

@@ -2,6 +2,7 @@ import { Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ComprovanteButton } from "@/components/comprovante-button";
 import { DeleteParcelaButton } from "@/components/delete-parcela-button";
+import { EditParcelaButton } from "@/components/edit-parcela-button";
 import { PaidToggle } from "@/components/paid-toggle";
 import { StatusBadge } from "@/components/status-badge";
 import { formatCurrency, formatDate } from "@/lib/format";
@@ -20,6 +21,7 @@ export function ParcelasTable({
   showPaid = false,
   debitoAutomatico = false,
   showDelete = false,
+  showEdit = false,
 }: {
   parcelas: DocumentRow[];
   total: number;
@@ -28,6 +30,8 @@ export function ParcelasTable({
   debitoAutomatico?: boolean;
   /** Mostra o botão de excluir parcela individual (só no painel do contador). */
   showDelete?: boolean;
+  /** Mostra o botão de editar valor/vencimento (débito automático, painel). */
+  showEdit?: boolean;
 }) {
   if (parcelas.length === 0) {
     return (
@@ -40,6 +44,13 @@ export function ParcelasTable({
   const ordenadas = [...parcelas].sort(
     (a, b) => (a.parcela_num ?? 0) - (b.parcela_num ?? 0),
   );
+
+  // Quantas parcelas seguintes (nº maior) ainda estão em aberto — habilita o
+  // "aplicar valor às próximas" na edição.
+  const followingOpen = (p: DocumentRow) =>
+    ordenadas.filter(
+      (x) => (x.parcela_num ?? 0) > (p.parcela_num ?? 0) && x.status === "open",
+    ).length;
 
   // Débito automático não tem boleto: a ação confirma que o débito ocorreu.
   const labelUnpaid = debitoAutomatico ? "Confirmar pagamento" : "Marcar pago";
@@ -105,6 +116,16 @@ export function ParcelasTable({
                 />
               ) : null}
               {downloadButton(p)}
+              {showEdit ? (
+                <EditParcelaButton
+                  docId={p.id}
+                  parcelaNum={p.parcela_num}
+                  total={total}
+                  amount={p.amount}
+                  dueDate={p.due_date}
+                  followingOpenCount={followingOpen(p)}
+                />
+              ) : null}
               {showDelete ? (
                 <DeleteParcelaButton
                   docId={p.id}
@@ -174,6 +195,16 @@ export function ParcelasTable({
                 <td className="px-4 py-3">
                   <div className="flex items-center justify-end gap-1">
                     {downloadButton(p)}
+                    {showEdit ? (
+                      <EditParcelaButton
+                        docId={p.id}
+                        parcelaNum={p.parcela_num}
+                        total={total}
+                        amount={p.amount}
+                        dueDate={p.due_date}
+                        followingOpenCount={followingOpen(p)}
+                      />
+                    ) : null}
                     {showDelete ? (
                       <DeleteParcelaButton
                         docId={p.id}
