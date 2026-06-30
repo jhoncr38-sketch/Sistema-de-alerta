@@ -56,6 +56,7 @@ export default async function PortalParcelamentoDetalhePage({
           parcelas={parcelas}
           showPaid
           formaPagamento={plan.forma_pagamento}
+          enforceProof
         />
       </div>
     </>

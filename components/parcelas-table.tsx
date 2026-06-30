@@ -4,6 +4,7 @@ import { ComprovanteButton } from "@/components/comprovante-button";
 import { DeleteParcelaButton } from "@/components/delete-parcela-button";
 import { EditParcelaButton } from "@/components/edit-parcela-button";
 import { PaidToggle } from "@/components/paid-toggle";
+import { RequireProofToggle } from "@/components/require-proof-toggle";
 import { StatusBadge } from "@/components/status-badge";
 import { formatCurrency, formatDate } from "@/lib/format";
 import type { DocumentRow } from "@/lib/types";
@@ -22,6 +23,8 @@ export function ParcelasTable({
   debitoAutomatico = false,
   showDelete = false,
   showEdit = false,
+  showRequireProof = false,
+  enforceProof = false,
 }: {
   parcelas: DocumentRow[];
   total: number;
@@ -32,6 +35,10 @@ export function ParcelasTable({
   showDelete?: boolean;
   /** Mostra o botão de editar valor/vencimento (débito automático, painel). */
   showEdit?: boolean;
+  /** Mostra o liga/desliga "exigir comprovante" por parcela (painel do contador). */
+  showRequireProof?: boolean;
+  /** Portal do cliente: aplica a exigência de comprovante no "confirmar pagamento". */
+  enforceProof?: boolean;
 }) {
   if (parcelas.length === 0) {
     return (
@@ -105,6 +112,8 @@ export function ParcelasTable({
                   docId={p.id}
                   paid={p.status === "paid"}
                   labelUnpaid={labelUnpaid}
+                  requireComprovante={enforceProof && p.exige_comprovante}
+                  hasComprovante={!!p.comprovante_path}
                 />
               ) : null}
               {showPaid ? (
@@ -114,6 +123,9 @@ export function ParcelasTable({
                   hasComprovante={!!p.comprovante_path}
                   fileName={p.comprovante_name}
                 />
+              ) : null}
+              {showRequireProof && p.status === "open" ? (
+                <RequireProofToggle docId={p.id} value={p.exige_comprovante} />
               ) : null}
               {downloadButton(p)}
               {showEdit ? (
@@ -182,6 +194,8 @@ export function ParcelasTable({
                         docId={p.id}
                         paid={p.status === "paid"}
                         labelUnpaid={labelUnpaid}
+                        requireComprovante={enforceProof && p.exige_comprovante}
+                        hasComprovante={!!p.comprovante_path}
                       />
                       <ComprovanteButton
                         docId={p.id}
@@ -189,6 +203,12 @@ export function ParcelasTable({
                         hasComprovante={!!p.comprovante_path}
                         fileName={p.comprovante_name}
                       />
+                      {showRequireProof && p.status === "open" ? (
+                        <RequireProofToggle
+                          docId={p.id}
+                          value={p.exige_comprovante}
+                        />
+                      ) : null}
                     </div>
                   </td>
                 ) : null}

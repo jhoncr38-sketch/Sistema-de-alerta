@@ -19,6 +19,8 @@ export function ParcelamentoDetail({
   formaPagamento,
   showDelete = false,
   showEdit = false,
+  showRequireProof = false,
+  enforceProof = false,
 }: {
   summary: PlanSummary;
   parcelas: DocumentRow[];
@@ -29,6 +31,10 @@ export function ParcelamentoDetail({
   showDelete?: boolean;
   /** Permite editar valor/vencimento da parcela (débito automático, painel). */
   showEdit?: boolean;
+  /** Liga/desliga "exigir comprovante" por parcela (painel do contador). */
+  showRequireProof?: boolean;
+  /** Portal do cliente: aplica a exigência de comprovante ao confirmar pagamento. */
+  enforceProof?: boolean;
 }) {
   const {
     pagas,
@@ -118,6 +124,8 @@ export function ParcelamentoDetail({
         debitoAutomatico={formaPagamento === "debito_automatico"}
         showDelete={showDelete}
         showEdit={showEdit}
+        showRequireProof={showRequireProof}
+        enforceProof={enforceProof}
       />
     </div>
   );
