@@ -3,6 +3,7 @@ import { getUrgency } from "@/lib/dates";
 import { sendEmail } from "@/lib/email/resend";
 import { weeklyDigestEmail, type DigestItem } from "@/lib/email/templates";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { isCronAuthorized } from "@/lib/cron-auth";
 import type { DocType } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -35,16 +36,12 @@ function isoDate(d: Date): string {
  * empresa com tudo que está em aberto e vence até 7 dias à frente (inclui o que
  * já venceu). É só um lembrete consolidado — não registra notificações.
  *
- * Protegido por CRON_SECRET. Teste manual: /api/cron/weekly-digest?secret=<...>
+ * Protegido por CRON_SECRET (header Bearer da Vercel). Em dev, teste pelo
+ * navegador: /api/cron/weekly-digest?secret=<...> (bloqueado em produção).
  */
 export async function GET(request: Request) {
-  const secret = process.env.CRON_SECRET;
   const url = new URL(request.url);
-  const authorized =
-    !secret ||
-    request.headers.get("authorization") === `Bearer ${secret}` ||
-    url.searchParams.get("secret") === secret;
-  if (!authorized) {
+  if (!isCronAuthorized(request)) {
     return new NextResponse("Unauthorized", { status: 401 });
   }
 

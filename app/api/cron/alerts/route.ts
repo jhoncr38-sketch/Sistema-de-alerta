@@ -8,6 +8,7 @@ import {
   type AdminDigestCompany,
 } from "@/lib/email/templates";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { isCronAuthorized } from "@/lib/cron-auth";
 import type { DocType } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -40,16 +41,12 @@ interface DocRow {
  * envia e-mail ao cliente e registra a notificação (sem repetir).
  *
  * Protegido por CRON_SECRET: a Vercel envia `Authorization: Bearer <secret>`.
- * Para testar manualmente: /api/cron/alerts?secret=<CRON_SECRET>
+ * Em dev dá para testar pelo navegador: /api/cron/alerts?secret=<CRON_SECRET>
+ * (o atalho via query é bloqueado em produção — ver lib/cron-auth.ts).
  */
 export async function GET(request: Request) {
-  const secret = process.env.CRON_SECRET;
   const url = new URL(request.url);
-  const authorized =
-    !secret ||
-    request.headers.get("authorization") === `Bearer ${secret}` ||
-    url.searchParams.get("secret") === secret;
-  if (!authorized) {
+  if (!isCronAuthorized(request)) {
     return new NextResponse("Unauthorized", { status: 401 });
   }
 

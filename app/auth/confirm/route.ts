@@ -3,6 +3,17 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
 /**
+ * Garante que o destino do redirect é um caminho interno do próprio site.
+ * Aceita só algo que comece com "/" e rejeita "//" e "/\" — que o navegador
+ * interpretaria como outro domínio (open redirect). Caso contrário, vai pra "/".
+ */
+function safeNext(raw: string | null): string {
+  if (!raw || !raw.startsWith("/")) return "/";
+  if (raw.startsWith("//") || raw.startsWith("/\\")) return "/";
+  return raw;
+}
+
+/**
  * Recebe os links de confirmação de e-mail e de recuperação de senha
  * enviados pelo Supabase Auth, troca o token por uma sessão e redireciona.
  */
@@ -11,7 +22,7 @@ export async function GET(request: Request) {
   const tokenHash = searchParams.get("token_hash");
   const type = searchParams.get("type") as EmailOtpType | null;
   const code = searchParams.get("code");
-  const next = searchParams.get("next") ?? "/";
+  const next = safeNext(searchParams.get("next"));
 
   const supabase = await createClient();
 
