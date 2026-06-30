@@ -35,6 +35,8 @@ export function DocumentsTable({
   showRequireProof = false,
   enforceProof = false,
   hideCompetencia = false,
+  competenciaInline = false,
+  subtleActions = false,
   flush = false,
   emptyMessage = "Nenhum boleto encontrado.",
 }: {
@@ -52,6 +54,12 @@ export function DocumentsTable({
   enforceProof?: boolean;
   /** Oculta a coluna Competência (ex.: quando já está agrupado por mês). */
   hideCompetencia?: boolean;
+  /** Remove a coluna Competência e a mostra como subtítulo discreto sob o Tipo
+   *  (deixa a tabela mais enxuta no dashboard, onde quase tudo é "—"). */
+  competenciaInline?: boolean;
+  /** Deixa as ações menos chamativas: "marcar pago" outline e "baixar" só ícone.
+   *  Usado no dashboard do contador (visão geral, ações são secundárias). */
+  subtleActions?: boolean;
   /** Sem borda/cartão externo no desktop — para usar dentro de outro cartão. */
   flush?: boolean;
   emptyMessage?: string;
@@ -70,7 +78,9 @@ export function DocumentsTable({
   // folha e documentos não têm valor/vencimento; documentos da empresa também
   // não têm competência; e só guias a pagar têm status (vencido/pago).
   const hasCompetencia =
-    !hideCompetencia && documents.some((d) => !!d.competencia);
+    !hideCompetencia &&
+    !competenciaInline &&
+    documents.some((d) => !!d.competencia);
   const hasAmount = documents.some((d) => d.amount != null);
   const hasDueDate = documents.some((d) => d.due_date != null);
   const hasPagavel = documents.some(isPagavel);
@@ -96,6 +106,21 @@ export function DocumentsTable({
   }
 
   function downloadButton(doc: DocumentWithCompany) {
+    if (subtleActions) {
+      return (
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          title="Baixar"
+          nativeButton={false}
+          render={
+            <a href={`/api/documents/${doc.id}/download`}>
+              <Download />
+            </a>
+          }
+        />
+      );
+    }
     return (
       <Button
         variant="outline"
@@ -193,6 +218,7 @@ export function DocumentsTable({
                       paid={doc.status === "paid"}
                       requireComprovante={enforceProof && doc.exige_comprovante}
                       hasComprovante={!!doc.comprovante_path}
+                      unpaidVariant={subtleActions ? "outline" : "default"}
                     />
                   ) : null}
                   {showPaid && pagavel ? (
@@ -270,7 +296,14 @@ export function DocumentsTable({
                         "—"}
                     </td>
                   ) : null}
-                  <td className="px-4 py-3">{tipoLabel(doc)}</td>
+                  <td className="px-4 py-3">
+                    <div>{tipoLabel(doc)}</div>
+                    {competenciaInline && doc.competencia ? (
+                      <div className="text-xs text-muted-foreground">
+                        Comp. {doc.competencia}
+                      </div>
+                    ) : null}
+                  </td>
                   {hasCompetencia ? (
                     <td className="px-4 py-3 text-muted-foreground">
                       {doc.competencia || "—"}
@@ -300,6 +333,7 @@ export function DocumentsTable({
                               enforceProof && doc.exige_comprovante
                             }
                             hasComprovante={!!doc.comprovante_path}
+                            unpaidVariant={subtleActions ? "outline" : "default"}
                           />
                           <ComprovanteButton
                             docId={doc.id}

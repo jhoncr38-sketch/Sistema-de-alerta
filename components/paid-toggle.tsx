@@ -13,6 +13,7 @@ export function PaidToggle({
   labelUnpaid = "Marcar pago",
   requireComprovante = false,
   hasComprovante = false,
+  unpaidVariant = "default",
 }: {
   docId: string;
   paid: boolean;
@@ -23,6 +24,9 @@ export function PaidToggle({
   requireComprovante?: boolean;
   /** Já existe comprovante anexado nesta guia. */
   hasComprovante?: boolean;
+  /** Visual do botão quando ainda não pago. "outline" deixa menos chamativo
+   *  (usado no dashboard do contador, onde marcar pago é ação secundária). */
+  unpaidVariant?: "default" | "outline";
 }) {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -60,7 +64,7 @@ export function PaidToggle({
         />
         <Button
           type="button"
-          variant="default"
+          variant={unpaidVariant}
           size="sm"
           disabled={pending}
           title="Anexe o comprovante para marcar como pago"
@@ -85,7 +89,7 @@ export function PaidToggle({
     <span className="inline-flex items-center gap-1">
       <Button
         type="button"
-        variant={paid ? "outline" : "default"}
+        variant={paid ? "outline" : unpaidVariant}
         size="sm"
         disabled={pending}
         title={paid ? "Clique para desmarcar" : "Marcar como pago"}

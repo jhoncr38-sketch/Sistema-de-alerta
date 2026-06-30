@@ -3,7 +3,7 @@ import { AlertBanner } from "@/components/alert-banner";
 import { DocumentsTable } from "@/components/documents-table";
 import { MetricCard } from "@/components/metric-card";
 import { PageHeader } from "@/components/page-header";
-import { getUrgency } from "@/lib/dates";
+import { getUrgency, type Urgency } from "@/lib/dates";
 import { formatCurrency } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
 import type { DocumentWithCompany } from "@/lib/types";
@@ -25,6 +25,44 @@ function ehDebitoAutomaticoFuturo(d: PainelDoc): boolean {
   if (!d.due_date) return false;
   return getUrgency(d.due_date, d.status).urgency === "em_dia";
 }
+
+/** Blocos da lista "Próximas obrigações", em ordem de urgência. */
+const BUCKETS: {
+  key: string;
+  title: string;
+  icon: React.ComponentType<{ className?: string }>;
+  iconClass: string;
+  urgencies: Urgency[];
+}[] = [
+  {
+    key: "vencido",
+    title: "Vencidos",
+    icon: AlertTriangle,
+    iconClass: "text-red-600 dark:text-red-400",
+    urgencies: ["vencido"],
+  },
+  {
+    key: "hoje",
+    title: "Vencem hoje",
+    icon: Clock,
+    iconClass: "text-amber-600 dark:text-amber-400",
+    urgencies: ["vence_hoje"],
+  },
+  {
+    key: "semana",
+    title: "Próximos 7 dias",
+    icon: CalendarClock,
+    iconClass: "text-blue-600 dark:text-blue-400",
+    urgencies: ["proximos_3", "proximos_7"],
+  },
+  {
+    key: "adiante",
+    title: "Mais adiante",
+    icon: CheckCircle2,
+    iconClass: "text-muted-foreground",
+    urgencies: ["em_dia"],
+  },
+];
 
 export default async function PainelPage() {
   const supabase = await createClient();
@@ -66,6 +104,20 @@ export default async function PainelPage() {
   const pagos = pagosBoletos.length;
   const pagosValor = pagosBoletos.reduce((s, d) => s + (d.amount ?? 0), 0);
   const totalClientes = companies?.length ?? 0;
+
+  // Agrupa as obrigações em aberto por urgência — o contador age primeiro no
+  // vermelho (vencidos), depois no amarelo, e o que está mais longe fica discreto.
+  const urgencyOf = (d: PainelDoc): Urgency =>
+    d.due_date ? getUrgency(d.due_date, d.status).urgency : "em_dia";
+
+  const grupos = BUCKETS.map((b) => {
+    const items = openList.filter((d) => b.urgencies.includes(urgencyOf(d)));
+    return {
+      ...b,
+      items,
+      total: items.reduce((s, d) => s + (d.amount ?? 0), 0),
+    };
+  }).filter((g) => g.items.length > 0);
 
   return (
     <>
@@ -123,15 +175,50 @@ export default async function PainelPage() {
           />
         </div>
 
-        <section className="space-y-3">
+        <section className="space-y-5">
           <h2 className="text-sm font-semibold">Próximas obrigações</h2>
-          <DocumentsTable
-            documents={openList.slice(0, 10)}
-            showClient
-            showDownload
-            showPaid
-            emptyMessage="Nenhuma obrigação em aberto. Publique um boleto em “Enviar documento”."
-          />
+          {grupos.length === 0 ? (
+            <DocumentsTable
+              documents={[]}
+              emptyMessage="Nenhuma obrigação em aberto. Publique um boleto em “Enviar documento”."
+            />
+          ) : (
+            grupos.map((g) => {
+              const Icon = g.icon;
+              // "Mais adiante" é o menos urgente: limita para não alongar a tela.
+              const items = g.key === "adiante" ? g.items.slice(0, 5) : g.items;
+              const ocultos = g.items.length - items.length;
+              return (
+                <div key={g.key} className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Icon className={`size-4 ${g.iconClass}`} />
+                    <span className="text-sm font-medium">{g.title}</span>
+                    <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                      {g.items.length}
+                    </span>
+                    {g.total > 0 ? (
+                      <span className="ml-auto text-xs text-muted-foreground tabular-nums">
+                        {formatCurrency(g.total)}
+                      </span>
+                    ) : null}
+                  </div>
+                  <DocumentsTable
+                    documents={items}
+                    showClient
+                    showDownload
+                    showPaid
+                    competenciaInline
+                    subtleActions
+                  />
+                  {ocultos > 0 ? (
+                    <p className="text-xs text-muted-foreground">
+                      + {ocultos} obrigaç{ocultos > 1 ? "ões" : "ão"} mais adiante
+                    </p>
+                  ) : null}
+                </div>
+              );
+            })
+          )}
         </section>
       </div>
     </>
