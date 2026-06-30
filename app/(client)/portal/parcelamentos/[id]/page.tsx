@@ -7,6 +7,7 @@ import { ParcelamentoDetail } from "@/components/parcelamento-detail";
 import { modalidadeLabel } from "@/lib/constants";
 import { summarizePlan } from "@/lib/parcelamento";
 import { createClient } from "@/lib/supabase/server";
+import { trackClientEvent } from "@/lib/track";
 import type { DocumentRow, InstallmentPlan } from "@/lib/types";
 
 export default async function PortalParcelamentoDetalhePage({
@@ -17,14 +18,21 @@ export default async function PortalParcelamentoDetalhePage({
   const { id } = await params;
   const supabase = await createClient();
 
-  // RLS garante que o cliente só lê os planos das empresas que pode acessar.
-  const { data: planRaw } = await supabase
-    .from("installment_plans")
-    .select("*")
-    .eq("id", id)
-    .single();
+  const [{ data: planRaw }, { data: { user } }] = await Promise.all([
+    supabase.from("installment_plans").select("*").eq("id", id).single(),
+    supabase.auth.getUser(),
+  ]);
 
   if (!planRaw) notFound();
+
+  if (user) {
+    trackClientEvent({
+      clientId: user.id,
+      companyId: planRaw.company_id ?? null,
+      eventType: "view_parcelamento",
+      planId: id,
+    });
+  }
   const plan = planRaw as InstallmentPlan;
 
   const { data: parcelasRaw } = await supabase

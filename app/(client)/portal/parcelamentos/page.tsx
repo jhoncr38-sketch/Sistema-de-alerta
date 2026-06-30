@@ -4,6 +4,7 @@ import { ParcelamentoCard } from "@/components/parcelamento-card";
 import { getActiveCompanyId } from "@/lib/companies";
 import { summarizePlan, type ParcelaLike } from "@/lib/parcelamento";
 import { createClient } from "@/lib/supabase/server";
+import { trackClientEvent } from "@/lib/track";
 
 interface PlanRow {
   id: string;
@@ -15,7 +16,18 @@ interface PlanRow {
 
 export default async function PortalParcelamentosPage() {
   const supabase = await createClient();
-  const activeCompanyId = await getActiveCompanyId();
+  const [activeCompanyId, { data: { user } }] = await Promise.all([
+    getActiveCompanyId(),
+    supabase.auth.getUser(),
+  ]);
+
+  if (user) {
+    trackClientEvent({
+      clientId: user.id,
+      companyId: activeCompanyId,
+      eventType: "view_parcelamentos",
+    });
+  }
   const { data } = await supabase
     .from("installment_plans")
     .select("id, nome, total, forma_pagamento, parcelas:documents(status,amount,due_date)")

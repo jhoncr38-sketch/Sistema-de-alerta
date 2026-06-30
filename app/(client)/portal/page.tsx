@@ -8,6 +8,7 @@ import { getClientCompanyContext } from "@/lib/companies";
 import { getUrgency } from "@/lib/dates";
 import { formatCurrency } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
+import { trackClientEvent } from "@/lib/track";
 import type { DocumentWithCompany } from "@/lib/types";
 
 /** Documento com a forma de pagamento do parcelamento (quando for parcela). */
@@ -33,6 +34,14 @@ export default async function PortalHome() {
   const supabase = await createClient();
   const { active } = await getClientCompanyContext();
   const activeId = active?.id ?? "00000000-0000-0000-0000-000000000000";
+
+  if (profile) {
+    trackClientEvent({
+      clientId: profile.id,
+      companyId: active?.id,
+      eventType: "portal_access",
+    });
+  }
   const { data } = await supabase
     .from("documents")
     .select(
