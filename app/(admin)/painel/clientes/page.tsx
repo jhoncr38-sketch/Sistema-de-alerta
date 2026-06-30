@@ -1,4 +1,4 @@
-import { Activity, Building2, ShieldCheck, ShieldOff, UserCheck, Users } from "lucide-react";
+import { Building2, ShieldCheck, ShieldOff, UserCheck, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -12,7 +12,6 @@ import { EditClientButton } from "@/components/edit-client-button";
 import { EditCompanyButton } from "@/components/edit-company-button";
 import { NewCompanyButton } from "@/components/new-company-button";
 import { createClient } from "@/lib/supabase/server";
-import { formatRelativeTime } from "@/lib/format";
 import type { Company, Profile, ProfileWithCompany } from "@/lib/types";
 import {
   approveClient,
@@ -36,7 +35,6 @@ export default async function ClientesPage() {
     { data: companiesRaw },
     { data: linksRaw },
     { data: adminsRaw },
-    { data: eventsRaw },
   ] = await Promise.all([
     supabase
       .from("profiles")
@@ -51,25 +49,12 @@ export default async function ClientesPage() {
       .select("*")
       .eq("role", "admin")
       .order("created_at", { ascending: true }),
-    supabase
-      .from("client_events")
-      .select("client_id, created_at")
-      .order("created_at", { ascending: false })
-      .limit(500),
   ]);
 
   const clients = (clientsRaw ?? []) as ProfileWithCompany[];
   const admins = (adminsRaw ?? []) as Profile[];
   const companies = (companiesRaw ?? []) as Company[];
   const links = (linksRaw ?? []) as { profile_id: string; company_id: string }[];
-
-  // Último acesso de cada cliente: first occurrence por client_id (já ordenado desc).
-  const lastAccessByClient = new Map<string, string>();
-  for (const ev of (eventsRaw ?? []) as { client_id: string; created_at: string }[]) {
-    if (!lastAccessByClient.has(ev.client_id)) {
-      lastAccessByClient.set(ev.client_id, ev.created_at);
-    }
-  }
   const pending = clients.filter((c) => c.status === "pending");
   const approved = clients.filter((c) => c.status === "approved");
 
@@ -283,7 +268,6 @@ export default async function ClientesPage() {
                   <th className="px-4 py-2.5 font-medium">Nome</th>
                   <th className="px-4 py-2.5 font-medium">E-mail</th>
                   <th className="px-4 py-2.5 font-medium">Empresas que pode ver</th>
-                  <th className="px-4 py-2.5 font-medium">Último acesso</th>
                   <th className="px-4 py-2.5 font-medium" />
                 </tr>
               </thead>
@@ -291,7 +275,7 @@ export default async function ClientesPage() {
                 {approved.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={5}
+                      colSpan={4}
                       className="px-4 py-8 text-center text-muted-foreground"
                     >
                       Nenhum cliente ativo ainda.
@@ -301,7 +285,6 @@ export default async function ClientesPage() {
                   approved.map((c) => {
                     const cos = companiesByClient.get(c.id) ?? [];
                     const linkedIds = companyIdsByClient.get(c.id) ?? [];
-                    const lastAccess = lastAccessByClient.get(c.id);
                     return (
                       <tr key={c.id} className="border-b last:border-0">
                         <td className="px-4 py-3 font-medium">{c.name}</td>
@@ -324,19 +307,6 @@ export default async function ClientesPage() {
                                 </span>
                               ))}
                             </div>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-muted-foreground">
-                          {lastAccess ? (
-                            <a
-                              href={`/painel/clientes/${c.id}/atividade`}
-                              className="inline-flex items-center gap-1 text-sm text-foreground hover:underline"
-                            >
-                              <Activity className="size-3.5 shrink-0 text-muted-foreground" />
-                              {formatRelativeTime(lastAccess)}
-                            </a>
-                          ) : (
-                            <span className="text-muted-foreground/60">Nunca acessou</span>
                           )}
                         </td>
                         <td className="px-4 py-3">

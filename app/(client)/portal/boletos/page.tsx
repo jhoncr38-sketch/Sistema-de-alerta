@@ -4,23 +4,11 @@ import { PageHeader } from "@/components/page-header";
 import { getActiveCompanyId } from "@/lib/companies";
 import { formatCurrency } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
-import { trackClientEvent } from "@/lib/track";
 import type { DocumentWithCompany } from "@/lib/types";
 
 export default async function MeusBoletosPage() {
   const supabase = await createClient();
-  const [activeCompanyId, { data: { user } }] = await Promise.all([
-    getActiveCompanyId(),
-    supabase.auth.getUser(),
-  ]);
-
-  if (user) {
-    trackClientEvent({
-      clientId: user.id,
-      companyId: activeCompanyId,
-      eventType: "view_boletos",
-    });
-  }
+  const activeCompanyId = await getActiveCompanyId();
   const { data } = await supabase
     .from("documents")
     .select("*, company:companies(id,razao_social,nome_fantasia,email)")
