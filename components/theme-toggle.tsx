@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useSyncExternalStore } from "react";
 import { Moon, Sun } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -8,25 +8,36 @@ import { Button } from "@/components/ui/button";
  * Alterna entre tema claro e escuro. A escolha é guardada no localStorage e
  * aplicada cedo por um script inline no layout (evita "piscar" ao carregar).
  * Aqui só lemos/gravamos a classe `dark` no <html> e persistimos a preferência.
+ *
+ * Lemos o tema com useSyncExternalStore — a forma recomendada de refletir um
+ * estado externo (a classe no <html>) sem render em cascata nem erro de
+ * hidratação. O MutationObserver avisa o React quando a classe muda.
  */
+function subscribe(onChange: () => void) {
+  const observer = new MutationObserver(onChange);
+  observer.observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ["class"],
+  });
+  return () => observer.disconnect();
+}
+
+/** Lê o tema atual no cliente. No servidor não há <html> — assume claro. */
+const isDarkClient = () =>
+  document.documentElement.classList.contains("dark");
+
 export function ThemeToggle() {
-  const [dark, setDark] = useState(false);
+  const dark = useSyncExternalStore(subscribe, isDarkClient, () => false);
 
-  // Sincroniza o estado do botão com o que o script inline já aplicou.
-  useEffect(() => {
-    setDark(document.documentElement.classList.contains("dark"));
-  }, []);
-
-  function toggle() {
-    const next = !dark;
-    setDark(next);
+  const toggle = useCallback(() => {
+    const next = !document.documentElement.classList.contains("dark");
     document.documentElement.classList.toggle("dark", next);
     try {
       localStorage.setItem("theme", next ? "dark" : "light");
     } catch {
       // localStorage indisponível (modo privado etc.) — ignora.
     }
-  }
+  }, []);
 
   return (
     <Button

@@ -1,0 +1,33 @@
+name: CI
+
+# Roda as verificações a cada push e em pull requests para a main.
+# É a rede de segurança: se o lint ou a checagem de tipos falhar, o GitHub
+# avisa antes do deploy na Vercel. O build de produção é feito pela Vercel.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  verificacoes:
+    name: Lint e tipos
+    runs-on: ubuntu-latest
+    steps:
+      - name: Baixar o código
+        uses: actions/checkout@v4
+
+      - name: Instalar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: ESLint
+        run: npm run lint
+
+      - name: Checagem de tipos (TypeScript)
+        run: npm run typecheck
