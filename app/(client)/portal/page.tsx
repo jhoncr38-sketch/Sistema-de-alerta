@@ -1,8 +1,8 @@
-import { AlertTriangle, CalendarClock, CheckCircle2, Clock, Info } from "lucide-react";
-import { AlertBanner } from "@/components/alert-banner";
+import { AlertTriangle, CalendarClock, CheckCircle2, Info } from "lucide-react";
 import { DocumentsTable } from "@/components/documents-table";
 import { MetricCard } from "@/components/metric-card";
 import { PageHeader } from "@/components/page-header";
+import { ProximoVencimento } from "@/components/proximo-vencimento";
 import { getUserAndProfile } from "@/lib/auth";
 import { getClientCompanyContext } from "@/lib/companies";
 import { getUrgency } from "@/lib/dates";
@@ -51,7 +51,6 @@ export default async function PortalHome() {
   const openList = open.filter((d) => !ehDebitoAutomaticoFuturo(d));
 
   let vencidos = 0;
-  let venceHoje = 0;
   let emBreve = 0;
   let vencidosValor = 0;
   let emBreveValor = 0;
@@ -62,7 +61,6 @@ export default async function PortalHome() {
       vencidos++;
       vencidosValor += d.amount ?? 0;
     }
-    if (urgency === "vence_hoje") venceHoje++;
     if (["vence_hoje", "proximos_3", "proximos_7"].includes(urgency)) {
       emBreve++;
       emBreveValor += d.amount ?? 0;
@@ -86,19 +84,7 @@ export default async function PortalHome() {
         subtitle="Confira seus boletos e documentos"
       />
       <div className="space-y-6 p-6">
-        {vencidos > 0 ? (
-          <AlertBanner tone="danger" icon={<AlertTriangle className="size-4" />}>
-            <strong>Atenção:</strong> você tem {vencidos} conta
-            {vencidos > 1 ? "s" : ""} vencida{vencidos > 1 ? "s" : ""} (boletos
-            ou parcelas). Efetue o pagamento para evitar multas.
-          </AlertBanner>
-        ) : null}
-        {venceHoje > 0 ? (
-          <AlertBanner tone="warning" icon={<Clock className="size-4" />}>
-            {venceHoje} conta{venceHoje > 1 ? "s" : ""} vence
-            {venceHoje > 1 ? "m" : ""} <strong>hoje</strong>.
-          </AlertBanner>
-        ) : null}
+        <ProximoVencimento open={openList} />
 
         <div className="grid gap-3 sm:grid-cols-3">
           <MetricCard
@@ -132,6 +118,7 @@ export default async function PortalHome() {
             showDownload
             showPaid
             enforceProof
+            showTypeIcon
             emptyMessage="Você não tem boletos ou parcelas em aberto."
           />
         </section>

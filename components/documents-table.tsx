@@ -1,6 +1,7 @@
 import { Download, FileText } from "lucide-react";
 import { deleteDocument } from "@/app/actions/documents";
 import { ComprovanteButton } from "@/components/comprovante-button";
+import { DocTypeIcon } from "@/components/doc-type-icon";
 import { ConfirmDeleteButton } from "@/components/confirm-delete-button";
 import { FilePreviewButton } from "@/components/file-preview-button";
 import { Button } from "@/components/ui/button";
@@ -37,6 +38,7 @@ export function DocumentsTable({
   hideCompetencia = false,
   competenciaInline = false,
   subtleActions = false,
+  showTypeIcon = false,
   flush = false,
   emptyMessage = "Nenhum boleto encontrado.",
 }: {
@@ -60,6 +62,8 @@ export function DocumentsTable({
   /** Deixa as ações menos chamativas: "marcar pago" outline e "baixar" só ícone.
    *  Usado no dashboard do contador (visão geral, ações são secundárias). */
   subtleActions?: boolean;
+  /** Mostra um ícone colorido por tipo de documento (telas do cliente). */
+  showTypeIcon?: boolean;
   /** Sem borda/cartão externo no desktop — para usar dentro de outro cartão. */
   flush?: boolean;
   emptyMessage?: string;
@@ -171,16 +175,19 @@ export function DocumentsTable({
           return (
             <div key={doc.id} className="space-y-3 rounded-xl border bg-card p-4">
               <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  {showClient ? (
-                    <div className="truncate text-xs text-muted-foreground">
-                      {doc.company?.nome_fantasia ||
-                        doc.company?.razao_social ||
-                        "—"}
+                <div className="flex min-w-0 items-center gap-2.5">
+                  {showTypeIcon ? <DocTypeIcon doc={doc} /> : null}
+                  <div className="min-w-0">
+                    {showClient ? (
+                      <div className="truncate text-xs text-muted-foreground">
+                        {doc.company?.nome_fantasia ||
+                          doc.company?.razao_social ||
+                          "—"}
+                      </div>
+                    ) : null}
+                    <div className="font-medium leading-snug">
+                      {tipoLabel(doc)}
                     </div>
-                  ) : null}
-                  <div className="font-medium leading-snug">
-                    {tipoLabel(doc)}
                   </div>
                 </div>
                 {hasPagavel ? (
@@ -297,12 +304,17 @@ export function DocumentsTable({
                     </td>
                   ) : null}
                   <td className="px-4 py-3">
-                    <div>{tipoLabel(doc)}</div>
-                    {competenciaInline && doc.competencia ? (
-                      <div className="text-xs text-muted-foreground">
-                        Comp. {doc.competencia}
+                    <div className="flex items-center gap-2.5">
+                      {showTypeIcon ? <DocTypeIcon doc={doc} /> : null}
+                      <div className="min-w-0">
+                        <div>{tipoLabel(doc)}</div>
+                        {competenciaInline && doc.competencia ? (
+                          <div className="text-xs text-muted-foreground">
+                            Comp. {doc.competencia}
+                          </div>
+                        ) : null}
                       </div>
-                    ) : null}
+                    </div>
                   </td>
                   {hasCompetencia ? (
                     <td className="px-4 py-3 text-muted-foreground">
