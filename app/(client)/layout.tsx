@@ -1,4 +1,5 @@
 import { AppSidebar } from "@/components/app-sidebar";
+import { SiteFooter } from "@/components/site-footer";
 import { requireClient } from "@/lib/auth";
 import { getBranding } from "@/lib/branding";
 import { getClientCompanyContext } from "@/lib/companies";
@@ -38,7 +39,10 @@ export default async function ClientLayout({
         companies={companies}
         activeCompanyId={active?.id ?? null}
       />
-      <div className="flex min-w-0 flex-1 flex-col bg-muted/30">{children}</div>
+      <div className="flex min-w-0 flex-1 flex-col bg-muted/30">
+        {children}
+        <SiteFooter />
+      </div>
     </div>
   );
 }

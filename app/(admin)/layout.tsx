@@ -1,4 +1,5 @@
 import { AppSidebar } from "@/components/app-sidebar";
+import { SiteFooter } from "@/components/site-footer";
 import { requireAdmin } from "@/lib/auth";
 import { getBranding } from "@/lib/branding";
 
@@ -21,7 +22,10 @@ export default async function AdminLayout({
         brandName={branding.name}
         brandLogoUrl={branding.logoUrl}
       />
-      <div className="flex min-w-0 flex-1 flex-col bg-muted/30">{children}</div>
+      <div className="flex min-w-0 flex-1 flex-col bg-muted/30">
+        {children}
+        <SiteFooter />
+      </div>
     </div>
   );
 }
