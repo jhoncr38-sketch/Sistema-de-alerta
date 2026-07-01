@@ -26,16 +26,18 @@ export async function getUserAndProfile() {
 export async function requireAdmin() {
   const { user, profile } = await getUserAndProfile();
   if (!user) redirect("/login");
+  if (profile && profile.active === false) redirect("/inativo");
   if (!profile || profile.role !== "admin") redirect("/portal");
   return { user, profile };
 }
 
-/** Garante que há um cliente APROVADO logado. Senão, redireciona. */
+/** Garante que há um cliente APROVADO e ATIVO logado. Senão, redireciona. */
 export async function requireClient() {
   const { user, profile } = await getUserAndProfile();
   if (!user) redirect("/login");
   if (!profile) redirect("/login");
   if (profile.role === "admin") redirect("/painel");
+  if (profile.active === false) redirect("/inativo");
   if (profile.status !== "approved") redirect("/pending");
   return { user, profile };
 }

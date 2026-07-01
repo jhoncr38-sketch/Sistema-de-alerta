@@ -294,6 +294,38 @@ export async function demoteToClient(userId: string) {
   revalidatePath("/painel");
 }
 
+/**
+ * Desativa ou reativa o ACESSO de um cliente ao portal, sem apagar nada.
+ * Cliente desativado (active=false) é barrado no login e em toda página do
+ * portal (redirecionado para /inativo), mas o cadastro, os vínculos e os
+ * documentos permanecem — basta reativar para liberar de novo.
+ * Trava de segurança: só mexe em quem tem role='client' (nunca desativa o
+ * contador, que não teria como se reativar depois).
+ */
+export async function setClientActive(userId: string, active: boolean) {
+  await requireAdmin();
+  if (!userId) return;
+
+  const supabase = await createClient();
+
+  const { data: prof } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", userId)
+    .single();
+  if (!prof || prof.role !== "client") {
+    throw new Error("Só é possível desativar o acesso de clientes.");
+  }
+
+  const { error } = await supabase
+    .from("profiles")
+    .update({ active })
+    .eq("id", userId);
+  if (error) throw new Error(error.message);
+
+  revalidateClientes();
+}
+
 /** Recusa um cadastro pendente. */
 export async function rejectClient(formData: FormData) {
   await requireAdmin();

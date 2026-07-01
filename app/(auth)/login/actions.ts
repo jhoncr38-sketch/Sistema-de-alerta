@@ -41,10 +41,11 @@ export async function login(
   if (user) {
     const { data: profile } = await supabase
       .from("profiles")
-      .select("role,status")
+      .select("role,status,active")
       .eq("id", user.id)
       .single();
-    if (profile?.role === "admin") target = "/painel";
+    if (profile?.active === false) target = "/inativo";
+    else if (profile?.role === "admin") target = "/painel";
     else if (profile?.status !== "approved") target = "/pending";
   }
 

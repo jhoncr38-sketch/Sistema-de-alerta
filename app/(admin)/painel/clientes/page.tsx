@@ -20,6 +20,7 @@ import {
   demoteToClient,
   promoteToAdmin,
   rejectClient,
+  setClientActive,
 } from "./actions";
 
 const selectClass =
@@ -285,9 +286,22 @@ export default async function ClientesPage() {
                   approved.map((c) => {
                     const cos = companiesByClient.get(c.id) ?? [];
                     const linkedIds = companyIdsByClient.get(c.id) ?? [];
+                    const inativo = c.active === false;
                     return (
-                      <tr key={c.id} className="border-b last:border-0">
-                        <td className="px-4 py-3 font-medium">{c.name}</td>
+                      <tr
+                        key={c.id}
+                        className={`border-b last:border-0 ${inativo ? "bg-muted/30" : ""}`}
+                      >
+                        <td className="px-4 py-3 font-medium">
+                          <span className={inativo ? "text-muted-foreground" : ""}>
+                            {c.name}
+                          </span>
+                          {inativo ? (
+                            <span className="ml-2 inline-flex items-center rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">
+                              Desativado
+                            </span>
+                          ) : null}
+                        </td>
                         <td className="px-4 py-3 text-muted-foreground">
                           {c.email ?? "—"}
                         </td>
@@ -334,6 +348,12 @@ export default async function ClientesPage() {
                             />
                             <ClientActionsMenu
                               clientName={c.name}
+                              active={c.active !== false}
+                              toggleActiveAction={setClientActive.bind(
+                                null,
+                                c.id,
+                                c.active === false,
+                              )}
                               promoteAction={promoteToAdmin.bind(null, c.id)}
                             />
                           </div>

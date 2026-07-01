@@ -40,6 +40,7 @@ export interface Profile {
   email: string | null;
   role: Role;
   status: UserStatus;
+  active: boolean; // false = acesso desativado pelo contador (bloqueia o portal)
   company_id: string | null;
   created_at: string;
 }
