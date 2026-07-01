@@ -9,6 +9,8 @@ import {
 } from "@/lib/email/templates";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isCronAuthorized } from "@/lib/cron-auth";
+import { sendPushToSubscriptions, type PushSub } from "@/lib/push/send";
+import { formatCurrency, formatDate } from "@/lib/format";
 import type { DocType } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -56,7 +58,12 @@ export async function GET(request: Request) {
 
   const supabase = createAdminClient();
 
-  const [{ data: docsRaw, error }, { data: profilesRaw }] = await Promise.all([
+  const [
+    { data: docsRaw, error },
+    { data: profilesRaw },
+    { data: subsRaw },
+    { data: linksRaw },
+  ] = await Promise.all([
     supabase
       .from("documents")
       .select(
@@ -69,6 +76,10 @@ export async function GET(request: Request) {
       .select("email,company_id")
       .eq("role", "client")
       .eq("status", "approved"),
+    supabase
+      .from("push_subscriptions")
+      .select("profile_id,endpoint,p256dh,auth"),
+    supabase.from("client_companies").select("profile_id,company_id"),
   ]);
 
   if (error) {
@@ -85,11 +96,37 @@ export async function GET(request: Request) {
     }
   }
 
+  // Assinaturas de Web Push por empresa. Via client_companies: quem tem acesso à
+  // empresa recebe o push (espelha o alcance dos e-mails).
+  const subsByProfile = new Map<string, PushSub[]>();
+  for (const s of (subsRaw ?? []) as Array<{
+    profile_id: string;
+    endpoint: string;
+    p256dh: string;
+    auth: string;
+  }>) {
+    const list = subsByProfile.get(s.profile_id) ?? [];
+    list.push({ endpoint: s.endpoint, p256dh: s.p256dh, auth: s.auth });
+    subsByProfile.set(s.profile_id, list);
+  }
+  const subsByCompany = new Map<string, PushSub[]>();
+  for (const l of (linksRaw ?? []) as Array<{
+    profile_id: string;
+    company_id: string;
+  }>) {
+    const subs = subsByProfile.get(l.profile_id);
+    if (!subs?.length) continue;
+    const list = subsByCompany.get(l.company_id) ?? [];
+    list.push(...subs);
+    subsByCompany.set(l.company_id, list);
+  }
+
   const docs = (docsRaw ?? []) as unknown as DocRow[];
   const portalBase = process.env.NEXT_PUBLIC_SITE_URL ?? url.origin;
 
   let processed = 0;
   let emailed = 0;
+  let pushed = 0;
   let resent = 0;
   let alreadySent = 0;
   const preview: Array<{
@@ -191,6 +228,20 @@ export async function GET(request: Request) {
       continue;
     }
 
+    // Web Push: mesmo gatilho do e-mail. Best-effort — nunca quebra o cron, e
+    // assinaturas mortas são removidas dentro de sendPushToSubscriptions.
+    const subs = subsByCompany.get(d.company_id);
+    if (subs && subs.length > 0) {
+      const { title, body } = pushTextFor(notifKind, d);
+      const r = await sendPushToSubscriptions(supabase, subs, {
+        title,
+        body,
+        url: `${portalBase}${portalPath}`,
+        tag: `doc-${d.id}`,
+      });
+      pushed += r.sent;
+    }
+
     if (existing) {
       // Recobrança do vencido: o unique(document_id, kind) impede inserir de
       // novo, então atualiza o registro existente (touch no sent_at).
@@ -222,6 +273,7 @@ export async function GET(request: Request) {
     total: docs.length,
     processed,
     emailed,
+    pushed,
     resent,
     alreadySent,
     adminDigest,
@@ -286,4 +338,51 @@ async function sendAdminDigest(
   });
   if (!dryRun) await sendEmail({ to: adminEmails, subject, html });
   return true;
+}
+
+/** Título/corpo curtos da notificação push, conforme o tipo de alerta. */
+function pushTextFor(
+  kind: string,
+  d: DocRow,
+): { title: string; body: string } {
+  const valor = formatCurrency(Number(d.amount) || 0);
+  const venc = formatDate(d.due_date);
+  const item = d.categoria === "parcelamento" ? "Parcela" : "Boleto";
+  switch (kind) {
+    case "vencido":
+      return {
+        title: `${item} vencido`,
+        body: `Venceu em ${venc} — ${valor}. Regularize para evitar juros.`,
+      };
+    case "parcela_risco":
+      return {
+        title: "Parcela em risco",
+        body: `Parcela vencida em ${venc} — ${valor}. Risco de exclusão do parcelamento.`,
+      };
+    case "vence_hoje":
+      return {
+        title: `${item} vence hoje`,
+        body: `${valor} — vence hoje (${venc}).`,
+      };
+    case "dias_1":
+      return {
+        title: `${item} vence amanhã`,
+        body: `${valor} — vence em ${venc}.`,
+      };
+    case "dias_3":
+      return {
+        title: `${item} a vencer`,
+        body: `${valor} — vence em ${venc} (em 3 dias).`,
+      };
+    case "dias_7":
+      return {
+        title: `${item} a vencer`,
+        body: `${valor} — vence em ${venc} (em 7 dias).`,
+      };
+    default:
+      return {
+        title: "Aviso de vencimento",
+        body: `${valor} — vence em ${venc}.`,
+      };
+  }
 }

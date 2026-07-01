@@ -1,6 +1,7 @@
 import { BoletosPagos } from "@/components/boletos-pagos";
 import { DocumentsTable } from "@/components/documents-table";
 import { PageHeader } from "@/components/page-header";
+import { PushOptIn } from "@/components/push-optin";
 import { getActiveCompanyId } from "@/lib/companies";
 import { parseCompetencia } from "@/lib/dates";
 import { formatCurrency } from "@/lib/format";
@@ -63,6 +64,7 @@ export default async function MeusBoletosPage() {
         subtitle="Baixe seus boletos e marque o que já foi pago"
       />
       <div className="space-y-6 p-6">
+        <PushOptIn />
         <section className="space-y-4">
           <div className="flex flex-wrap items-baseline justify-between gap-2">
             <h2 className="text-sm font-semibold">Em aberto</h2>
