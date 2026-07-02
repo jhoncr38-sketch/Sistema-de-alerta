@@ -148,6 +148,16 @@ export function PushOptIn() {
     }
   }
 
+  async function reverificar() {
+    // Se o navegador ainda mostra "bloqueado" neste tab, recarrega para captar
+    // a mudança feita nas configurações; senão, tenta ativar direto.
+    if (Notification.permission === "denied") {
+      window.location.reload();
+      return;
+    }
+    await ativar();
+  }
+
   if (estado === "carregando" || estado === "indisponivel") return null;
 
   const box =
@@ -184,6 +194,16 @@ export function PushOptIn() {
             Você bloqueou as notificações. Para reativar: {comoLiberar}
           </p>
         </div>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={busy}
+          onClick={reverificar}
+        >
+          {busy ? "..." : "Já liberei"}
+        </Button>
+        {erro ? <p className="w-full text-xs text-destructive">{erro}</p> : null}
       </div>
     );
   }
