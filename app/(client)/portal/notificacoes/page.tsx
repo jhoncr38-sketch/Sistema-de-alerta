@@ -1,5 +1,6 @@
 import { Bell } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
+import { PushOptIn } from "@/components/push-optin";
 import { getActiveCompanyId } from "@/lib/companies";
 import { docTypeLabel } from "@/lib/constants";
 import { formatDate } from "@/lib/format";
@@ -42,7 +43,8 @@ export default async function NotificacoesPage() {
   return (
     <>
       <PageHeader title="Notificações" subtitle="Avisos sobre seus vencimentos" />
-      <div className="p-6">
+      <div className="space-y-4 p-6">
+        <PushOptIn />
         {items.length === 0 ? (
           <div className="rounded-xl border border-dashed bg-card px-6 py-12 text-center text-sm text-muted-foreground">
             Você ainda não recebeu notificações.

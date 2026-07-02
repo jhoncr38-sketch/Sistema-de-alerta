@@ -41,6 +41,9 @@ export function PushOptIn() {
   const [estado, setEstado] = useState<Estado>("carregando");
   const [busy, setBusy] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
+  const [plataforma, setPlataforma] = useState<"ios" | "android" | "desktop">(
+    "desktop",
+  );
 
   useEffect(() => {
     let alive = true;
@@ -60,6 +63,11 @@ export function PushOptIn() {
       const isStandalone =
         window.matchMedia?.("(display-mode: standalone)").matches ||
         (navigator as unknown as { standalone?: boolean }).standalone === true;
+
+      const isAndroid = /android/i.test(ua);
+      if (alive) {
+        setPlataforma(isIOS ? "ios" : isAndroid ? "android" : "desktop");
+      }
 
       if (!supported) {
         // iPhone no Safari (aba normal) não tem PushManager: oriente a instalar.
@@ -161,14 +169,19 @@ export function PushOptIn() {
   }
 
   if (estado === "negado") {
+    const comoLiberar =
+      plataforma === "ios"
+        ? "Ajustes do iPhone → Notificações → S J Contábil → ative."
+        : plataforma === "android"
+          ? "Toque no cadeado na barra de endereço → Permissões → Notificações → Permitir."
+          : "Clique no cadeado 🔒 na barra de endereço → Notificações → Permitir e recarregue a página.";
     return (
       <div className={box}>
         <span className="text-lg">🔕</span>
         <div className="min-w-0 flex-1 text-sm">
-          <p className="font-medium">Avisos bloqueados</p>
+          <p className="font-medium">Avisos bloqueados neste aparelho</p>
           <p className="text-muted-foreground">
-            As notificações estão bloqueadas nas configurações do navegador para
-            este site. Libere-as ali para receber os avisos de vencimento.
+            Você bloqueou as notificações. Para reativar: {comoLiberar}
           </p>
         </div>
       </div>
