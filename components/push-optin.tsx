@@ -4,19 +4,18 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 
 /**
- * Botão de opt-in do Web Push, no portal do cliente. É totalmente opcional: se o
- * navegador não suportar, ou o cliente negar, o portal segue funcionando e os
- * avisos continuam chegando por e-mail. No iPhone, o push só existe com o app
- * instalado na tela inicial — nesse caso mostramos o passo a passo.
+ * Botão de opt-in do Web Push, na aba Notificações do cliente. Opcional: se o
+ * navegador não suportar, ou o cliente negar, os avisos continuam por e-mail.
+ * No iPhone, o push exige o PWA instalado na tela inicial.
  */
 
 type Estado =
   | "carregando"
-  | "indisponivel" // navegador sem suporte (desktop antigo etc.)
-  | "ios_instalar" // iPhone/iPad sem o PWA instalado
-  | "negado" // usuário bloqueou nas configurações
-  | "ativar" // pode ativar
-  | "ativado"; // já inscrito neste aparelho
+  | "indisponivel"
+  | "ios_instalar"
+  | "negado"
+  | "ativar"
+  | "ativado";
 
 const VAPID_PUBLIC = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
 
@@ -41,13 +40,10 @@ export function PushOptIn() {
   const [estado, setEstado] = useState<Estado>("carregando");
   const [busy, setBusy] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
-  const [plataforma, setPlataforma] = useState<"ios" | "android" | "desktop">(
-    "desktop",
-  );
+  const [isIos, setIsIos] = useState(false);
 
   useEffect(() => {
     let alive = true;
-    // useEffect só roda no cliente, então window/navigator existem aqui.
     const init = async () => {
       const supported =
         "serviceWorker" in navigator &&
@@ -56,7 +52,7 @@ export function PushOptIn() {
         !!VAPID_PUBLIC;
 
       const ua = navigator.userAgent;
-      const isIOS =
+      const ios =
         /iphone|ipad|ipod/i.test(ua) ||
         // iPad recente se identifica como Mac com tela sensível ao toque.
         (/macintosh/i.test(ua) && "ontouchend" in document);
@@ -64,16 +60,10 @@ export function PushOptIn() {
         window.matchMedia?.("(display-mode: standalone)").matches ||
         (navigator as unknown as { standalone?: boolean }).standalone === true;
 
-      const isAndroid = /android/i.test(ua);
-      if (alive) {
-        setPlataforma(isIOS ? "ios" : isAndroid ? "android" : "desktop");
-      }
+      if (alive) setIsIos(ios);
 
       if (!supported) {
-        // iPhone no Safari (aba normal) não tem PushManager: oriente a instalar.
-        if (alive) {
-          setEstado(isIOS && !isStandalone ? "ios_instalar" : "indisponivel");
-        }
+        if (alive) setEstado(ios && !isStandalone ? "ios_instalar" : "indisponivel");
         return;
       }
       if (Notification.permission === "denied") {
@@ -81,15 +71,13 @@ export function PushOptIn() {
         return;
       }
 
-      // Mostra o card já; em paralelo confere se este aparelho já está inscrito
-      // (sem travar a UI caso o service worker demore a ativar).
       if (alive) setEstado("ativar");
       try {
         const reg = await ensureRegistration();
         const sub = await reg.pushManager.getSubscription();
         if (sub && alive) setEstado("ativado");
       } catch {
-        /* mantém "ativar" — a inscrição real acontece no clique */
+        /* mantém "ativar" */
       }
     };
     init();
@@ -148,16 +136,6 @@ export function PushOptIn() {
     }
   }
 
-  async function reverificar() {
-    // Se o navegador ainda mostra "bloqueado" neste tab, recarrega para captar
-    // a mudança feita nas configurações; senão, tenta ativar direto.
-    if (Notification.permission === "denied") {
-      window.location.reload();
-      return;
-    }
-    await ativar();
-  }
-
   if (estado === "carregando" || estado === "indisponivel") return null;
 
   const box =
@@ -167,43 +145,24 @@ export function PushOptIn() {
     return (
       <div className={box}>
         <span className="text-lg">🔔</span>
-        <div className="min-w-0 flex-1 text-sm">
-          <p className="font-medium">Receba avisos de vencimento no iPhone</p>
-          <p className="text-muted-foreground">
-            Toque em <strong>Compartilhar</strong> → <strong>Adicionar à Tela
-            de Início</strong>, abra o app pela tela inicial e ative os avisos.
-          </p>
-        </div>
+        <p className="min-w-0 flex-1 text-sm text-muted-foreground">
+          Para receber avisos no iPhone: Compartilhar → Adicionar à Tela de
+          Início.
+        </p>
       </div>
     );
   }
 
   if (estado === "negado") {
-    const comoLiberar =
-      plataforma === "ios"
-        ? "Ajustes do iPhone → Notificações → S J Contábil → ative."
-        : plataforma === "android"
-          ? "Toque no cadeado na barra de endereço → Permissões → Notificações → Permitir."
-          : "Clique no cadeado 🔒 na barra de endereço → Notificações → Permitir e recarregue a página.";
     return (
       <div className={box}>
         <span className="text-lg">🔕</span>
-        <div className="min-w-0 flex-1 text-sm">
-          <p className="font-medium">Avisos bloqueados neste aparelho</p>
-          <p className="text-muted-foreground">
-            Você bloqueou as notificações. Para reativar: {comoLiberar}
-          </p>
-        </div>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          disabled={busy}
-          onClick={reverificar}
-        >
-          {busy ? "..." : "Já liberei"}
-        </Button>
-        {erro ? <p className="w-full text-xs text-destructive">{erro}</p> : null}
+        <p className="min-w-0 flex-1 text-sm text-muted-foreground">
+          Avisos bloqueados —{" "}
+          {isIos
+            ? "libere em Ajustes → Notificações."
+            : "libere no cadeado 🔒 da barra de endereço."}
+        </p>
       </div>
     );
   }
@@ -212,13 +171,7 @@ export function PushOptIn() {
     return (
       <div className={box}>
         <span className="text-lg">🔔</span>
-        <div className="min-w-0 flex-1 text-sm">
-          <p className="font-medium">Avisos de vencimento ativados</p>
-          <p className="text-muted-foreground">
-            Você receberá uma notificação neste aparelho quando um boleto estiver
-            perto de vencer.
-          </p>
-        </div>
+        <p className="min-w-0 flex-1 text-sm font-medium">Avisos ativados</p>
         <Button
           type="button"
           variant="outline"
@@ -237,13 +190,9 @@ export function PushOptIn() {
   return (
     <div className={box}>
       <span className="text-lg">🔔</span>
-      <div className="min-w-0 flex-1 text-sm">
-        <p className="font-medium">Ativar avisos de vencimento</p>
-        <p className="text-muted-foreground">
-          Receba uma notificação neste aparelho quando um boleto estiver perto de
-          vencer — além do e-mail.
-        </p>
-      </div>
+      <p className="min-w-0 flex-1 text-sm font-medium">
+        Ativar avisos de vencimento
+      </p>
       <Button type="button" size="sm" disabled={busy} onClick={ativar}>
         {busy ? "Ativando..." : "Ativar"}
       </Button>
