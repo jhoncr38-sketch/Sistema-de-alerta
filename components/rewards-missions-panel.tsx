@@ -441,7 +441,7 @@ function MissionFormDialog({
                   name="coins"
                   type="number"
                   min={0}
-                  step={10}
+                  step={1}
                   defaultValue={mission?.coins ?? ""}
                   placeholder="300"
                 />
@@ -453,7 +453,7 @@ function MissionFormDialog({
                   name="xp"
                   type="number"
                   min={0}
-                  step={10}
+                  step={1}
                   defaultValue={mission?.xp ?? ""}
                   placeholder="250"
                 />

@@ -265,7 +265,7 @@ function RewardFormDialog({ reward }: { reward?: AdminReward }) {
                   name="cost"
                   type="number"
                   min={1}
-                  step={10}
+                  step={1}
                   required
                   defaultValue={reward?.cost ?? ""}
                   placeholder="500"

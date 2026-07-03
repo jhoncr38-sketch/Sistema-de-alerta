@@ -134,7 +134,7 @@ export function SendCoinsButton({
                   name="coins"
                   type="number"
                   min={0}
-                  step={10}
+                  step={1}
                   placeholder="Ex.: 500"
                 />
               </div>
@@ -145,7 +145,7 @@ export function SendCoinsButton({
                   name="xp"
                   type="number"
                   min={0}
-                  step={10}
+                  step={1}
                   placeholder="Ex.: 500"
                 />
               </div>

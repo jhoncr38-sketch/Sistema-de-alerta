@@ -311,7 +311,7 @@ function EarnRuleFormDialog({ rule }: { rule?: AdminEarnRule }) {
                   name="coins"
                   type="number"
                   min={0}
-                  step={10}
+                  step={1}
                   defaultValue={rule?.coins ?? ""}
                   placeholder="100"
                 />
@@ -323,7 +323,7 @@ function EarnRuleFormDialog({ rule }: { rule?: AdminEarnRule }) {
                   name="xp"
                   type="number"
                   min={0}
-                  step={10}
+                  step={1}
                   defaultValue={rule?.xp ?? ""}
                   placeholder="100"
                 />
