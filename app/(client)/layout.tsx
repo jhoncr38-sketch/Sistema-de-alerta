@@ -38,6 +38,7 @@ export default async function ClientLayout({
         brandLogoUrl={branding.logoUrl}
         companies={companies}
         activeCompanyId={active?.id ?? null}
+        rewardsEnabled={active?.rewards_enabled !== false}
       />
       <div className="flex min-w-0 flex-1 flex-col bg-muted/30">
         {children}

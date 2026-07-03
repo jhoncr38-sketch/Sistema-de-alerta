@@ -11,6 +11,25 @@ const UNDEFINED_FUNCTION = "42883";
 const UNDEFINED_TABLE = "42P01";
 
 /**
+ * A empresa pode acumular SJ Coins? O contador liga/desliga o clube por empresa
+ * (companies.rewards_enabled). Desligado → nenhum crédito automático é gerado.
+ * Pré-migração (coluna ainda não existe) ou erro de leitura → assume LIGADO,
+ * para não mudar o comportamento anterior por acidente.
+ */
+async function rewardsEnabled(
+  supabase: ServerClient,
+  companyId: string,
+): Promise<boolean> {
+  const { data, error } = await supabase
+    .from("companies")
+    .select("rewards_enabled")
+    .eq("id", companyId)
+    .maybeSingle();
+  if (error) return true; // coluna ausente/erro de leitura → não bloqueia
+  return data?.rewards_enabled !== false;
+}
+
+/**
  * Consulta a regra de ganho (boa ação) editável pelo contador. Retorna:
  *   • objeto com coins/xp/active quando a regra existe;
  *   • "absent" quando a tabela existe mas a regra foi apagada (→ crédito desativado);
@@ -132,6 +151,7 @@ export async function creditPaymentOnTime(
   if (!doc.dueDate) return;
   const today = new Date().toISOString().slice(0, 10);
   if (today > doc.dueDate) return; // pago com atraso — sem crédito
+  if (!(await rewardsEnabled(supabase, doc.companyId))) return; // clube desligado
 
   const reward = await resolvePaymentReward(supabase, doc.categoria, doc.type);
   if (!reward) return;
@@ -168,6 +188,7 @@ export async function creditDocumentOnTime(
     const today = new Date().toISOString().slice(0, 10);
     if (today > args.dueDate) return; // enviou após o prazo — sem crédito
   }
+  if (!(await rewardsEnabled(supabase, args.companyId))) return; // clube desligado
 
   // Valor/estado da regra editável (apagada/oculta → não credita).
   let coins = 100;

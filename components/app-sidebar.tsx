@@ -12,6 +12,7 @@ import {
   History,
   Layers,
   LayoutDashboard,
+  Lock,
   LogOut,
   Menu,
   Settings,
@@ -81,6 +82,7 @@ export function AppSidebar({
   brandLogoUrl,
   companies = [],
   activeCompanyId = null,
+  rewardsEnabled = true,
 }: {
   role: Role;
   userName: string;
@@ -91,6 +93,8 @@ export function AppSidebar({
   /** Empresas que o cliente pode ver (o seletor só aparece com 2+). */
   companies?: Company[];
   activeCompanyId?: string | null;
+  /** SJ Rewards ligado para a empresa ativa; false esconde o item do menu. */
+  rewardsEnabled?: boolean;
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -119,6 +123,9 @@ export function AppSidebar({
         ? pathname === item.href
         : pathname.startsWith(item.href);
       const Icon = item.icon;
+      // Clube desligado na empresa ativa: o item continua clicável (leva à
+      // vitrine), mas ganha um cadeado que sinaliza "não incluído".
+      const locked = !rewardsEnabled && item.href === "/portal/rewards";
       return (
         <Link
           key={item.href}
@@ -133,6 +140,9 @@ export function AppSidebar({
         >
           <Icon className="size-4" />
           {item.label}
+          {locked ? (
+            <Lock className="ml-auto size-3.5 text-muted-foreground/70" />
+          ) : null}
         </Link>
       );
     });

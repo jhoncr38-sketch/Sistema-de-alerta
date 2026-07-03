@@ -326,6 +326,31 @@ export async function setClientActive(userId: string, active: boolean) {
   revalidateClientes();
 }
 
+/**
+ * Liga ou desliga o SJ Rewards de uma EMPRESA (não do cliente). Quando
+ * desligado (rewards_enabled=false): o item "SJ Rewards" some do menu do
+ * portal, a página do clube fica bloqueada e o crédito automático de SJ Coins
+ * (guia paga em dia / documento enviado no prazo) para de acontecer. Nada é
+ * apagado — saldo, extrato e conquistas ficam guardados e voltam ao reativar.
+ */
+export async function setCompanyRewardsEnabled(
+  companyId: string,
+  enabled: boolean,
+) {
+  await requireAdmin();
+  if (!companyId) return;
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("companies")
+    .update({ rewards_enabled: enabled })
+    .eq("id", companyId);
+  if (error) throw new Error(error.message);
+
+  revalidateClientes();
+  revalidatePath("/painel/rewards");
+}
+
 /** Recusa um cadastro pendente. */
 export async function rejectClient(formData: FormData) {
   await requireAdmin();

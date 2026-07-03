@@ -31,6 +31,7 @@ export interface Company {
   email: string | null;
   phone: string | null;
   active: boolean;
+  rewards_enabled: boolean; // false = SJ Rewards desligado pelo contador para esta empresa
   created_at: string;
 }
 
