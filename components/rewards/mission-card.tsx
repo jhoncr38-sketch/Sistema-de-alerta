@@ -10,7 +10,7 @@ export function MissionCard({ mission }: { mission: Mission }) {
   const done = missionDone(mission);
 
   return (
-    <Card className="gap-0 shadow-sm">
+    <Card className="gap-0 shadow-sm transition-shadow hover:shadow-md">
       <div className="flex items-center justify-between gap-3 px-4 pb-3">
         <div className="flex items-center gap-2">
           <span className="rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary">

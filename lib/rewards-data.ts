@@ -63,7 +63,7 @@ export async function getEarnRules(
 ): Promise<EarnRule[]> {
   const { data, error } = await supabase
     .from("rewards_earn_rules")
-    .select("key,label,description,icon,coins,xp")
+    .select("key,label,description,icon,coins,xp,pay_categoria")
     .eq("active", true)
     .order("sort", { ascending: true });
 
@@ -76,6 +76,7 @@ export async function getEarnRules(
     icon: (r.icon as string) as IconKey,
     coins: r.coins as number,
     xp: r.xp as number,
+    payCategoria: (r.pay_categoria as string | null) ?? null,
   }));
 }
 

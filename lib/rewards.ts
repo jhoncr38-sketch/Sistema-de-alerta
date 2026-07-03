@@ -207,6 +207,8 @@ export interface EarnRule {
   icon: IconKey;
   coins: number;
   xp: number;
+  /** Categoria do gatilho de pagamento ('boleto'|'parcelamento'), p/ levar à aba certa. */
+  payCategoria?: string | null;
 }
 
 /** Catálogo de boas ações que geram SJ Coins e XP. */
