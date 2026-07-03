@@ -1,19 +1,7 @@
 import Link from "next/link";
-import {
-  ArrowLeft,
-  Award,
-  Coins,
-  Crown,
-  Gem,
-  Gift,
-  Lock,
-  Medal,
-  Sparkles,
-  Star,
-  Trophy,
-  type LucideIcon,
-} from "lucide-react";
+import { ArrowLeft, Coins, Gift, Lock, Sparkles, Trophy } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
+import { LEVEL_VISUAL } from "@/components/rewards/level-badge";
 import { LEVELS } from "@/lib/rewards";
 import { cn } from "@/lib/utils";
 
@@ -24,16 +12,6 @@ import { cn } from "@/lib/utils";
  * — despertando interesse para pedir a ativação ao contador. Tela estática
  * (nenhuma consulta ao banco), então não pesa nem credita nada.
  */
-
-/** Símbolo + cor de cada nível — prestígio crescente, no lugar de bolinhas. */
-const LEVEL_STYLE: Record<string, { Icon: LucideIcon; color: string }> = {
-  bronze: { Icon: Medal, color: "text-amber-600" },
-  prata: { Icon: Award, color: "text-slate-300" },
-  ouro: { Icon: Trophy, color: "text-amber-400" },
-  diamante: { Icon: Gem, color: "text-cyan-300" },
-  master: { Icon: Star, color: "text-violet-400" },
-  elite: { Icon: Crown, color: "text-fuchsia-300" },
-};
 
 export function RewardsLocked({ brandName }: { brandName: string }) {
   const perks = [
@@ -103,13 +81,13 @@ export function RewardsLocked({ brandName }: { brandName: string }) {
           {/* Trilha de níveis */}
           <div className="mt-1 flex flex-wrap items-center justify-center gap-1.5">
             {LEVELS.map((l) => {
-              const { Icon, color } = LEVEL_STYLE[l.accent];
+              const { Icon, onDark } = LEVEL_VISUAL[l.accent];
               return (
                 <span
                   key={l.id}
                   className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.06] px-2.5 py-1 text-xs text-white/75"
                 >
-                  <Icon className={cn("size-3.5", color)} />
+                  <Icon className={cn("size-3.5", onDark)} />
                   {l.name}
                 </span>
               );

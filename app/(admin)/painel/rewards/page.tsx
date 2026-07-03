@@ -25,8 +25,9 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { LevelBadge, LEVEL_VISUAL } from "@/components/rewards/level-badge";
 import { formatDate } from "@/lib/format";
-import { levelForXp, REWARDS, type IconKey } from "@/lib/rewards";
+import { levelProgress, REWARDS, type IconKey } from "@/lib/rewards";
 import { createClient } from "@/lib/supabase/server";
 import { cn } from "@/lib/utils";
 
@@ -298,12 +299,13 @@ export default async function AdminRewardsPage() {
 
           {/* ---- Acompanhamento ---- */}
           <TabsContent value="acompanhamento">
-            <div className="overflow-hidden rounded-xl bg-card ring-1 ring-foreground/10">
+            <div className="overflow-x-auto rounded-xl bg-card ring-1 ring-foreground/10">
               <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead>Empresa</TableHead>
                     <TableHead>Nível</TableHead>
+                    <TableHead>Rumo ao próximo nível</TableHead>
                     <TableHead className="text-right">SJ Coins</TableHead>
                     <TableHead className="text-right">XP</TableHead>
                     <TableHead className="text-right">Sequência</TableHead>
@@ -311,14 +313,41 @@ export default async function AdminRewardsPage() {
                 </TableHeader>
                 <TableBody>
                   {rows.map(({ company, account }) => {
-                    const level = levelForXp(account?.xp ?? 0);
+                    const { current, next, pct, xpRemaining } = levelProgress(
+                      account?.xp ?? 0,
+                    );
                     return (
                       <TableRow key={company.id}>
                         <TableCell className="font-medium">
                           {companyName(company)}
                         </TableCell>
-                        <TableCell className="text-muted-foreground">
-                          {level.name}
+                        <TableCell>
+                          <LevelBadge
+                            accent={current.accent}
+                            name={current.name}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          {next ? (
+                            <div className="flex min-w-[190px] items-center gap-2.5">
+                              <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
+                                <div
+                                  className={cn(
+                                    "h-full rounded-full transition-[width]",
+                                    LEVEL_VISUAL[current.accent].bar,
+                                  )}
+                                  style={{ width: `${pct}%` }}
+                                />
+                              </div>
+                              <span className="whitespace-nowrap text-xs tabular-nums text-muted-foreground">
+                                faltam {nf.format(xpRemaining)} XP · {next.name}
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-600 dark:text-amber-400">
+                              Nível máximo atingido
+                            </span>
+                          )}
                         </TableCell>
                         <TableCell className="text-right tabular-nums">
                           {nf.format(account?.coins ?? 0)}
