@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
 import { redeemReward } from "@/app/(client)/portal/rewards/actions";
@@ -136,9 +135,7 @@ export function RewardsView({
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="space-y-4 lg:col-span-2">
           {initialState.missions.map((m) => (
-            <Link key={m.id} href="/portal/solicitacoes" className="block">
-              <MissionCard mission={m} />
-            </Link>
+            <MissionCard key={m.id} mission={m} href="/portal/solicitacoes" />
           ))}
         </div>
         <StreakCard days={initialState.streakDays} />

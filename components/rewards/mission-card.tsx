@@ -1,16 +1,24 @@
-import { ClipboardList } from "lucide-react";
+import Link from "next/link";
+import { ArrowRight, ClipboardList } from "lucide-react";
 import { CoinAmount } from "@/components/rewards/coin";
 import { ProgressBar } from "@/components/rewards/parts";
 import { RewardIcon } from "@/components/rewards/reward-icon";
 import { Card } from "@/components/ui/card";
 import { missionDone, missionPct, type Mission } from "@/lib/rewards";
 
-export function MissionCard({ mission }: { mission: Mission }) {
+export function MissionCard({
+  mission,
+  href,
+}: {
+  mission: Mission;
+  /** Destino do botão "Completar missão" (opcional). */
+  href?: string;
+}) {
   const pct = missionPct(mission);
   const done = missionDone(mission);
 
   return (
-    <Card className="gap-0 shadow-sm transition-shadow hover:shadow-md">
+    <Card className="gap-0 shadow-sm">
       <div className="flex items-center justify-between gap-3 px-4 pb-3">
         <div className="flex items-center gap-2">
           <span className="rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary">
@@ -51,6 +59,19 @@ export function MissionCard({ mission }: { mission: Mission }) {
           ) : null}
         </div>
       </div>
+
+      {/* Botão explícito: só ele navega (o card inteiro não é clicável). */}
+      {href && !done ? (
+        <div className="mt-3 flex justify-end border-t px-4 pt-2.5">
+          <Link
+            href={href}
+            className="inline-flex items-center gap-1 rounded-md px-1 text-sm font-medium text-primary transition-colors hover:underline"
+          >
+            Completar missão
+            <ArrowRight className="size-4" aria-hidden />
+          </Link>
+        </div>
+      ) : null}
     </Card>
   );
 }
