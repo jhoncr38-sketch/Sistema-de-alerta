@@ -5,8 +5,10 @@ import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import {
   Bell,
+  FileClock,
   FileText,
   Files,
+  Gift,
   History,
   Layers,
   LayoutDashboard,
@@ -38,10 +40,12 @@ interface NavItem {
 const ADMIN_NAV: NavItem[] = [
   { label: "Dashboard", href: "/painel", icon: LayoutDashboard },
   { label: "Clientes", href: "/painel/clientes", icon: Users },
+  { label: "SJ Rewards", href: "/painel/rewards", icon: Gift },
   { label: "Faturamento", href: "/painel/faturamento", icon: TrendingUp },
   { label: "Parcelamentos", href: "/painel/parcelamentos", icon: Layers },
   { label: "Folha de pagamento", href: "/painel/folha", icon: Wallet },
   { label: "Documentos", href: "/painel/documentos", icon: FileText },
+  { label: "Solicitações", href: "/painel/solicitacoes", icon: FileClock },
   { label: "Enviar documento", href: "/painel/enviar", icon: Upload },
   { label: "Histórico", href: "/painel/historico", icon: History },
   { label: "Configurações", href: "/painel/configuracoes", icon: Settings },
@@ -54,6 +58,8 @@ const CLIENT_NAV: NavItem[] = [
   { label: "Parcelamentos", href: "/portal/parcelamentos", icon: Layers },
   { label: "Folha de pagamento", href: "/portal/folha", icon: Wallet },
   { label: "Documentos", href: "/portal/documentos", icon: Files },
+  { label: "Solicitações", href: "/portal/solicitacoes", icon: FileClock },
+  { label: "SJ Rewards", href: "/portal/rewards", icon: Gift },
   { label: "Notificações", href: "/portal/notificacoes", icon: Bell },
 ];
 

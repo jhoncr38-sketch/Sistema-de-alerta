@@ -6,6 +6,7 @@ import { requireAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { notifyPaid } from "@/lib/email/notify";
+import { creditPaymentOnTime, reversePaymentCredit } from "@/lib/rewards-credit";
 import type { DocCategoria, DocType } from "@/lib/types";
 
 /** Telas que mostram status de pagamento / comprovante. */
@@ -29,7 +30,7 @@ export async function toggleDocumentPaid(docId: string, paid: boolean) {
   // aberto -> pago e já temos os dados para o e-mail de confirmação.
   const { data: before } = await supabase
     .from("documents")
-    .select("status,type,categoria,competencia,amount,company_id")
+    .select("status,type,categoria,competencia,amount,company_id,due_date")
     .eq("id", docId)
     .single();
 
@@ -41,6 +42,14 @@ export async function toggleDocumentPaid(docId: string, paid: boolean) {
 
   // Confirmação de pagamento só quando a guia passou de aberta para paga.
   if (paid && before?.status === "open") {
+    // SJ Rewards: credita moedas se a guia foi paga em dia (idempotente).
+    await creditPaymentOnTime(supabase, {
+      id: docId,
+      companyId: before.company_id,
+      categoria: before.categoria as DocCategoria,
+      type: before.type as DocType,
+      dueDate: before.due_date,
+    });
     after(() =>
       notifyPaid({
         documentId: docId,
@@ -51,6 +60,14 @@ export async function toggleDocumentPaid(docId: string, paid: boolean) {
         amount: before.amount,
       }).catch((err) => console.error("[notify] pagamento confirmado:", err)),
     );
+  }
+
+  // Desmarcou (pago -> aberto): anula a recompensa creditada por esta guia.
+  if (!paid && before?.status === "paid") {
+    await reversePaymentCredit(supabase, {
+      companyId: before.company_id,
+      docId,
+    });
   }
 
   // Atualiza as telas que mostram status de pagamento.
@@ -148,7 +165,7 @@ export async function payWithComprovante(docId: string, formData: FormData) {
   // Estado antes (para o e-mail de confirmação e para saber se houve transição).
   const { data: before } = await supabase
     .from("documents")
-    .select("status,type,categoria,competencia,amount,company_id")
+    .select("status,type,categoria,competencia,amount,company_id,due_date")
     .eq("id", docId)
     .single();
 
@@ -161,6 +178,14 @@ export async function payWithComprovante(docId: string, formData: FormData) {
   if (error) throw new Error(error.message);
 
   if (before?.status === "open") {
+    // SJ Rewards: credita moedas se a guia foi paga em dia (idempotente).
+    await creditPaymentOnTime(supabase, {
+      id: docId,
+      companyId: before.company_id,
+      categoria: before.categoria as DocCategoria,
+      type: before.type as DocType,
+      dueDate: before.due_date,
+    });
     after(() =>
       notifyPaid({
         documentId: docId,

@@ -281,6 +281,56 @@ export function pagamentoConfirmadoEmail(opts: {
   return { subject, html: shell({ headline, accent: SUCCESS, bodyHtml: body }) };
 }
 
+/** Cliente subiu de nível no Clube SJ (SJ Rewards). */
+export function nivelAlcancadoEmail(opts: {
+  companyName: string;
+  levelName: string;
+  perks: string[];
+  portalUrl: string;
+}) {
+  const { companyName, levelName, perks, portalUrl } = opts;
+  const headline = "Você subiu de nível!";
+  const subject = `Parabéns! Você chegou ao nível ${levelName} — Clube SJ`;
+  const perksHtml = perks
+    .map(
+      (pk) =>
+        `<p style="margin:0 0 8px;color:${TEXT};font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.5">&#10004;&nbsp; ${pk}</p>`,
+    )
+    .join("");
+  const body = `
+        ${p(`Olá, ${b(companyName)}!`)}
+        ${p(`Você alcançou o nível <strong style="color:${GOLD_DARK}">${levelName}</strong> no Clube SJ. &#127881;`)}
+        ${perks.length ? p("Vantagens que passam a valer:") + perksHtml : ""}
+        ${button(portalUrl, "Ver meu Clube SJ")}`;
+  return { subject, html: shell({ headline, accent: GOLD, bodyHtml: body }) };
+}
+
+/** Cliente desbloqueou uma ou mais conquistas (medalhas). */
+export function conquistaEmail(opts: {
+  companyName: string;
+  achievements: { name: string; description: string }[];
+  portalUrl: string;
+}) {
+  const { companyName, achievements, portalUrl } = opts;
+  const many = achievements.length > 1;
+  const headline = many ? "Novas conquistas!" : "Nova conquista!";
+  const subject = many
+    ? `Você desbloqueou ${achievements.length} conquistas — Clube SJ`
+    : `Nova conquista: ${achievements[0]?.name} — Clube SJ`;
+  const list = achievements
+    .map(
+      (a) =>
+        `<p style="margin:0 0 8px;color:${TEXT};font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.5">&#127941;&nbsp; <strong style="color:${GOLD_DARK}">${a.name}</strong> — ${a.description}</p>`,
+    )
+    .join("");
+  const body = `
+        ${p(`Olá, ${b(companyName)}!`)}
+        ${p(many ? "Você desbloqueou novas medalhas no Clube SJ:" : "Você desbloqueou uma nova medalha no Clube SJ:")}
+        ${list}
+        ${button(portalUrl, "Ver minhas conquistas")}`;
+  return { subject, html: shell({ headline, accent: GOLD, bodyHtml: body }) };
+}
+
 export interface DigestItem {
   type: DocType;
   competencia: string | null;

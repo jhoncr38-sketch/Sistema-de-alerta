@@ -122,3 +122,26 @@ export interface AppSettingsRow {
   logo_path: string | null;
   updated_at: string;
 }
+
+export type DocRequestStatus = "pending" | "submitted";
+
+/** Solicitação de documento: o contador pede, o cliente envia pelo portal. */
+export interface DocumentRequest {
+  id: string;
+  company_id: string;
+  title: string;
+  description: string | null;
+  competencia: string | null; // "MM/YYYY" (opcional)
+  due_date: string | null; // ISO date (opcional)
+  status: DocRequestStatus;
+  file_path: string | null; // arquivo enviado pelo cliente (bucket 'boletos')
+  file_name: string | null;
+  submitted_at: string | null;
+  submitted_by: string | null;
+  created_by: string | null;
+  created_at: string;
+}
+
+export interface DocumentRequestWithCompany extends DocumentRequest {
+  company: Pick<Company, "id" | "razao_social" | "nome_fantasia"> | null;
+}
