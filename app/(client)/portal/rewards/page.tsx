@@ -2,6 +2,7 @@ import {
   registerAccess,
   runRewardsChecks,
 } from "@/app/(client)/portal/rewards/actions";
+import { RewardsGuide } from "@/components/rewards/rewards-guide";
 import { RewardsView } from "@/components/rewards/rewards-view";
 import { PageHeader } from "@/components/page-header";
 import { getUserAndProfile } from "@/lib/auth";
@@ -34,7 +35,9 @@ export default async function RewardsPage() {
 
   return (
     <>
-      <PageHeader title="SJ Rewards" subtitle="Clube de Vantagens" />
+      <PageHeader title="SJ Rewards" subtitle="Clube de Vantagens">
+        <RewardsGuide />
+      </PageHeader>
       <RewardsView initialState={state} companyId={active?.id ?? null} />
     </>
   );
