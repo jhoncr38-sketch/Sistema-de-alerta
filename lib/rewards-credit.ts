@@ -90,6 +90,10 @@ interface PaidDoc {
   categoria: DocCategoria;
   type: DocType;
   dueDate: string | null; // ISO (YYYY-MM-DD)
+  /** Quando o pagamento foi DECLARADO pelo cliente (ISO). Base do "em dia" — se
+   *  ausente, usa a data de hoje. Evita punir o cliente pela demora do contador
+   *  em confirmar. */
+  paidAt?: string | null;
 }
 
 interface PaymentReward {
@@ -173,8 +177,10 @@ export async function creditPaymentOnTime(
   doc: PaidDoc,
 ): Promise<void> {
   if (!doc.dueDate) return;
-  const today = new Date().toISOString().slice(0, 10);
-  if (today > doc.dueDate) return; // pago com atraso — sem crédito
+  // "Em dia" pela data em que o cliente DECLAROU o pagamento (não a de hoje, que
+  // seria a da confirmação do contador). Sem essa data, cai no dia de hoje.
+  const paidDay = (doc.paidAt ?? new Date().toISOString()).slice(0, 10);
+  if (paidDay > doc.dueDate) return; // pago com atraso — sem crédito
   if (!(await rewardsEnabled(supabase, doc.companyId))) return; // clube desligado
 
   // Missões automáticas de "pagar em dia" avançam pelo EVENTO — independem de

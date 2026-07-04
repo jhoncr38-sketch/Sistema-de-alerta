@@ -1,4 +1,4 @@
-import { AlertTriangle, CalendarClock, CheckCircle2, Clock, Users } from "lucide-react";
+import { AlertTriangle, BadgeCheck, CalendarClock, CheckCircle2, Clock, Users } from "lucide-react";
 import { AlertBanner } from "@/components/alert-banner";
 import { DocumentsTable } from "@/components/documents-table";
 import { MetricCard } from "@/components/metric-card";
@@ -82,6 +82,9 @@ export default async function PainelPage() {
     (d) => d.categoria === "boleto" || d.categoria === "parcelamento",
   );
   const open = boletos.filter((d) => d.status === "open");
+  // Guias que o cliente marcou como pagas e aguardam a confirmação do contador.
+  const aguardando = boletos.filter((d) => d.status === "aguardando");
+  const aguardandoValor = aguardando.reduce((s, d) => s + (d.amount ?? 0), 0);
   // Lista "em aberto": oculta as parcelas futuras de débito automático.
   const openList = open.filter((d) => !ehDebitoAutomaticoFuturo(d));
 
@@ -142,6 +145,36 @@ export default async function PainelPage() {
             </strong>{" "}
             vencem nos próximos 7 dias. Mantenha seus clientes informados.
           </AlertBanner>
+        ) : null}
+
+        {aguardando.length > 0 ? (
+          <section className="space-y-2">
+            <div className="flex items-center gap-2">
+              <BadgeCheck className="size-4 text-amber-600 dark:text-amber-400" />
+              <span className="text-sm font-medium">
+                Aguardando sua confirmação
+              </span>
+              <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
+                {aguardando.length}
+              </span>
+              {aguardandoValor > 0 ? (
+                <span className="ml-auto text-xs text-muted-foreground tabular-nums">
+                  {formatCurrency(aguardandoValor)}
+                </span>
+              ) : null}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Estes clientes marcaram pagamentos que precisam da sua confirmação.
+            </p>
+            <DocumentsTable
+              documents={aguardando}
+              showClient
+              showDownload
+              showPaid
+              isAdmin
+              competenciaInline
+            />
+          </section>
         ) : null}
 
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -207,6 +240,7 @@ export default async function PainelPage() {
                     showClient
                     showDownload
                     showPaid
+                    isAdmin
                     competenciaInline
                     subtleActions
                   />

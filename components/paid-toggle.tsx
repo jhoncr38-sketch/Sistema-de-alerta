@@ -1,14 +1,17 @@
 "use client";
 
 import { useRef, useState, useTransition } from "react";
-import { Check, Circle, Loader2, Paperclip } from "lucide-react";
+import { Check, Circle, Clock, Loader2, Paperclip } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { payWithComprovante, toggleDocumentPaid } from "@/app/actions/documents";
+import type { DocStatus } from "@/lib/types";
 
 /** Botão de marcar/desmarcar boleto como pago (toggle). */
 export function PaidToggle({
   docId,
   paid,
+  status,
+  isAdmin = false,
   labelPaid = "Pago",
   labelUnpaid = "Marcar pago",
   requireComprovante = false,
@@ -17,6 +20,10 @@ export function PaidToggle({
 }: {
   docId: string;
   paid: boolean;
+  /** Status completo da guia. Quando 'aguardando', o cliente vê o botão travado. */
+  status?: DocStatus;
+  /** True nas telas do contador: mostra o botão de confirmação em vez de travar. */
+  isAdmin?: boolean;
   /** Rótulos personalizados (ex.: débito automático usa "Confirmar pagamento"). */
   labelPaid?: string;
   labelUnpaid?: string;
@@ -31,6 +38,20 @@ export function PaidToggle({
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Cliente com pagamento declarado (aguardando): botão travado — só o contador
+  // resolve, pelos botões de confirmar/rejeitar (ver ConfirmPaymentButtons).
+  if (status === "aguardando" && !isAdmin) {
+    return (
+      <span
+        className="inline-flex items-center gap-1 rounded-md bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700 ring-1 ring-amber-200 ring-inset dark:bg-amber-950/40 dark:text-amber-300 dark:ring-amber-900"
+        title="Você marcou como pago. Aguarde a confirmação do contador."
+      >
+        <Clock className="size-3 shrink-0" />
+        Aguardando confirmação
+      </span>
+    );
+  }
 
   // Quitar exige anexar o comprovante (e ainda não há um). O botão vira um fluxo
   // único: escolher o arquivo, que é anexado e já marca como pago.

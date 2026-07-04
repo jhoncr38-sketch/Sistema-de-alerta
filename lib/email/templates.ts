@@ -281,6 +281,30 @@ export function pagamentoConfirmadoEmail(opts: {
   return { subject, html: shell({ headline, accent: SUCCESS, bodyHtml: body }) };
 }
 
+/** Aviso AO CONTADOR: um cliente declarou pagamento e aguarda confirmação. */
+export function pagamentoAguardandoEmail(opts: {
+  companyName: string;
+  type: DocType;
+  competencia: string | null;
+  amount: number | null;
+  painelUrl: string;
+}) {
+  const { companyName, type, competencia, amount, painelUrl } = opts;
+  const headline = "Pagamento aguardando confirmação";
+  const subject = `Confirmar pagamento — ${companyName} · ${docTypeLabel(type)}`;
+  const body = `
+        ${p(`O cliente ${b(companyName)} marcou uma guia como paga e aguarda a sua confirmação.`)}
+        ${infoTable(`
+          ${row("Cliente", companyName)}
+          ${row("Guia", docTypeLabel(type))}
+          ${competencia ? row("Competência", competencia) : ""}
+          ${amount != null ? row("Valor", formatCurrency(amount), WARN) : ""}
+        `)}
+        ${p("Abra o painel para confirmar ou rejeitar o pagamento.")}
+        ${button(painelUrl, "Confirmar no painel")}`;
+  return { subject, html: shell({ headline, accent: WARN, bodyHtml: body }) };
+}
+
 /** Cliente subiu de nível no Clube SJ (SJ Rewards). */
 export function nivelAlcancadoEmail(opts: {
   companyName: string;

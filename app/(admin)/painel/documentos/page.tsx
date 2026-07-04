@@ -115,6 +115,7 @@ export default async function DocumentosPage({
             showClient
             showDownload
             showPaid
+            isAdmin
             showDelete
             showRequireProof
             emptyMessage="Nenhum documento. Publique um boleto em “Enviar documento”."
@@ -137,6 +138,7 @@ export default async function DocumentosPage({
                   documents={g.docs}
                   showDownload
                   showPaid
+                  isAdmin
                   showDelete
                   showRequireProof
                   hideCompetencia

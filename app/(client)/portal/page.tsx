@@ -46,9 +46,13 @@ export default async function PortalHome() {
   const pagaveis = docs.filter(
     (d) => d.categoria === "boleto" || d.categoria === "parcelamento",
   );
+  // Métricas de vencido/vencendo olham só o que ainda está em aberto de fato.
   const open = pagaveis.filter((d) => d.status === "open");
-  // Lista "em aberto": oculta as parcelas futuras de débito automático.
-  const openList = open.filter((d) => !ehDebitoAutomaticoFuturo(d));
+  // Lista visível "em aberto": inclui o que aguarda confirmação (selo âmbar,
+  // botão travado), mas oculta as parcelas futuras de débito automático.
+  const openList = pagaveis
+    .filter((d) => d.status !== "paid")
+    .filter((d) => !ehDebitoAutomaticoFuturo(d));
 
   let vencidos = 0;
   let emBreve = 0;

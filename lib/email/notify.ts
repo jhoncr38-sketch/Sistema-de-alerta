@@ -1,7 +1,8 @@
-import { companyNotifyTarget } from "@/lib/email/recipients";
+import { adminNotifyTarget, companyNotifyTarget } from "@/lib/email/recipients";
 import { sendEmail } from "@/lib/email/resend";
 import {
   novoDocumentoEmail,
+  pagamentoAguardandoEmail,
   pagamentoConfirmadoEmail,
 } from "@/lib/email/templates";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -114,4 +115,52 @@ export async function notifyPaid(opts: {
     .from("notifications")
     .insert({ document_id: opts.documentId, channel, kind: "pago" });
   if (error) console.warn("[notify] pago não registrado:", error.message);
+}
+
+/**
+ * Avisa O CONTADOR que um cliente declarou o pagamento de uma guia e ela aguarda
+ * confirmação. Dispara e-mail aos admins e registra a notificação (kind
+ * 'aguardando'), idempotente por guia. Best-effort — nunca quebra a ação.
+ */
+export async function notifyPagamentoAguardando(opts: {
+  documentId: string;
+  companyId: string;
+  categoria: DocCategoria;
+  type: DocType;
+  competencia: string | null;
+  amount: number | null;
+}): Promise<void> {
+  const supabase = createAdminClient();
+
+  // Não reenvia se já houver um aviso de "aguardando" para esta guia.
+  const { data: existing } = await supabase
+    .from("notifications")
+    .select("id")
+    .eq("document_id", opts.documentId)
+    .eq("kind", "aguardando")
+    .maybeSingle();
+  if (existing) return;
+
+  const [{ companyName }, { recipients }] = await Promise.all([
+    companyNotifyTarget(supabase, opts.companyId),
+    adminNotifyTarget(supabase),
+  ]);
+
+  let channel: "email" | "portal" = "portal";
+  if (recipients.length > 0) {
+    const { subject, html } = pagamentoAguardandoEmail({
+      companyName,
+      type: opts.type,
+      competencia: opts.competencia,
+      amount: opts.amount,
+      painelUrl: `${portalBase()}/painel`,
+    });
+    await sendEmail({ to: recipients, subject, html });
+    channel = "email";
+  }
+
+  const { error } = await supabase
+    .from("notifications")
+    .insert({ document_id: opts.documentId, channel, kind: "aguardando" });
+  if (error) console.warn("[notify] aguardando não registrado:", error.message);
 }

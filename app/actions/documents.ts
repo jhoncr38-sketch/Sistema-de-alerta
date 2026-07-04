@@ -2,12 +2,55 @@
 
 import { after } from "next/server";
 import { revalidatePath } from "next/cache";
-import { requireAdmin } from "@/lib/auth";
+import { getUserAndProfile, requireAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { notifyPaid } from "@/lib/email/notify";
+import { notifyPaid, notifyPagamentoAguardando } from "@/lib/email/notify";
 import { creditPaymentOnTime, reversePaymentCredit } from "@/lib/rewards-credit";
 import type { DocCategoria, DocType } from "@/lib/types";
+
+/** Colunas lidas antes de mexer no status — dados p/ rewards, e-mail e transição. */
+const DOC_BEFORE_COLS =
+  "status,type,categoria,competencia,amount,company_id,due_date,marcado_pago_at";
+
+/**
+ * Credita SJ Rewards e avisa o cliente que o pagamento foi CONFIRMADO. Roda só na
+ * confirmação (contador) — não quando o cliente declara. O "em dia" usa a data em
+ * que o cliente marcou (marcado_pago_at); na falta dela, cai no vencimento.
+ */
+async function creditAndNotifyConfirmed(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  docId: string,
+  before: {
+    company_id: string;
+    categoria: string;
+    type: string;
+    competencia: string | null;
+    amount: number | null;
+    due_date: string | null;
+    marcado_pago_at: string | null;
+  },
+) {
+  await creditPaymentOnTime(supabase, {
+    id: docId,
+    companyId: before.company_id,
+    categoria: before.categoria as DocCategoria,
+    type: before.type as DocType,
+    dueDate: before.due_date,
+    // Considera "em dia" pela data em que o cliente declarou o pagamento.
+    paidAt: before.marcado_pago_at,
+  });
+  after(() =>
+    notifyPaid({
+      documentId: docId,
+      companyId: before.company_id,
+      categoria: before.categoria as DocCategoria,
+      type: before.type as DocType,
+      competencia: before.competencia,
+      amount: before.amount,
+    }).catch((err) => console.error("[notify] pagamento confirmado:", err)),
+  );
+}
 
 /** Telas que mostram status de pagamento / comprovante. */
 function revalidatePagamentos() {
@@ -21,16 +64,24 @@ function revalidatePagamentos() {
 /**
  * Marca/desmarca um boleto como pago. A autorização é feita no banco pela
  * função set_document_paid (cliente só mexe nos boletos da própria empresa;
- * admin, em qualquer um). Por isso não exige admin aqui.
+ * admin, em qualquer um).
+ *
+ * O efeito depende de QUEM marca:
+ *   • CLIENTE marcando  -> guia vai para 'aguardando' e o CONTADOR é avisado
+ *     (e-mail + feed). Nada de rewards ainda — só na confirmação.
+ *   • CONTADOR marcando -> guia vai direto para 'paid' (ele é a confirmação):
+ *     credita rewards e avisa o cliente.
+ *   • Desmarcar (paid=false) -> volta para 'open' e estorna a recompensa.
  */
 export async function toggleDocumentPaid(docId: string, paid: boolean) {
   const supabase = await createClient();
+  const { profile } = await getUserAndProfile();
+  const isAdmin = profile?.role === "admin";
 
-  // Lê o estado atual antes de alterar: assim sabemos se é uma transição
-  // aberto -> pago e já temos os dados para o e-mail de confirmação.
+  // Lê o estado atual antes de alterar (dados p/ transição, rewards e e-mail).
   const { data: before } = await supabase
     .from("documents")
-    .select("status,type,categoria,competencia,amount,company_id,due_date")
+    .select(DOC_BEFORE_COLS)
     .eq("id", docId)
     .single();
 
@@ -40,25 +91,20 @@ export async function toggleDocumentPaid(docId: string, paid: boolean) {
   });
   if (error) throw new Error(error.message);
 
-  // Confirmação de pagamento só quando a guia passou de aberta para paga.
-  if (paid && before?.status === "open") {
-    // SJ Rewards: credita moedas se a guia foi paga em dia (idempotente).
-    await creditPaymentOnTime(supabase, {
-      id: docId,
-      companyId: before.company_id,
-      categoria: before.categoria as DocCategoria,
-      type: before.type as DocType,
-      dueDate: before.due_date,
-    });
+  if (paid && isAdmin && before?.status !== "paid") {
+    // Contador marcou: é a confirmação — credita e avisa o cliente.
+    await creditAndNotifyConfirmed(supabase, docId, before!);
+  } else if (paid && !isAdmin && before?.status === "open") {
+    // Cliente declarou o pagamento: avisa o contador que há algo a confirmar.
     after(() =>
-      notifyPaid({
+      notifyPagamentoAguardando({
         documentId: docId,
-        companyId: before.company_id,
-        categoria: before.categoria as DocCategoria,
-        type: before.type as DocType,
-        competencia: before.competencia,
-        amount: before.amount,
-      }).catch((err) => console.error("[notify] pagamento confirmado:", err)),
+        companyId: before!.company_id,
+        categoria: before!.categoria as DocCategoria,
+        type: before!.type as DocType,
+        competencia: before!.competencia,
+        amount: before!.amount,
+      }).catch((err) => console.error("[notify] aguardando confirmação:", err)),
     );
   }
 
@@ -71,6 +117,36 @@ export async function toggleDocumentPaid(docId: string, paid: boolean) {
   }
 
   // Atualiza as telas que mostram status de pagamento.
+  revalidatePagamentos();
+}
+
+/**
+ * O contador CONFIRMA (confirm=true) ou REJEITA (confirm=false) um pagamento que
+ * o cliente declarou ('aguardando'). Só admin — a função do banco valida. Ao
+ * confirmar, credita os rewards e avisa o cliente; ao rejeitar, volta para
+ * 'open' (nada é creditado). Idempotente pela verificação de status anterior.
+ */
+export async function confirmDocumentPayment(docId: string, confirm: boolean) {
+  await requireAdmin();
+  const supabase = await createClient();
+
+  const { data: before } = await supabase
+    .from("documents")
+    .select(DOC_BEFORE_COLS)
+    .eq("id", docId)
+    .single();
+
+  const { error } = await supabase.rpc("confirm_document_payment", {
+    doc_id: docId,
+    confirm,
+  });
+  if (error) throw new Error(error.message);
+
+  // Só credita/avisa na primeira confirmação (não estava 'paid' ainda).
+  if (confirm && before && before.status !== "paid") {
+    await creditAndNotifyConfirmed(supabase, docId, before);
+  }
+
   revalidatePagamentos();
 }
 
@@ -161,11 +237,13 @@ export async function attachComprovante(docId: string, formData: FormData) {
  */
 export async function payWithComprovante(docId: string, formData: FormData) {
   const supabase = await createClient();
+  const { profile } = await getUserAndProfile();
+  const isAdmin = profile?.role === "admin";
 
-  // Estado antes (para o e-mail de confirmação e para saber se houve transição).
+  // Estado antes (para saber se houve transição e para os avisos).
   const { data: before } = await supabase
     .from("documents")
-    .select("status,type,categoria,competencia,amount,company_id,due_date")
+    .select(DOC_BEFORE_COLS)
     .eq("id", docId)
     .single();
 
@@ -177,24 +255,20 @@ export async function payWithComprovante(docId: string, formData: FormData) {
   });
   if (error) throw new Error(error.message);
 
-  if (before?.status === "open") {
-    // SJ Rewards: credita moedas se a guia foi paga em dia (idempotente).
-    await creditPaymentOnTime(supabase, {
-      id: docId,
-      companyId: before.company_id,
-      categoria: before.categoria as DocCategoria,
-      type: before.type as DocType,
-      dueDate: before.due_date,
-    });
+  if (isAdmin && before?.status !== "paid") {
+    // Contador anexou e confirmou de uma vez.
+    await creditAndNotifyConfirmed(supabase, docId, before!);
+  } else if (!isAdmin && before?.status === "open") {
+    // Cliente anexou comprovante e declarou pagamento -> aguarda confirmação.
     after(() =>
-      notifyPaid({
+      notifyPagamentoAguardando({
         documentId: docId,
-        companyId: before.company_id,
-        categoria: before.categoria as DocCategoria,
-        type: before.type as DocType,
-        competencia: before.competencia,
-        amount: before.amount,
-      }).catch((err) => console.error("[notify] pagamento confirmado:", err)),
+        companyId: before!.company_id,
+        categoria: before!.categoria as DocCategoria,
+        type: before!.type as DocType,
+        competencia: before!.competencia,
+        amount: before!.amount,
+      }).catch((err) => console.error("[notify] aguardando confirmação:", err)),
     );
   }
 

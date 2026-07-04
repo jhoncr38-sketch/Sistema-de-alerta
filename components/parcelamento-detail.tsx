@@ -21,6 +21,7 @@ export function ParcelamentoDetail({
   showEdit = false,
   showRequireProof = false,
   enforceProof = false,
+  isAdmin = false,
 }: {
   summary: PlanSummary;
   parcelas: DocumentRow[];
@@ -35,6 +36,8 @@ export function ParcelamentoDetail({
   showRequireProof?: boolean;
   /** Portal do cliente: aplica a exigência de comprovante ao confirmar pagamento. */
   enforceProof?: boolean;
+  /** Painel do contador: habilita Confirmar/Rejeitar nas parcelas aguardando. */
+  isAdmin?: boolean;
 }) {
   const {
     pagas,
@@ -126,6 +129,7 @@ export function ParcelamentoDetail({
         showEdit={showEdit}
         showRequireProof={showRequireProof}
         enforceProof={enforceProof}
+        isAdmin={isAdmin}
       />
     </div>
   );

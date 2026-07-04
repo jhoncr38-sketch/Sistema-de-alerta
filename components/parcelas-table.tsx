@@ -1,6 +1,7 @@
 import { Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ComprovanteButton } from "@/components/comprovante-button";
+import { ConfirmPaymentButtons } from "@/components/confirm-payment-buttons";
 import { DeleteParcelaButton } from "@/components/delete-parcela-button";
 import { EditParcelaButton } from "@/components/edit-parcela-button";
 import { PaidToggle } from "@/components/paid-toggle";
@@ -25,6 +26,7 @@ export function ParcelasTable({
   showEdit = false,
   showRequireProof = false,
   enforceProof = false,
+  isAdmin = false,
 }: {
   parcelas: DocumentRow[];
   total: number;
@@ -39,6 +41,9 @@ export function ParcelasTable({
   showRequireProof?: boolean;
   /** Portal do cliente: aplica a exigência de comprovante no "confirmar pagamento". */
   enforceProof?: boolean;
+  /** Painel do contador: parcela aguardando vira Confirmar/Rejeitar; marcar pago
+   *  vai direto para confirmado. */
+  isAdmin?: boolean;
 }) {
   if (parcelas.length === 0) {
     return (
@@ -61,6 +66,25 @@ export function ParcelasTable({
 
   // Débito automático não tem boleto: a ação confirma que o débito ocorreu.
   const labelUnpaid = debitoAutomatico ? "Confirmar pagamento" : "Marcar pago";
+
+  // No painel do contador, parcela aguardando vira Confirmar/Rejeitar; senão, o
+  // toggle normal (que trava para o cliente quando está aguardando).
+  function paidControl(p: DocumentRow) {
+    if (isAdmin && p.status === "aguardando") {
+      return <ConfirmPaymentButtons docId={p.id} />;
+    }
+    return (
+      <PaidToggle
+        docId={p.id}
+        paid={p.status === "paid"}
+        status={p.status}
+        isAdmin={isAdmin}
+        labelUnpaid={labelUnpaid}
+        requireComprovante={enforceProof && p.exige_comprovante}
+        hasComprovante={!!p.comprovante_path}
+      />
+    );
+  }
 
   function downloadButton(doc: DocumentRow) {
     // Parcela de débito automático não tem arquivo — nada para baixar.
@@ -107,15 +131,7 @@ export function ParcelasTable({
               ) : null}
             </div>
             <div className="flex flex-wrap items-center gap-2 border-t pt-3">
-              {showPaid ? (
-                <PaidToggle
-                  docId={p.id}
-                  paid={p.status === "paid"}
-                  labelUnpaid={labelUnpaid}
-                  requireComprovante={enforceProof && p.exige_comprovante}
-                  hasComprovante={!!p.comprovante_path}
-                />
-              ) : null}
+              {showPaid ? paidControl(p) : null}
               {showPaid ? (
                 <ComprovanteButton
                   docId={p.id}
@@ -190,13 +206,7 @@ export function ParcelasTable({
                 {showPaid ? (
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1">
-                      <PaidToggle
-                        docId={p.id}
-                        paid={p.status === "paid"}
-                        labelUnpaid={labelUnpaid}
-                        requireComprovante={enforceProof && p.exige_comprovante}
-                        hasComprovante={!!p.comprovante_path}
-                      />
+                      {paidControl(p)}
                       <ComprovanteButton
                         docId={p.id}
                         paid={p.status === "paid"}

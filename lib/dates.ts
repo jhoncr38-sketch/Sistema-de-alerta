@@ -4,6 +4,7 @@ export type Tone = "danger" | "warning" | "info" | "success" | "muted";
 
 export type Urgency =
   | "pago"
+  | "aguardando"
   | "vencido"
   | "vence_hoje"
   | "proximos_3"
@@ -45,6 +46,14 @@ export function getUrgency(
 
   if (status === "paid") {
     return { urgency: "pago", label: "Pago", days, tone: "success" };
+  }
+  if (status === "aguardando") {
+    return {
+      urgency: "aguardando",
+      label: "Aguardando confirmação",
+      days,
+      tone: "warning",
+    };
   }
   if (days < 0) {
     return { urgency: "vencido", label: "Vencido", days, tone: "danger" };
@@ -131,7 +140,8 @@ export function alertKind(
   status: DocStatus = "open",
   today: Date = new Date(),
 ): "vencido" | "vence_hoje" | "dias_1" | "dias_3" | "dias_7" | null {
-  if (status === "paid") return null;
+  // 'aguardando' = cliente já declarou pagamento; não cobra vencimento.
+  if (status === "paid" || status === "aguardando") return null;
   const { urgency, days } = getUrgency(dueDate, status, today);
   if (urgency === "vencido") return "vencido";
   if (urgency === "vence_hoje") return "vence_hoje";

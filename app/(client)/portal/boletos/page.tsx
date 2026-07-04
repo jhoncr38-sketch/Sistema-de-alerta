@@ -36,7 +36,9 @@ export default async function MeusBoletosPage() {
   const docs = (data ?? []) as DocumentWithCompany[];
 
   // Em aberto fica em destaque (mais urgente primeiro); pagos viram histórico.
-  const abertos = docs.filter((d) => d.status === "open");
+  // 'aguardando' (pagamento declarado, à espera do contador) continua entre os
+  // "em aberto" — o cliente vê o selo "Aguardando confirmação" e não some da tela.
+  const abertos = docs.filter((d) => d.status !== "paid");
   const pagos = docs.filter((d) => d.status === "paid");
   const totalAberto = abertos.reduce((s, d) => s + (d.amount ?? 0), 0);
   const totalPago = pagos.reduce((s, d) => s + (d.amount ?? 0), 0);

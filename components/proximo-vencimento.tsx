@@ -38,7 +38,9 @@ const toneText: Record<Tone, string> = {
  * que o cliente vê no portal. Sem nada em aberto, mostra um estado "em dia".
  */
 export function ProximoVencimento({ open }: { open: DocumentWithCompany[] }) {
-  const comData = open.filter((d) => d.due_date);
+  // Só o que ainda está em aberto de fato entra no destaque de vencimento — o
+  // que aguarda confirmação já foi pago pelo cliente e não é uma conta a vencer.
+  const comData = open.filter((d) => d.due_date && d.status === "open");
 
   if (comData.length === 0) {
     return (

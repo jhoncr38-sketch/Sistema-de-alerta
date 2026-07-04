@@ -1,6 +1,7 @@
 import { Download, FileText } from "lucide-react";
 import { deleteDocument } from "@/app/actions/documents";
 import { ComprovanteButton } from "@/components/comprovante-button";
+import { ConfirmPaymentButtons } from "@/components/confirm-payment-buttons";
 import { DocTypeIcon } from "@/components/doc-type-icon";
 import { ConfirmDeleteButton } from "@/components/confirm-delete-button";
 import { FilePreviewButton } from "@/components/file-preview-button";
@@ -40,6 +41,7 @@ export function DocumentsTable({
   showDelete = false,
   showRequireProof = false,
   enforceProof = false,
+  isAdmin = false,
   hideCompetencia = false,
   competenciaInline = false,
   subtleActions = false,
@@ -59,6 +61,9 @@ export function DocumentsTable({
   showRequireProof?: boolean;
   /** Telas do cliente: aplica a exigência de comprovante no botão "marcar pago". */
   enforceProof?: boolean;
+  /** Telas do contador: mostra Confirmar/Rejeitar quando a guia está aguardando,
+   *  e marca pago vai direto para confirmado. */
+  isAdmin?: boolean;
   /** Oculta a coluna Competência (ex.: quando já está agrupado por mês). */
   hideCompetencia?: boolean;
   /** Remove a coluna Competência e a mostra como subtítulo discreto sob o Tipo
@@ -105,6 +110,25 @@ export function DocumentsTable({
         <FileText className="size-3" />
         Informativo
       </span>
+    );
+  }
+
+  // Controle de pagamento por guia: no painel do contador, uma guia aguardando
+  // vira Confirmar/Rejeitar; nos demais casos é o toggle de marcar/desmarcar.
+  function paidControl(doc: DocumentWithCompany) {
+    if (isAdmin && doc.status === "aguardando") {
+      return <ConfirmPaymentButtons docId={doc.id} />;
+    }
+    return (
+      <PaidToggle
+        docId={doc.id}
+        paid={doc.status === "paid"}
+        status={doc.status}
+        isAdmin={isAdmin}
+        requireComprovante={enforceProof && doc.exige_comprovante}
+        hasComprovante={!!doc.comprovante_path}
+        unpaidVariant={subtleActions ? "outline" : "default"}
+      />
     );
   }
 
@@ -224,15 +248,7 @@ export function DocumentsTable({
 
               {hasActions ? (
                 <div className="flex flex-wrap items-center gap-2 border-t pt-3">
-                  {showPaid && pagavel ? (
-                    <PaidToggle
-                      docId={doc.id}
-                      paid={doc.status === "paid"}
-                      requireComprovante={enforceProof && doc.exige_comprovante}
-                      hasComprovante={!!doc.comprovante_path}
-                      unpaidVariant={subtleActions ? "outline" : "default"}
-                    />
-                  ) : null}
+                  {showPaid && pagavel ? paidControl(doc) : null}
                   {showPaid && pagavel ? (
                     <ComprovanteButton
                       docId={doc.id}
@@ -343,15 +359,7 @@ export function DocumentsTable({
                     <td className="px-4 py-3">
                       {pagavel ? (
                         <div className="flex items-center gap-1">
-                          <PaidToggle
-                            docId={doc.id}
-                            paid={doc.status === "paid"}
-                            requireComprovante={
-                              enforceProof && doc.exige_comprovante
-                            }
-                            hasComprovante={!!doc.comprovante_path}
-                            unpaidVariant={subtleActions ? "outline" : "default"}
-                          />
+                          {paidControl(doc)}
                           <ComprovanteButton
                             docId={doc.id}
                             paid={doc.status === "paid"}

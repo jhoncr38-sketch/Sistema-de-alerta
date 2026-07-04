@@ -20,7 +20,7 @@ export type DocType =
   | "licenca"
   | "alvara"
   | "outro";
-export type DocStatus = "open" | "paid";
+export type DocStatus = "open" | "aguardando" | "paid";
 export type DocCategoria = "boleto" | "documento" | "folha" | "parcelamento";
 
 export interface Company {
@@ -61,6 +61,7 @@ export interface DocumentRow {
   due_date: string | null; // ISO date (YYYY-MM-DD); null em documentos informativos
   status: DocStatus;
   paid_at: string | null;
+  marcado_pago_at: string | null; // quando o cliente declarou o pagamento (base do "em dia")
   comprovante_path: string | null; // comprovante de pagamento (opcional), no bucket 'boletos'
   comprovante_name: string | null; // nome original do arquivo do comprovante
   comprovante_at: string | null; // ISO timestamp de quando o comprovante foi anexado
@@ -114,6 +115,7 @@ export interface NotificationRow {
     | "vencido"
     | "parcela_risco"
     | "novo_doc"
+    | "aguardando" // cliente declarou pagamento; aguarda confirmação do contador
     | "pago";
   sent_at: string;
 }
