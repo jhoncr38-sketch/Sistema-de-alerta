@@ -18,10 +18,15 @@ function isPagavel(d: DocumentWithCompany): boolean {
   return d.categoria === "boleto" || d.categoria === "parcelamento";
 }
 
-/** Rótulo da coluna "Tipo": parcela mostra "Parcela N"; o resto, o tipo da guia. */
+/** Rótulo da coluna "Tipo": parcela mostra "Parcela N"; o resto, o tipo da guia.
+ *  Quando o tipo é "Outro" e há descrição livre, usa a descrição (mais útil ao
+ *  cliente do que o genérico "Outro"). */
 function tipoLabel(d: DocumentWithCompany): string {
   if (d.categoria === "parcelamento" && d.parcela_num) {
     return `Parcela ${d.parcela_num}`;
+  }
+  if (d.type === "outro" && d.descricao) {
+    return d.descricao;
   }
   return docTypeLabel(d.type);
 }

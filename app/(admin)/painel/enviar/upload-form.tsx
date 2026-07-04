@@ -205,6 +205,25 @@ export function UploadForm({
           </div>
         )}
 
+        {/* "Outro" não diz nada ao cliente — abre um campo livre pra descrever o
+            documento (ex.: "Certidão Negativa"). Fica visível na tela dele. */}
+        {type === "outro" ? (
+          <div className="space-y-1.5 sm:col-span-2">
+            <Label htmlFor="descricao">Descrição do documento</Label>
+            <Input
+              id="descricao"
+              name="descricao"
+              maxLength={120}
+              required
+              placeholder="Ex.: Certidão Negativa de Débitos"
+            />
+            <p className="text-xs text-muted-foreground">
+              Este texto aparece para o cliente no lugar de “Outro”. Diga do que
+              se trata.
+            </p>
+          </div>
+        ) : null}
+
         {precisaCompetencia ? (
           <div className="space-y-1.5">
             <Label htmlFor="competencia">

@@ -46,6 +46,11 @@ export async function uploadDocument(
   const competencia = normalizeCompetencia(
     String(formData.get("competencia") ?? ""),
   );
+  // Texto livre para o tipo "Outro" — o cliente vê isto no lugar de "Outro".
+  const descricao =
+    type === "outro"
+      ? String(formData.get("descricao") ?? "").trim().slice(0, 120)
+      : null;
 
   // Folha pode ter vários arquivos (folha, recibo, frequência...). Boleto e
   // documento usam apenas um.
@@ -56,6 +61,9 @@ export async function uploadDocument(
 
   if (!companyId || !type) {
     return { error: "Preencha todos os campos." };
+  }
+  if (type === "outro" && !descricao) {
+    return { error: "Descreva o documento (tipo “Outro”)." };
   }
   if (precisaCompetencia && !competencia) {
     return { error: "Informe a competência (mês/ano)." };
@@ -126,6 +134,7 @@ export async function uploadDocument(
       company_id: companyId,
       type,
       categoria,
+      descricao, // texto livre quando o tipo é "Outro" (null nos demais)
       competencia: competencia || null, // documento da empresa pode não ter mês
       amount,
       due_date: dueDate,
