@@ -170,11 +170,11 @@ export function BoletosPagos({
 
       {open ? (
         <div className="space-y-3">
-          {grupos.map((g, i) => (
+          {grupos.map((g) => (
             <MesBoletos
               key={g.competencia ?? "—"}
               grupo={g}
-              defaultOpen={i === 0}
+              defaultOpen={false}
             />
           ))}
         </div>
