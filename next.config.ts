@@ -25,6 +25,16 @@ const nextConfig: NextConfig = {
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
   },
+  experimental: {
+    // Os uploads aceitam PDFs de até 10MB por arquivo, e a folha manda vários
+    // de uma vez (folha, recibo, frequência...). O padrão do Next para o body
+    // de Server Actions é 1MB — sem isto, arquivos maiores estouram com erro
+    // 413 genérico antes do nosso código validar. A validação de 10MB por
+    // arquivo continua nas actions; aqui só abrimos espaço pro lote.
+    serverActions: {
+      bodySizeLimit: "30mb",
+    },
+  },
 };
 
 export default nextConfig;
