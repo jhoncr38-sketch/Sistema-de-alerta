@@ -30,6 +30,30 @@ async function rewardsEnabled(
 }
 
 /**
+ * Avança em +1 as missões com o gatilho `trigger` para a empresa (globais ou
+ * exclusivas dela), idempotente por `dedupeKey` no banco — um mesmo evento nunca
+ * conta em dobro. Ao bater a meta, a função no banco credita a recompensa uma
+ * única vez. Best-effort e silencioso se a 0028 ainda não foi aplicada.
+ */
+export async function advanceMissions(
+  supabase: ServerClient,
+  args: { companyId: string; trigger: string; dedupeKey: string },
+): Promise<void> {
+  const { error } = await supabase.rpc("rewards_mission_advance", {
+    c: args.companyId,
+    p_trigger: args.trigger,
+    p_dedupe_key: args.dedupeKey,
+  });
+  if (
+    error &&
+    error.code !== UNDEFINED_FUNCTION &&
+    error.code !== UNDEFINED_TABLE
+  ) {
+    console.error("[rewards] avanço de missão:", error.message);
+  }
+}
+
+/**
  * Consulta a regra de ganho (boa ação) editável pelo contador. Retorna:
  *   • objeto com coins/xp/active quando a regra existe;
  *   • "absent" quando a tabela existe mas a regra foi apagada (→ crédito desativado);
@@ -153,6 +177,14 @@ export async function creditPaymentOnTime(
   if (today > doc.dueDate) return; // pago com atraso — sem crédito
   if (!(await rewardsEnabled(supabase, doc.companyId))) return; // clube desligado
 
+  // Missões automáticas de "pagar em dia" avançam pelo EVENTO — independem de
+  // este tipo de guia gerar (ou não) crédito de moedas abaixo.
+  await advanceMissions(supabase, {
+    companyId: doc.companyId,
+    trigger: "pagamento_em_dia",
+    dedupeKey: `pago:${doc.id}`,
+  });
+
   const reward = await resolvePaymentReward(supabase, doc.categoria, doc.type);
   if (!reward) return;
 
@@ -189,6 +221,13 @@ export async function creditDocumentOnTime(
     if (today > args.dueDate) return; // enviou após o prazo — sem crédito
   }
   if (!(await rewardsEnabled(supabase, args.companyId))) return; // clube desligado
+
+  // Missões automáticas de "enviar no prazo" avançam pelo EVENTO.
+  await advanceMissions(supabase, {
+    companyId: args.companyId,
+    trigger: "documento_no_prazo",
+    dedupeKey: `envio:${args.requestId}`,
+  });
 
   // Valor/estado da regra editável (apagada/oculta → não credita).
   let coins = 100;

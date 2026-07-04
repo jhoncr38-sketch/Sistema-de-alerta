@@ -69,6 +69,7 @@ interface MissionRowRaw {
   target: number;
   due_date: string | null;
   company_id: string | null;
+  trigger: string | null;
 }
 interface MissionProgressRaw {
   mission_id: string;
@@ -161,7 +162,9 @@ export default async function AdminRewardsPage() {
         .limit(50),
       supabase
         .from("rewards_missions")
-        .select("id,title,description,icon,coins,xp,target,due_date,company_id")
+        .select(
+          "id,title,description,icon,coins,xp,target,due_date,company_id,trigger",
+        )
         .eq("active", true)
         .order("created_at", { ascending: false }),
       supabase
@@ -210,6 +213,7 @@ export default async function AdminRewardsPage() {
     target: m.target,
     dueDate: m.due_date,
     companyId: m.company_id,
+    trigger: m.trigger,
   }));
   const missionProgress: Record<
     string,

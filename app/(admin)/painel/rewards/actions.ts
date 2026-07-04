@@ -147,6 +147,22 @@ export interface MissionFormState {
   ok?: boolean;
 }
 
+/**
+ * Gatilhos que fazem a missão avançar sozinha (migration 0028). Fora desta
+ * lista (inclusive vazio) = missão manual, como antes.
+ */
+const MISSION_TRIGGERS = [
+  "pagamento_em_dia",
+  "documento_no_prazo",
+  "acesso_app",
+];
+
+/** Lê e valida o gatilho do formulário; devolve null para "manual". */
+function parseMissionTrigger(raw: unknown): string | null {
+  const t = String(raw ?? "").trim();
+  return MISSION_TRIGGERS.includes(t) ? t : null;
+}
+
 /** Cria uma missão: global (empresa vazia) ou exclusiva de uma empresa. */
 export async function createMission(
   _prev: MissionFormState,
@@ -162,6 +178,7 @@ export async function createMission(
   const target = Math.max(1, toInt(formData.get("target")));
   const dueDate = String(formData.get("due_date") ?? "").trim();
   const companyId = String(formData.get("company_id") ?? "").trim();
+  const trigger = parseMissionTrigger(formData.get("trigger"));
 
   if (!title) return { error: "Dê um título à missão." };
   if (coins <= 0 && xp <= 0) return { error: "Defina a recompensa (SJ Coins e/ou XP)." };
@@ -176,6 +193,7 @@ export async function createMission(
     target,
     due_date: dueDate || null,
     company_id: companyId || null,
+    trigger,
     created_by: user.id,
   });
 
@@ -208,6 +226,7 @@ export async function updateMission(
   const target = Math.max(1, toInt(formData.get("target")));
   const dueDate = String(formData.get("due_date") ?? "").trim();
   const companyId = String(formData.get("company_id") ?? "").trim();
+  const trigger = parseMissionTrigger(formData.get("trigger"));
 
   if (!title) return { error: "Dê um título à missão." };
   if (coins <= 0 && xp <= 0) return { error: "Defina a recompensa (SJ Coins e/ou XP)." };
@@ -224,6 +243,7 @@ export async function updateMission(
       target,
       due_date: dueDate || null,
       company_id: companyId || null,
+      trigger,
     })
     .eq("id", id);
 

@@ -4,6 +4,7 @@ import { after } from "next/server";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { notifyRewardsEvents } from "@/lib/email/notify-rewards";
+import { advanceMissions } from "@/lib/rewards-credit";
 import { REWARDS } from "@/lib/rewards";
 
 // Códigos Postgres que indicam "SJ Rewards ainda não migrado" (0018 não aplicada).
@@ -107,6 +108,14 @@ export async function registerAccess(companyId: string): Promise<void> {
   ) {
     console.error("[rewards] registrar acesso:", error.message);
   }
+
+  // Missões de "acessar o app": +1 por dia (idempotente pela data).
+  const today = new Date().toISOString().slice(0, 10);
+  await advanceMissions(supabase, {
+    companyId,
+    trigger: "acesso_app",
+    dedupeKey: `acesso:${today}`,
+  });
 }
 
 /**

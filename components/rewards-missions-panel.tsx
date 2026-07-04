@@ -51,6 +51,33 @@ export interface AdminMission {
   target: number;
   dueDate: string | null;
   companyId: string | null;
+  /** Gatilho de avanço automático; null = manual (ver 0028). */
+  trigger: string | null;
+}
+
+/** Opções de "Avanço" no formulário e rótulos do selo automático. */
+const TRIGGER_OPTIONS: { value: string; label: string }[] = [
+  { value: "", label: "Manual — eu marco o progresso" },
+  { value: "pagamento_em_dia", label: "Automático: ao pagar uma guia em dia" },
+  {
+    value: "documento_no_prazo",
+    label: "Automático: ao enviar um documento no prazo",
+  },
+  { value: "acesso_app", label: "Automático: a cada dia de acesso ao app" },
+];
+
+/** Rótulo curto do gatilho para o selo na lista (null/desconhecido = sem selo). */
+function triggerLabel(trigger: string | null): string | null {
+  switch (trigger) {
+    case "pagamento_em_dia":
+      return "Auto: pagou em dia";
+    case "documento_no_prazo":
+      return "Auto: enviou no prazo";
+    case "acesso_app":
+      return "Auto: acesso diário";
+    default:
+      return null;
+  }
 }
 
 const inputBase =
@@ -165,6 +192,11 @@ function MissionRow({
                 ? applicable[0]?.name ?? "Empresa"
                 : "Todas as empresas"}
             </Badge>
+            {triggerLabel(mission.trigger) ? (
+              <Badge className="bg-primary/10 font-normal text-primary">
+                {triggerLabel(mission.trigger)}
+              </Badge>
+            ) : null}
           </div>
           {mission.description ? (
             <p className="mt-0.5 text-sm text-muted-foreground">
@@ -471,15 +503,38 @@ function MissionFormDialog({
               </div>
             </div>
 
-            <div className="space-y-1.5">
-              <Label htmlFor="m-due">Prazo (opcional)</Label>
-              <Input
-                id="m-due"
-                name="due_date"
-                type="date"
-                defaultValue={mission?.dueDate ?? ""}
-              />
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="m-trigger">Avanço</Label>
+                <select
+                  id="m-trigger"
+                  name="trigger"
+                  defaultValue={mission?.trigger ?? ""}
+                  className={inputBase}
+                >
+                  {TRIGGER_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="m-due">Prazo (opcional)</Label>
+                <Input
+                  id="m-due"
+                  name="due_date"
+                  type="date"
+                  defaultValue={mission?.dueDate ?? ""}
+                />
+              </div>
             </div>
+
+            <p className="text-xs text-muted-foreground">
+              No modo automático a barra sobe sozinha a cada evento do cliente
+              (idempotente — não conta o mesmo evento duas vezes). No manual, você
+              controla o progresso pelos botões +/−.
+            </p>
 
             {error ? <p className="text-sm text-destructive">{error}</p> : null}
 
