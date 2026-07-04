@@ -69,7 +69,10 @@ export function ParcelasTable({
 
   // No painel do contador, parcela aguardando vira Confirmar/Rejeitar; senão, o
   // toggle normal (que trava para o cliente quando está aguardando).
-  function paidControl(p: DocumentRow) {
+  // `compact`: versão curta do estado "aguardando" (o selo de status já aparece
+  // ao lado). No cartão mobile, para o cliente, o controle é omitido de vez —
+  // o selo no topo do card já informa (ver showPaidControlMobile).
+  function paidControl(p: DocumentRow, compact = false) {
     if (isAdmin && p.status === "aguardando") {
       return <ConfirmPaymentButtons docId={p.id} />;
     }
@@ -79,12 +82,16 @@ export function ParcelasTable({
         paid={p.status === "paid"}
         status={p.status}
         isAdmin={isAdmin}
+        compactWaiting={compact}
         labelUnpaid={labelUnpaid}
         requireComprovante={enforceProof && p.exige_comprovante}
         hasComprovante={!!p.comprovante_path}
       />
     );
   }
+
+  const showPaidControlMobile = (p: DocumentRow): boolean =>
+    !(p.status === "aguardando" && !isAdmin);
 
   function downloadButton(doc: DocumentRow) {
     // Parcela de débito automático não tem arquivo — nada para baixar.
@@ -131,7 +138,7 @@ export function ParcelasTable({
               ) : null}
             </div>
             <div className="flex flex-wrap items-center gap-2 border-t pt-3">
-              {showPaid ? paidControl(p) : null}
+              {showPaid && showPaidControlMobile(p) ? paidControl(p) : null}
               {showPaid ? (
                 <ComprovanteButton
                   docId={p.id}
@@ -206,7 +213,7 @@ export function ParcelasTable({
                 {showPaid ? (
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1">
-                      {paidControl(p)}
+                      {paidControl(p, true)}
                       <ComprovanteButton
                         docId={p.id}
                         paid={p.status === "paid"}

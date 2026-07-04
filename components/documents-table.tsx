@@ -115,7 +115,9 @@ export function DocumentsTable({
 
   // Controle de pagamento por guia: no painel do contador, uma guia aguardando
   // vira Confirmar/Rejeitar; nos demais casos é o toggle de marcar/desmarcar.
-  function paidControl(doc: DocumentWithCompany) {
+  // `compact`: usa a versão curta do estado "aguardando" (o selo de status já
+  // aparece ao lado, então não repetimos a frase inteira).
+  function paidControl(doc: DocumentWithCompany, compact = false) {
     if (isAdmin && doc.status === "aguardando") {
       return <ConfirmPaymentButtons docId={doc.id} />;
     }
@@ -125,11 +127,19 @@ export function DocumentsTable({
         paid={doc.status === "paid"}
         status={doc.status}
         isAdmin={isAdmin}
+        compactWaiting={compact}
         requireComprovante={enforceProof && doc.exige_comprovante}
         hasComprovante={!!doc.comprovante_path}
         unpaidVariant={subtleActions ? "outline" : "default"}
       />
     );
+  }
+
+  /** No cartão mobile o status já aparece no topo — para o cliente com guia
+   *  aguardando, o controle de pagamento repetiria a mesma informação, então
+   *  não é renderizado. Nos demais casos, mostra o controle normal. */
+  function showPaidControlMobile(doc: DocumentWithCompany): boolean {
+    return !(doc.status === "aguardando" && !isAdmin);
   }
 
   function previewButton(doc: DocumentWithCompany) {
@@ -248,7 +258,9 @@ export function DocumentsTable({
 
               {hasActions ? (
                 <div className="flex flex-wrap items-center gap-2 border-t pt-3">
-                  {showPaid && pagavel ? paidControl(doc) : null}
+                  {showPaid && pagavel && showPaidControlMobile(doc)
+                    ? paidControl(doc)
+                    : null}
                   {showPaid && pagavel ? (
                     <ComprovanteButton
                       docId={doc.id}
@@ -359,7 +371,7 @@ export function DocumentsTable({
                     <td className="px-4 py-3">
                       {pagavel ? (
                         <div className="flex items-center gap-1">
-                          {paidControl(doc)}
+                          {paidControl(doc, true)}
                           <ComprovanteButton
                             docId={doc.id}
                             paid={doc.status === "paid"}

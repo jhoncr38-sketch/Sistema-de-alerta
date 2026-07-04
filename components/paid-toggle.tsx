@@ -12,6 +12,7 @@ export function PaidToggle({
   paid,
   status,
   isAdmin = false,
+  compactWaiting = false,
   labelPaid = "Pago",
   labelUnpaid = "Marcar pago",
   requireComprovante = false,
@@ -24,6 +25,9 @@ export function PaidToggle({
   status?: DocStatus;
   /** True nas telas do contador: mostra o botão de confirmação em vez de travar. */
   isAdmin?: boolean;
+  /** Estado "aguardando" em versão curta (só "Enviado"): usado onde o selo de
+   *  status já aparece ao lado, para não repetir a frase inteira. */
+  compactWaiting?: boolean;
   /** Rótulos personalizados (ex.: débito automático usa "Confirmar pagamento"). */
   labelPaid?: string;
   labelUnpaid?: string;
@@ -48,7 +52,7 @@ export function PaidToggle({
         title="Você marcou como pago. Aguarde a confirmação do contador."
       >
         <Clock className="size-3 shrink-0" />
-        Aguardando confirmação
+        {compactWaiting ? "Enviado" : "Aguardando confirmação"}
       </span>
     );
   }
