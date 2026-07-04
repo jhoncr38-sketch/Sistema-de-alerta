@@ -195,5 +195,7 @@ export async function uploadDocument(
   revalidatePath("/painel/documentos");
   revalidatePath("/painel/faturamento");
   revalidatePath("/painel");
-  redirect("/painel/documentos?ok=1");
+  // Já abre a tela filtrada pela empresa recém-enviada — o contador vê logo o
+  // que acabou de publicar, sem precisar procurar entre todos os clientes.
+  redirect(`/painel/documentos?company=${companyId}&ok=1`);
 }
