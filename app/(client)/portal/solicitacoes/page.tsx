@@ -1,7 +1,7 @@
 import { FileClock, Info } from "lucide-react";
 import { DocumentRequestUpload } from "@/components/document-request-upload";
 import { PageHeader } from "@/components/page-header";
-import { getActiveCompanyId } from "@/lib/companies";
+import { getClientCompanyContext } from "@/lib/companies";
 import { getUrgency } from "@/lib/dates";
 import { formatDate } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
@@ -19,13 +19,29 @@ const CHIP_TONE = {
 
 export default async function PortalSolicitacoesPage() {
   const supabase = await createClient();
-  const activeCompanyId = await getActiveCompanyId();
+  const { active } = await getClientCompanyContext();
+  const activeCompanyId = active?.id ?? null;
+  // Só promete moedas se o clube estiver ligado para esta empresa.
+  const clubEnabled = active?.rewards_enabled !== false;
 
   const { data } = await supabase
     .from("document_requests")
     .select("*")
     .eq("company_id", activeCompanyId ?? "00000000-0000-0000-0000-000000000000")
     .order("created_at", { ascending: false });
+
+  // Recompensa real por enviar no prazo — lê a ação "doc-no-prazo" (o mesmo valor
+  // que o crédito usa). Regra oculta/apagada ou clube desligado → não promete nada.
+  let docReward: number | null = null;
+  if (clubEnabled) {
+    const { data: rule, error } = await supabase
+      .from("rewards_earn_rules")
+      .select("coins,active")
+      .eq("key", "doc-no-prazo")
+      .maybeSingle();
+    if (error) docReward = 100; // tabela ainda não migrada → valor padrão do código
+    else if (rule?.active) docReward = rule.coins as number;
+  }
 
   const requests = (data ?? []) as DocumentRequest[];
 
@@ -125,8 +141,15 @@ export default async function PortalSolicitacoesPage() {
 
         <div className="flex items-center gap-2 rounded-lg bg-muted px-4 py-3 text-xs text-muted-foreground">
           <Info className="size-4 shrink-0" />
-          Enviar dentro do prazo rende <strong className="font-medium">+100 SJ Coins</strong> no
-          Clube SJ. Formatos aceitos: PDF, imagem, planilha ou XML.
+          {docReward != null ? (
+            <span>
+              Enviar dentro do prazo rende{" "}
+              <strong className="font-medium">+{docReward} SJ Coins</strong> no
+              Clube SJ. Formatos aceitos: PDF, imagem, planilha ou XML.
+            </span>
+          ) : (
+            <span>Formatos aceitos: PDF, imagem, planilha ou XML.</span>
+          )}
         </div>
       </div>
     </>
