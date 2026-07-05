@@ -63,6 +63,7 @@ export async function GET(request: Request) {
     { data: profilesRaw },
     { data: subsRaw },
     { data: linksRaw },
+    { data: notifsRaw },
   ] = await Promise.all([
     supabase
       .from("documents")
@@ -80,6 +81,10 @@ export async function GET(request: Request) {
       .from("push_subscriptions")
       .select("profile_id,endpoint,p256dh,auth"),
     supabase.from("client_companies").select("profile_id,company_id"),
+    // Todas as notificações já enviadas, de uma vez. Antes isto era 1 query por
+    // documento dentro do loop (N+1); agora carregamos tudo e consultamos um Map
+    // em memória — o loop não vai mais ao banco para checar "já notificado?".
+    supabase.from("notifications").select("document_id,kind,sent_at"),
   ]);
 
   if (error) {
@@ -121,6 +126,17 @@ export async function GET(request: Request) {
     subsByCompany.set(l.company_id, list);
   }
 
+  // Índice das notificações já enviadas: chave "documentId:kind" -> sent_at.
+  // Usar .has() para saber se existe (mesmo com sent_at nulo) e .get() p/ a data.
+  const sentNotifByKey = new Map<string, string | null>();
+  for (const n of (notifsRaw ?? []) as Array<{
+    document_id: string;
+    kind: string;
+    sent_at: string | null;
+  }>) {
+    sentNotifByKey.set(`${n.document_id}:${n.kind}`, n.sent_at);
+  }
+
   const docs = (docsRaw ?? []) as unknown as DocRow[];
   const portalBase = process.env.NEXT_PUBLIC_SITE_URL ?? url.origin;
 
@@ -150,17 +166,15 @@ export async function GET(request: Request) {
     // os demais alertas (7d/3d/amanhã/hoje) são enviados uma única vez.
     const isOverdue = notifKind === "vencido" || notifKind === "parcela_risco";
 
-    // já notificado para esse documento + tipo de alerta?
-    const { data: existing } = await supabase
-      .from("notifications")
-      .select("id,sent_at")
-      .eq("document_id", d.id)
-      .eq("kind", notifKind)
-      .maybeSingle();
+    // já notificado para esse documento + tipo de alerta? (consulta o índice
+    // em memória, sem ir ao banco — ver sentNotifByKey acima).
+    const notifKey = `${d.id}:${notifKind}`;
+    const existing = sentNotifByKey.has(notifKey);
     if (existing) {
-      const daysSince = existing.sent_at
+      const existingSentAt = sentNotifByKey.get(notifKey);
+      const daysSince = existingSentAt
         ? Math.floor(
-            (Date.now() - new Date(existing.sent_at).getTime()) / MS_PER_DAY,
+            (Date.now() - new Date(existingSentAt).getTime()) / MS_PER_DAY,
           )
         : Infinity;
       // Só reenvia se for vencido E já passou o intervalo de recobrança.
@@ -244,11 +258,13 @@ export async function GET(request: Request) {
 
     if (existing) {
       // Recobrança do vencido: o unique(document_id, kind) impede inserir de
-      // novo, então atualiza o registro existente (touch no sent_at).
+      // novo, então atualiza o registro existente (touch no sent_at). Identifica
+      // a linha por document_id+kind (é a chave única) já que não trazemos o id.
       await supabase
         .from("notifications")
         .update({ channel, sent_at: new Date().toISOString() })
-        .eq("id", existing.id);
+        .eq("document_id", d.id)
+        .eq("kind", notifKind);
       resent++;
     } else {
       await supabase
