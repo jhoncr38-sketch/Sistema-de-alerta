@@ -75,6 +75,27 @@ function textoReserva(type: DocType): string {
   return FALLBACK[type] ?? fallbackGenerico(type);
 }
 
+// --- Parcelamento -----------------------------------------------------------
+// Uma parcela NÃO é um imposto avulso: é uma das prestações de um parcelamento
+// (acordo para pagar uma dívida em várias vezes, tipo REFIS). Explicamos o que é
+// o parcelamento, não o tributo. Cache com chave própria p/ não colidir com os
+// tipos (doc_type = '__parcelamento__').
+const PARCELAMENTO_KEY = "__parcelamento__";
+
+const PARCELAMENTO_FALLBACK =
+  "Esta é uma parcela de um parcelamento: um acordo para quitar uma dívida " +
+  "(de impostos) em várias prestações mensais. A cada mês vence uma parcela — " +
+  "pague em dia, porque atrasar pode cancelar o parcelamento e reativar a " +
+  "dívida toda. Em caso de dúvida, fale com seu contador.";
+
+const PARCELAMENTO_PROMPT =
+  "Explique, para o dono de uma pequena empresa, o que é uma PARCELA de um " +
+  "PARCELAMENTO tributário no Brasil (um acordo para pagar uma dívida de " +
+  "impostos em prestações mensais, como REFIS). Deixe claro que a cada mês " +
+  "vence uma parcela e que atrasar pode cancelar o parcelamento e cobrar a " +
+  "dívida toda de volta. Não é um imposto novo, é o pagamento de uma dívida " +
+  "já negociada.";
+
 const SYSTEM =
   "Você explica termos contábeis brasileiros para leigos (donos de pequenas " +
   "empresas). Escreva em português do Brasil, tom cordial e tranquilizador, no " +
@@ -83,21 +104,28 @@ const SYSTEM =
   "consultoria fiscal específica, não cite valores nem prazos exatos e não use " +
   "markdown. Não invente detalhes que não conheça com certeza.";
 
-/**
- * Retorna a explicação do tipo, usando o cache no banco. Gera pela IA na 1ª vez
- * (e grava), ou cai no texto de reserva. Nunca lança: o botão sempre mostra algo.
- */
-export async function explicarTipo(type: DocType): Promise<{
+export interface Explicacao {
   texto: string;
   fonte: "ia" | "fallback" | "cache";
-}> {
+}
+
+/**
+ * Núcleo do cache: dada uma CHAVE (doc_type ou '__parcelamento__'), devolve a
+ * explicação. Lê do banco; se não houver, gera com o `prompt` dado e grava;
+ * em falha/sem chave, usa `reserva`. Nunca lança.
+ */
+async function explicarPorChave(
+  chave: string,
+  prompt: string,
+  reserva: string,
+): Promise<Explicacao> {
   const supabase = createAdminClient();
 
   // 1) Já temos em cache? Devolve na hora (custo zero).
   const { data: existente } = await supabase
     .from("doc_explanations")
     .select("texto")
-    .eq("doc_type", type)
+    .eq("doc_type", chave)
     .maybeSingle();
   if (existente?.texto) {
     return { texto: existente.texto, fonte: "cache" };
@@ -106,30 +134,60 @@ export async function explicarTipo(type: DocType): Promise<{
   // 2) Sem cache: tenta a IA. Sem chave, usa reserva (sem gravar — pode gerar
   //    depois quando a chave existir).
   if (!isAiConfigured()) {
-    return { texto: textoReserva(type), fonte: "fallback" };
+    return { texto: reserva, fonte: "fallback" };
   }
 
-  const label = docTypeLabel(type);
   const texto = await chatComplete(
     [
       { role: "system", content: SYSTEM },
-      {
-        role: "user",
-        content: `Explique de forma simples a guia: "${label}" (usada no Brasil).`,
-      },
+      { role: "user", content: prompt },
     ],
     { temperature: 0.3, maxTokens: 220 },
   );
 
   if (!texto) {
     // IA falhou agora — devolve reserva, sem gravar (tenta de novo na próxima).
-    return { texto: textoReserva(type), fonte: "fallback" };
+    return { texto: reserva, fonte: "fallback" };
   }
 
   // 3) Grava no cache para as próximas leituras (best-effort).
   await supabase
     .from("doc_explanations")
-    .upsert({ doc_type: type, texto, fonte: "ia" }, { onConflict: "doc_type" });
+    .upsert({ doc_type: chave, texto, fonte: "ia" }, { onConflict: "doc_type" });
 
   return { texto, fonte: "ia" };
+}
+
+/** Explica uma parcela de parcelamento (o que é o parcelamento, não o tributo). */
+export async function explicarParcelamento(): Promise<Explicacao> {
+  return explicarPorChave(
+    PARCELAMENTO_KEY,
+    PARCELAMENTO_PROMPT,
+    PARCELAMENTO_FALLBACK,
+  );
+}
+
+/**
+ * Retorna a explicação do tipo da guia, usando o cache no banco. Gera pela IA na
+ * 1ª vez (e grava), ou cai no texto de reserva. Nunca lança.
+ */
+export async function explicarTipo(type: DocType): Promise<Explicacao> {
+  const label = docTypeLabel(type);
+  return explicarPorChave(
+    type,
+    `Explique de forma simples a guia: "${label}" (usada no Brasil).`,
+    textoReserva(type),
+  );
+}
+
+/**
+ * Explica uma guia: se for parcela de parcelamento, explica o parcelamento;
+ * senão, explica o tipo do tributo. É o que o endpoint usa.
+ */
+export async function explicarGuia(
+  type: DocType,
+  categoria?: string,
+): Promise<Explicacao> {
+  if (categoria === "parcelamento") return explicarParcelamento();
+  return explicarTipo(type);
 }

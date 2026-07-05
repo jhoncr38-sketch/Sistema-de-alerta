@@ -156,7 +156,13 @@ export function DocumentsTable({
    *  no `type`). Documentos institucionais e folha não recebem. */
   function explainButton(doc: DocumentWithCompany) {
     if (!isPagavel(doc)) return null;
-    return <ExplicarGuiaButton type={doc.type} label={tipoLabel(doc)} />;
+    return (
+      <ExplicarGuiaButton
+        type={doc.type}
+        label={tipoLabel(doc)}
+        categoria={doc.categoria}
+      />
+    );
   }
 
   function downloadButton(doc: DocumentWithCompany) {

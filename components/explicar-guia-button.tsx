@@ -18,15 +18,27 @@ import type { DocType } from "@/lib/types";
 export function ExplicarGuiaButton({
   type,
   label,
+  categoria,
 }: {
   type: DocType;
   /** Rótulo do tipo, exibido como título (ex.: "DAS - Simples Nacional"). */
   label: string;
+  /** Categoria da guia. "parcelamento" faz explicar o parcelamento, não o tipo. */
+  categoria?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [texto, setTexto] = useState<string | null>(null);
   const [carregando, setCarregando] = useState(false);
   const [erro, setErro] = useState(false);
+
+  // Numa parcela, o que interessa é explicar o PARCELAMENTO (não o tributo).
+  // Mantém o "Parcela N" no título, mas deixa claro que se trata de parcelamento.
+  const ehParcelamento = categoria === "parcelamento";
+  const titulo = ehParcelamento
+    ? label.toLowerCase().includes("parcela")
+      ? `${label} · Parcelamento`
+      : "Parcelamento"
+    : label;
 
   async function carregar() {
     if (texto || carregando) return; // já temos (ou já buscando)
@@ -36,7 +48,7 @@ export function ExplicarGuiaButton({
       const res = await fetch("/api/explicar-guia", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type }),
+        body: JSON.stringify({ type, categoria }),
       });
       const data = (await res.json().catch(() => ({}))) as { texto?: string };
       if (!res.ok || !data.texto) {
@@ -64,7 +76,7 @@ export function ExplicarGuiaButton({
         size="icon-sm"
         onClick={abrir}
         title="O que é isso?"
-        aria-label={`O que é ${label}?`}
+        aria-label={`O que é ${titulo}?`}
         className="text-muted-foreground"
       >
         <HelpCircle />
@@ -76,7 +88,7 @@ export function ExplicarGuiaButton({
             <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-amber-100 text-amber-600 dark:bg-amber-950/50 dark:text-amber-400">
               <Sparkles className="size-4" />
             </span>
-            <DialogTitle className="leading-snug">{label}</DialogTitle>
+            <DialogTitle className="leading-snug">{titulo}</DialogTitle>
           </div>
 
           {carregando ? (

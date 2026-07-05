@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { explicarTipo } from "@/lib/ai/explicacao";
+import { explicarGuia } from "@/lib/ai/explicacao";
 import { rateLimit } from "@/lib/ai/rate-limit";
 import { getUserAndProfile } from "@/lib/auth";
 import { DOC_TYPE_LABELS } from "@/lib/constants";
@@ -29,9 +29,14 @@ export async function POST(request: Request) {
   }
 
   let type = "";
+  let categoria = "";
   try {
-    const body = (await request.json()) as { type?: unknown };
+    const body = (await request.json()) as {
+      type?: unknown;
+      categoria?: unknown;
+    };
     if (typeof body.type === "string") type = body.type;
+    if (typeof body.categoria === "string") categoria = body.categoria;
   } catch {
     return NextResponse.json({ error: "Requisição inválida." }, { status: 400 });
   }
@@ -52,7 +57,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const { texto } = await explicarTipo(type as DocType);
+    const { texto } = await explicarGuia(type as DocType, categoria);
     return NextResponse.json({ texto });
   } catch (err) {
     console.error("[explicar-guia] erro:", err);
