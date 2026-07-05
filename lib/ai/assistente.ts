@@ -29,6 +29,41 @@ interface DocCtx {
   status: "open" | "aguardando" | "paid";
   marcado_pago_at: string | null;
   paid_at: string | null;
+  parcela_num: number | null; // nº da parcela no plano (só em parcelamento)
+  plan: { nome: string; total: number } | null; // plano ao qual a parcela pertence
+}
+
+/** Colunas buscadas em documents (inclui o plano da parcela). */
+const DOC_SELECT =
+  "company_id,type,categoria,amount,due_date,status,marcado_pago_at,paid_at,parcela_num,plan:installment_plans(nome,total)";
+
+/**
+ * Normaliza o retorno cru do Supabase em DocCtx[]. O join `plan` pode vir como
+ * array (comportamento do PostgREST) — aqui reduzimos ao primeiro elemento.
+ */
+function normalizeDocs(rows: unknown): DocCtx[] {
+  const arr = Array.isArray(rows) ? rows : [];
+  return arr.map((r) => {
+    const row = r as Record<string, unknown>;
+    const planRaw = row.plan;
+    const plan = Array.isArray(planRaw) ? planRaw[0] : planRaw;
+    return {
+      ...(row as object),
+      plan: (plan as DocCtx["plan"]) ?? null,
+    } as DocCtx;
+  });
+}
+
+/**
+ * Rótulo de uma guia no contexto. Parcela de parcelamento vira
+ * "Parcela 3/33 do <plano>"; guia comum usa o tipo do imposto.
+ */
+function rotuloGuia(d: DocCtx): string {
+  if (d.categoria === "parcelamento" && d.plan) {
+    const num = d.parcela_num ?? "?";
+    return `Parcela ${num}/${d.plan.total} do parcelamento "${d.plan.nome}"`;
+  }
+  return docTypeLabel(d.type);
 }
 
 const MAX_PERGUNTA = 300; // caracteres — evita prompt gigante/custo
@@ -73,11 +108,33 @@ function contextoCliente(
   let pagasAnoValor = 0;
   const ano = mes.slice(0, 4);
 
+  // Progresso dos parcelamentos: por plano, quantas parcelas pagas de quantas.
+  const planos = new Map<
+    string,
+    { nome: string; total: number; pagas: number; proxVenc: string | null }
+  >();
+
   for (const d of docs) {
     const pagavel = d.categoria === "boleto" || d.categoria === "parcelamento";
     if (!pagavel) continue;
     const valor = d.amount ?? 0;
-    const nome = docTypeLabel(d.type);
+    const nome = rotuloGuia(d);
+
+    // Acumula o progresso do plano (independente do status da parcela).
+    if (d.categoria === "parcelamento" && d.plan) {
+      const key = `${d.plan.nome}|${d.plan.total}`;
+      const p = planos.get(key) ?? {
+        nome: d.plan.nome,
+        total: d.plan.total,
+        pagas: 0,
+        proxVenc: null,
+      };
+      if (d.status === "paid") p.pagas++;
+      else if (d.due_date && (!p.proxVenc || d.due_date < p.proxVenc)) {
+        p.proxVenc = d.due_date;
+      }
+      planos.set(key, p);
+    }
 
     if (d.status === "paid") {
       const ref = d.marcado_pago_at ?? d.paid_at;
@@ -122,6 +179,22 @@ function contextoCliente(
       `Guias aguardando confirmação (${aguardando.length}):\n- ${aguardando.join("\n- ")}`,
     );
   }
+  if (planos.size > 0) {
+    const linhasPlano = Array.from(planos.values()).map((p) => {
+      const prox =
+        p.pagas >= p.total
+          ? "quitado"
+          : p.proxVenc
+            ? `próxima parcela vence ${formatDate(p.proxVenc)}`
+            : "sem próxima parcela definida";
+      return `"${p.nome}": ${p.pagas} de ${p.total} parcelas pagas, ${prox}`;
+    });
+    partes.push(
+      `Parcelamentos (${planos.size}):\n- ${linhasPlano.join("\n- ")}`,
+    );
+  } else {
+    partes.push("Parcelamentos: nenhum cadastrado.");
+  }
   partes.push(
     `Pagas no mês atual: ${pagasMesQtd} guia(s), total ${formatCurrency(pagasMesValor)} (dos quais ${formatCurrency(tributosMesValor)} em impostos).`,
   );
@@ -148,6 +221,7 @@ function contextoContador(
     aVencer7Valor: number;
     aguardando: number;
     pagasMesValor: number;
+    parcelasRisco: number; // parcelas de parcelamento vencidas (risco de exclusão)
   }
   const byCompany = new Map<string, Agg>();
   const get = (id: string): Agg => {
@@ -162,6 +236,7 @@ function contextoContador(
         aVencer7Valor: 0,
         aguardando: 0,
         pagasMesValor: 0,
+        parcelasRisco: 0,
       };
       byCompany.set(id, a);
     }
@@ -188,6 +263,8 @@ function contextoContador(
     if (urgency === "vencido") {
       a.vencidas++;
       a.vencidasValor += valor;
+      // Parcela de parcelamento vencida = risco de exclusão do parcelamento.
+      if (d.categoria === "parcelamento") a.parcelasRisco++;
     } else if (urgency === "vence_hoje") {
       a.venceHoje++;
       a.aVencer7++;
@@ -211,6 +288,10 @@ function contextoContador(
       if (a.venceHoje) campos.push(`${a.venceHoje} vence(m) hoje`);
       if (a.aVencer7)
         campos.push(`${a.aVencer7} a vencer em 7 dias = ${formatCurrency(a.aVencer7Valor)}`);
+      if (a.parcelasRisco)
+        campos.push(
+          `${a.parcelasRisco} parcela(s) de parcelamento vencida(s) — risco de exclusão`,
+        );
       if (a.aguardando) campos.push(`${a.aguardando} aguardando confirmação`);
       if (a.pagasMesValor)
         campos.push(`pago no mês ${formatCurrency(a.pagasMesValor)}`);
@@ -282,13 +363,11 @@ export async function perguntarCliente(
   const supabase = createAdminClient();
   const { data } = await supabase
     .from("documents")
-    .select(
-      "company_id,type,categoria,amount,due_date,status,marcado_pago_at,paid_at",
-    )
+    .select(DOC_SELECT)
     .eq("company_id", companyId)
     .in("categoria", ["boleto", "parcelamento"]);
 
-  const ctx = contextoCliente((data ?? []) as DocCtx[], companyName, today);
+  const ctx = contextoCliente(normalizeDocs(data), companyName, today);
   const resposta = await chatComplete(
     [
       { role: "system", content: systemPrompt("cliente") },
@@ -320,9 +399,7 @@ export async function perguntarContador(
   const [{ data: docs }, { data: companies }] = await Promise.all([
     supabase
       .from("documents")
-      .select(
-        "company_id,type,categoria,amount,due_date,status,marcado_pago_at,paid_at",
-      )
+      .select(DOC_SELECT)
       .in("categoria", ["boleto", "parcelamento"]),
     supabase.from("companies").select("id,razao_social,nome_fantasia").eq("active", true),
   ]);
@@ -336,7 +413,7 @@ export async function perguntarContador(
     nomes.set(c.id, c.nome_fantasia || c.razao_social || "—");
   }
 
-  const ctx = contextoContador((docs ?? []) as DocCtx[], nomes, today);
+  const ctx = contextoContador(normalizeDocs(docs), nomes, today);
   const resposta = await chatComplete(
     [
       { role: "system", content: systemPrompt("contador") },
