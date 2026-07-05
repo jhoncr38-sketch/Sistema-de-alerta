@@ -13,6 +13,8 @@ import { EditClientButton } from "@/components/edit-client-button";
 import { EditCompanyButton } from "@/components/edit-company-button";
 import { NewCompanyButton } from "@/components/new-company-button";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { formatUltimoAcesso } from "@/lib/format";
 import type { Company, Profile, ProfileWithCompany } from "@/lib/types";
 import {
   approveClient,
@@ -28,6 +30,57 @@ import {
 const selectClass =
   "h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
 
+interface UltimoAcesso {
+  /** Texto relativo pronto: "Hoje", "Há 3 dias", "Nunca acessou". */
+  texto: string;
+  /** ISO exato, para o tooltip (data/hora completa). */
+  iso: string | null;
+  /** Nunca entrou, ou faz mais de 30 dias — destaque visual pro contador. */
+  sumido: boolean;
+}
+
+/**
+ * "Último acesso" de cada usuário, direto do Supabase Auth
+ * (auth.users.last_sign_in_at). É preenchido automaticamente a cada login —
+ * não gravamos nada, não pesa no site do cliente. Só o contador vê, aqui.
+ *
+ * Retorna um mapa id -> UltimoAcesso já formatado. O "agora" é calculado aqui
+ * (função utilitária, fora do render — a regra de pureza do React proíbe
+ * Date.now() no corpo do componente). Se der qualquer erro (ex.: service role
+ * ausente), devolve mapa vazio e a página segue funcionando.
+ */
+async function fetchUltimosAcessos(): Promise<Map<string, UltimoAcesso>> {
+  const mapa = new Map<string, UltimoAcesso>();
+  const agora = Date.now();
+  try {
+    const admin = createAdminClient();
+    // listUsers é paginado. Percorremos até acabar, para não perder clientes
+    // quando o escritório passar de uma página de cadastros.
+    for (let page = 1; page <= 100; page++) {
+      const { data, error } = await admin.auth.admin.listUsers({
+        page,
+        perPage: 200,
+      });
+      if (error || !data?.users?.length) break;
+      for (const u of data.users) {
+        const iso = u.last_sign_in_at ?? null;
+        const dias = iso
+          ? Math.floor((agora - new Date(iso).getTime()) / 86_400_000)
+          : Infinity;
+        mapa.set(u.id, {
+          texto: formatUltimoAcesso(iso, agora),
+          iso,
+          sumido: dias > 30,
+        });
+      }
+      if (data.users.length < 200) break;
+    }
+  } catch {
+    // silencioso: sem último acesso a página ainda funciona.
+  }
+  return mapa;
+}
+
 export default async function ClientesPage() {
   const supabase = await createClient();
   const {
@@ -38,6 +91,7 @@ export default async function ClientesPage() {
     { data: companiesRaw },
     { data: linksRaw },
     { data: adminsRaw },
+    ultimosAcessos,
   ] = await Promise.all([
     supabase
       .from("profiles")
@@ -52,6 +106,7 @@ export default async function ClientesPage() {
       .select("*")
       .eq("role", "admin")
       .order("created_at", { ascending: true }),
+    fetchUltimosAcessos(),
   ]);
 
   const clients = (clientsRaw ?? []) as ProfileWithCompany[];
@@ -279,6 +334,7 @@ export default async function ClientesPage() {
                   <th className="px-4 py-2.5 font-medium">Nome</th>
                   <th className="px-4 py-2.5 font-medium">E-mail</th>
                   <th className="px-4 py-2.5 font-medium">Empresas que pode ver</th>
+                  <th className="px-4 py-2.5 font-medium">Último acesso</th>
                   <th className="px-4 py-2.5 font-medium" />
                 </tr>
               </thead>
@@ -286,7 +342,7 @@ export default async function ClientesPage() {
                 {approved.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={4}
+                      colSpan={5}
                       className="px-4 py-8 text-center text-muted-foreground"
                     >
                       Nenhum cliente ativo ainda.
@@ -297,6 +353,8 @@ export default async function ClientesPage() {
                     const cos = companiesByClient.get(c.id) ?? [];
                     const linkedIds = companyIdsByClient.get(c.id) ?? [];
                     const inativo = c.active === false;
+                    const acesso = ultimosAcessos.get(c.id);
+                    const sumido = acesso?.sumido ?? false;
                     return (
                       <tr
                         key={c.id}
@@ -332,6 +390,28 @@ export default async function ClientesPage() {
                               ))}
                             </div>
                           )}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span
+                            className={
+                              sumido
+                                ? "inline-flex items-center gap-1.5 text-amber-700 dark:text-amber-500"
+                                : "text-muted-foreground"
+                            }
+                            title={
+                              acesso?.iso
+                                ? new Date(acesso.iso).toLocaleString("pt-BR")
+                                : "Nunca fez login no portal"
+                            }
+                          >
+                            {sumido ? (
+                              <span
+                                className="size-1.5 rounded-full bg-amber-500"
+                                aria-hidden
+                              />
+                            ) : null}
+                            {acesso?.texto ?? "—"}
+                          </span>
                         </td>
                         <td className="px-4 py-3">
                           <div className="flex flex-wrap justify-end gap-1">
