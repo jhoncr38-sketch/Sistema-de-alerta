@@ -1,4 +1,5 @@
 import { AppSidebar } from "@/components/app-sidebar";
+import { AssistenteChat } from "@/components/assistente-chat";
 import { SiteFooter } from "@/components/site-footer";
 import { requireClient } from "@/lib/auth";
 import { getBranding } from "@/lib/branding";
@@ -44,6 +45,7 @@ export default async function ClientLayout({
         {children}
         <SiteFooter />
       </div>
+      <AssistenteChat scope="cliente" />
     </div>
   );
 }

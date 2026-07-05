@@ -1,0 +1,354 @@
+import { chatComplete, isAiConfigured } from "@/lib/ai/openai";
+import { docTypeLabel, isTributo } from "@/lib/constants";
+import { getUrgency } from "@/lib/dates";
+import { formatCurrency, formatDate } from "@/lib/format";
+import { createAdminClient } from "@/lib/supabase/admin";
+import type { DocType } from "@/lib/types";
+
+/**
+ * Assistente de dúvidas em linguagem natural.
+ *
+ * REGRA DE OURO (privacidade + confiança): a IA nunca acessa o banco. O código
+ * busca os dados do ESCOPO permitido (a empresa do cliente, ou todas as
+ * empresas para o contador), monta um "contexto factual" já formatado em pt-BR
+ * e a IA apenas responde a pergunta com base nesse contexto. Ela não soma,
+ * não inventa valores e não vê dados fora do escopo.
+ *
+ * O acesso ao banco aqui usa o service role, mas o ESCOPO é imposto por
+ * parâmetro (companyId do cliente) — o endpoint que chama isto é quem valida a
+ * sessão e decide o escopo. Ver app/api/assistente/route.ts.
+ */
+
+/** Guia mínima usada para montar o contexto. */
+interface DocCtx {
+  company_id: string;
+  type: DocType;
+  categoria: "boleto" | "documento" | "folha" | "parcelamento";
+  amount: number | null;
+  due_date: string | null;
+  status: "open" | "aguardando" | "paid";
+  marcado_pago_at: string | null;
+  paid_at: string | null;
+}
+
+const MAX_PERGUNTA = 300; // caracteres — evita prompt gigante/custo
+
+/** Mês atual "YYYY-MM" no fuso do Brasil. */
+function mesAtual(today = new Date()): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+  }).formatToParts(today);
+  const y = parts.find((p) => p.type === "year")?.value ?? "1970";
+  const m = parts.find((p) => p.type === "month")?.value ?? "01";
+  return `${y}-${m}`;
+}
+
+function isoDay(v: string): string {
+  return v.split("T")[0];
+}
+
+/** Resultado da pergunta. `disponivel=false` => IA não configurada. */
+export interface AssistenteResposta {
+  disponivel: boolean;
+  resposta: string | null;
+}
+
+// ---------------------------------------------------------------------------
+// Contexto do CLIENTE: guias da empresa dele.
+// ---------------------------------------------------------------------------
+function contextoCliente(
+  docs: DocCtx[],
+  companyName: string,
+  today: Date,
+): string {
+  const mes = mesAtual(today);
+  const abertas: string[] = [];
+  const atrasadas: string[] = [];
+  const aguardando: string[] = [];
+  let pagasMesQtd = 0;
+  let pagasMesValor = 0;
+  let tributosMesValor = 0;
+  let pagasAnoValor = 0;
+  const ano = mes.slice(0, 4);
+
+  for (const d of docs) {
+    const pagavel = d.categoria === "boleto" || d.categoria === "parcelamento";
+    if (!pagavel) continue;
+    const valor = d.amount ?? 0;
+    const nome = docTypeLabel(d.type);
+
+    if (d.status === "paid") {
+      const ref = d.marcado_pago_at ?? d.paid_at;
+      if (ref) {
+        const day = isoDay(ref);
+        if (day.slice(0, 7) === mes) {
+          pagasMesQtd++;
+          pagasMesValor += valor;
+          if (isTributo(d.type)) tributosMesValor += valor;
+        }
+        if (day.slice(0, 4) === ano) pagasAnoValor += valor;
+      }
+      continue;
+    }
+
+    if (!d.due_date) continue;
+    const { urgency } = getUrgency(d.due_date, d.status, today);
+    const linha = `${nome} — ${formatCurrency(valor)}, vence ${formatDate(d.due_date)}`;
+    if (d.status === "aguardando") {
+      aguardando.push(`${linha} (aguardando confirmação do contador)`);
+    } else if (urgency === "vencido") {
+      atrasadas.push(`${linha} (VENCIDO)`);
+    } else {
+      abertas.push(linha);
+    }
+  }
+
+  const partes: string[] = [`Empresa: ${companyName}`, `Mês atual: ${mes}`];
+
+  partes.push(
+    atrasadas.length
+      ? `Guias VENCIDAS em aberto (${atrasadas.length}):\n- ${atrasadas.join("\n- ")}`
+      : "Guias vencidas em aberto: nenhuma.",
+  );
+  partes.push(
+    abertas.length
+      ? `Guias a vencer em aberto (${abertas.length}):\n- ${abertas.join("\n- ")}`
+      : "Guias a vencer em aberto: nenhuma.",
+  );
+  if (aguardando.length) {
+    partes.push(
+      `Guias aguardando confirmação (${aguardando.length}):\n- ${aguardando.join("\n- ")}`,
+    );
+  }
+  partes.push(
+    `Pagas no mês atual: ${pagasMesQtd} guia(s), total ${formatCurrency(pagasMesValor)} (dos quais ${formatCurrency(tributosMesValor)} em impostos).`,
+  );
+  partes.push(`Total pago no ano de ${ano}: ${formatCurrency(pagasAnoValor)}.`);
+
+  return partes.join("\n\n");
+}
+
+// ---------------------------------------------------------------------------
+// Contexto do CONTADOR: panorama agregado por empresa (todas).
+// ---------------------------------------------------------------------------
+function contextoContador(
+  docs: DocCtx[],
+  nomesPorEmpresa: Map<string, string>,
+  today: Date,
+): string {
+  const mes = mesAtual(today);
+  interface Agg {
+    nome: string;
+    vencidas: number;
+    vencidasValor: number;
+    venceHoje: number;
+    aVencer7: number;
+    aVencer7Valor: number;
+    aguardando: number;
+    pagasMesValor: number;
+  }
+  const byCompany = new Map<string, Agg>();
+  const get = (id: string): Agg => {
+    let a = byCompany.get(id);
+    if (!a) {
+      a = {
+        nome: nomesPorEmpresa.get(id) ?? "—",
+        vencidas: 0,
+        vencidasValor: 0,
+        venceHoje: 0,
+        aVencer7: 0,
+        aVencer7Valor: 0,
+        aguardando: 0,
+        pagasMesValor: 0,
+      };
+      byCompany.set(id, a);
+    }
+    return a;
+  };
+
+  for (const d of docs) {
+    const pagavel = d.categoria === "boleto" || d.categoria === "parcelamento";
+    if (!pagavel) continue;
+    const valor = d.amount ?? 0;
+    const a = get(d.company_id);
+
+    if (d.status === "paid") {
+      const ref = d.marcado_pago_at ?? d.paid_at;
+      if (ref && isoDay(ref).slice(0, 7) === mes) a.pagasMesValor += valor;
+      continue;
+    }
+    if (d.status === "aguardando") {
+      a.aguardando++;
+      continue;
+    }
+    if (!d.due_date) continue;
+    const { urgency } = getUrgency(d.due_date, d.status, today);
+    if (urgency === "vencido") {
+      a.vencidas++;
+      a.vencidasValor += valor;
+    } else if (urgency === "vence_hoje") {
+      a.venceHoje++;
+      a.aVencer7++;
+      a.aVencer7Valor += valor;
+    } else if (urgency === "proximos_3" || urgency === "proximos_7") {
+      a.aVencer7++;
+      a.aVencer7Valor += valor;
+    }
+  }
+
+  // Só empresas com algo relevante; ordena por vencidas desc.
+  const linhas = Array.from(byCompany.values())
+    .filter(
+      (a) => a.vencidas || a.aVencer7 || a.aguardando || a.pagasMesValor,
+    )
+    .sort((a, b) => b.vencidas - a.vencidas || b.aVencer7 - a.aVencer7)
+    .map((a) => {
+      const campos: string[] = [];
+      if (a.vencidas)
+        campos.push(`${a.vencidas} vencida(s) = ${formatCurrency(a.vencidasValor)}`);
+      if (a.venceHoje) campos.push(`${a.venceHoje} vence(m) hoje`);
+      if (a.aVencer7)
+        campos.push(`${a.aVencer7} a vencer em 7 dias = ${formatCurrency(a.aVencer7Valor)}`);
+      if (a.aguardando) campos.push(`${a.aguardando} aguardando confirmação`);
+      if (a.pagasMesValor)
+        campos.push(`pago no mês ${formatCurrency(a.pagasMesValor)}`);
+      return `${a.nome}: ${campos.join("; ")}`;
+    });
+
+  if (linhas.length === 0) {
+    return `Mês atual: ${mes}\n\nNenhuma pendência ou pagamento relevante entre as empresas no momento.`;
+  }
+  return `Mês atual: ${mes}\nPanorama por empresa (todas as empresas ativas):\n- ${linhas.join("\n- ")}`;
+}
+
+// ---------------------------------------------------------------------------
+// Chamada à IA
+// ---------------------------------------------------------------------------
+function systemPrompt(escopo: "cliente" | "contador"): string {
+  const base =
+    "Você é o assistente virtual da ContAlert, um portal de obrigações " +
+    "contábeis (boletos, impostos e parcelamentos). Responda em português do " +
+    "Brasil, de forma curta, direta e cordial. Use SOMENTE os dados do CONTEXTO " +
+    "abaixo — nunca invente, estime ou calcule valores que não estejam lá. Se a " +
+    "informação não estiver no contexto, diga que não tem esse dado e sugira " +
+    "falar com o contador. Não dê consultoria fiscal nem opinião jurídica. " +
+    "Valores em reais, datas no formato dia/mês/ano. Não use markdown pesado; " +
+    "listas curtas são bem-vindas quando ajudarem.";
+  if (escopo === "contador") {
+    return (
+      base +
+      " Você fala com o CONTADOR (visão de todas as empresas). Pode citar nomes " +
+      "de empresas presentes no contexto."
+    );
+  }
+  return (
+    base +
+    " Você fala com o CLIENTE sobre a empresa dele. Nunca mencione outras empresas."
+  );
+}
+
+/** Sugestões de perguntas exibidas na interface (por escopo). */
+export function sugestoes(escopo: "cliente" | "contador"): string[] {
+  if (escopo === "contador") {
+    return [
+      "Quais clientes têm boleto vencido?",
+      "Quem tem guias a vencer esta semana?",
+      "Há pagamentos aguardando minha confirmação?",
+    ];
+  }
+  return [
+    "Qual boleto vence primeiro?",
+    "Tenho algo vencido?",
+    "Quanto paguei de imposto este mês?",
+  ];
+}
+
+/**
+ * Responde uma pergunta do cliente (escopo: 1 empresa).
+ * `companyId`/`companyName` já validados pelo endpoint.
+ */
+export async function perguntarCliente(
+  pergunta: string,
+  companyId: string,
+  companyName: string,
+  today: Date = new Date(),
+): Promise<AssistenteResposta> {
+  if (!isAiConfigured()) return { disponivel: false, resposta: null };
+  const q = pergunta.trim().slice(0, MAX_PERGUNTA);
+  if (!q) return { disponivel: true, resposta: "Faça uma pergunta 🙂" };
+
+  const supabase = createAdminClient();
+  const { data } = await supabase
+    .from("documents")
+    .select(
+      "company_id,type,categoria,amount,due_date,status,marcado_pago_at,paid_at",
+    )
+    .eq("company_id", companyId)
+    .in("categoria", ["boleto", "parcelamento"]);
+
+  const ctx = contextoCliente((data ?? []) as DocCtx[], companyName, today);
+  const resposta = await chatComplete(
+    [
+      { role: "system", content: systemPrompt("cliente") },
+      { role: "user", content: `CONTEXTO:\n${ctx}\n\nPERGUNTA: ${q}` },
+    ],
+    { temperature: 0.2, maxTokens: 400 },
+  );
+
+  return {
+    disponivel: true,
+    resposta:
+      resposta ??
+      "Não consegui responder agora. Tente novamente em instantes ou fale com seu contador.",
+  };
+}
+
+/**
+ * Responde uma pergunta do contador (escopo: todas as empresas ativas).
+ */
+export async function perguntarContador(
+  pergunta: string,
+  today: Date = new Date(),
+): Promise<AssistenteResposta> {
+  if (!isAiConfigured()) return { disponivel: false, resposta: null };
+  const q = pergunta.trim().slice(0, MAX_PERGUNTA);
+  if (!q) return { disponivel: true, resposta: "Faça uma pergunta 🙂" };
+
+  const supabase = createAdminClient();
+  const [{ data: docs }, { data: companies }] = await Promise.all([
+    supabase
+      .from("documents")
+      .select(
+        "company_id,type,categoria,amount,due_date,status,marcado_pago_at,paid_at",
+      )
+      .in("categoria", ["boleto", "parcelamento"]),
+    supabase.from("companies").select("id,razao_social,nome_fantasia").eq("active", true),
+  ]);
+
+  const nomes = new Map<string, string>();
+  for (const c of (companies ?? []) as {
+    id: string;
+    razao_social: string;
+    nome_fantasia: string | null;
+  }[]) {
+    nomes.set(c.id, c.nome_fantasia || c.razao_social || "—");
+  }
+
+  const ctx = contextoContador((docs ?? []) as DocCtx[], nomes, today);
+  const resposta = await chatComplete(
+    [
+      { role: "system", content: systemPrompt("contador") },
+      { role: "user", content: `CONTEXTO:\n${ctx}\n\nPERGUNTA: ${q}` },
+    ],
+    { temperature: 0.2, maxTokens: 500 },
+  );
+
+  return {
+    disponivel: true,
+    resposta:
+      resposta ??
+      "Não consegui responder agora. Tente novamente em instantes.",
+  };
+}

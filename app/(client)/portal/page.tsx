@@ -3,12 +3,24 @@ import { DocumentsTable } from "@/components/documents-table";
 import { MetricCard } from "@/components/metric-card";
 import { PageHeader } from "@/components/page-header";
 import { ProximoVencimento } from "@/components/proximo-vencimento";
+import { ResumoMensalCard } from "@/components/resumo-mensal-card";
 import { getUserAndProfile } from "@/lib/auth";
 import { getClientCompanyContext } from "@/lib/companies";
 import { getUrgency } from "@/lib/dates";
 import { formatCurrency } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
 import type { DocumentWithCompany } from "@/lib/types";
+
+const MESES_EXT = [
+  "janeiro", "fevereiro", "março", "abril", "maio", "junho",
+  "julho", "agosto", "setembro", "outubro", "novembro", "dezembro",
+];
+
+/** "2026-06" -> "junho de 2026" (rótulo do cartão de resumo). */
+function competenciaExtenso(ym: string): string {
+  const [y, m] = ym.split("-").map(Number);
+  return `${MESES_EXT[(m ?? 1) - 1] ?? ""} de ${y}`;
+}
 
 /** Documento com a forma de pagamento do parcelamento (quando for parcela). */
 type PortalDoc = DocumentWithCompany & {
@@ -33,15 +45,26 @@ export default async function PortalHome() {
   const supabase = await createClient();
   const { active } = await getClientCompanyContext();
   const activeId = active?.id ?? "00000000-0000-0000-0000-000000000000";
-  const { data } = await supabase
-    .from("documents")
-    .select(
-      "*, company:companies(id,razao_social,nome_fantasia,email), plan:installment_plans(forma_pagamento)",
-    )
-    .eq("company_id", activeId)
-    .order("due_date", { ascending: true });
+  const [{ data }, { data: resumoRow }] = await Promise.all([
+    supabase
+      .from("documents")
+      .select(
+        "*, company:companies(id,razao_social,nome_fantasia,email), plan:installment_plans(forma_pagamento)",
+      )
+      .eq("company_id", activeId)
+      .order("due_date", { ascending: true }),
+    // Resumo mensal mais recente desta empresa (gerado pelo cron). Só leitura.
+    supabase
+      .from("monthly_summaries")
+      .select("texto,competencia")
+      .eq("company_id", activeId)
+      .order("competencia", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ]);
 
   const docs = (data ?? []) as PortalDoc[];
+  const resumo = resumoRow as { texto: string; competencia: string } | null;
   // Boletos e parcelas de parcelamento são "guias a pagar" — entram no resumo.
   const pagaveis = docs.filter(
     (d) => d.categoria === "boleto" || d.categoria === "parcelamento",
@@ -88,6 +111,12 @@ export default async function PortalHome() {
         subtitle="Confira seus boletos e documentos"
       />
       <div className="space-y-6 p-6">
+        {resumo ? (
+          <ResumoMensalCard
+            texto={resumo.texto}
+            competenciaLabel={competenciaExtenso(resumo.competencia)}
+          />
+        ) : null}
         <ProximoVencimento open={openList} />
 
         <div className="grid gap-3 sm:grid-cols-3">

@@ -305,6 +305,23 @@ export function pagamentoAguardandoEmail(opts: {
   return { subject, html: shell({ headline, accent: WARN, bodyHtml: body }) };
 }
 
+/** Resumo mensal (gerado por IA/cron): panorama do mês para o cliente. */
+export function resumoMensalEmail(opts: {
+  companyName: string;
+  competenciaLabel: string; // "junho de 2026"
+  texto: string; // resumo já redigido (pt-BR)
+  portalUrl: string;
+}) {
+  const { companyName, competenciaLabel, texto, portalUrl } = opts;
+  const headline = `Seu resumo de ${competenciaLabel}`;
+  const subject = `Resumo de ${competenciaLabel} — ${companyName}`;
+  const body = `
+        ${p(`Olá, ${b(companyName)}!`)}
+        ${p(texto)}
+        ${button(portalUrl, "Ver no portal")}`;
+  return { subject, html: shell({ headline, accent: INFO, bodyHtml: body }) };
+}
+
 /** Cliente subiu de nível no Clube SJ (SJ Rewards). */
 export function nivelAlcancadoEmail(opts: {
   companyName: string;
