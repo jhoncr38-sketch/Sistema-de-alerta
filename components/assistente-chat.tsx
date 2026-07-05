@@ -256,7 +256,7 @@ export function AssistenteChat({ scope = "cliente" }: { scope?: AssistenteScope 
         ) : (
           <>
             <Sparkles className="size-5 shrink-0" />
-            <span className="text-sm font-semibold whitespace-nowrap max-sm:hidden">
+            <span className="text-sm font-semibold whitespace-nowrap">
               Dúvidas?
             </span>
           </>
