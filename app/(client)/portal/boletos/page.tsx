@@ -96,6 +96,7 @@ export default async function MeusBoletosPage() {
                   showPaid
                   enforceProof
                   showTypeIcon
+                  showExplain
                   hideCompetencia
                 />
               </div>

@@ -4,6 +4,7 @@ import { ComprovanteButton } from "@/components/comprovante-button";
 import { ConfirmPaymentButtons } from "@/components/confirm-payment-buttons";
 import { DocTypeIcon } from "@/components/doc-type-icon";
 import { ConfirmDeleteButton } from "@/components/confirm-delete-button";
+import { ExplicarGuiaButton } from "@/components/explicar-guia-button";
 import { FilePreviewButton } from "@/components/file-preview-button";
 import { Button } from "@/components/ui/button";
 import { PaidToggle } from "@/components/paid-toggle";
@@ -46,6 +47,7 @@ export function DocumentsTable({
   competenciaInline = false,
   subtleActions = false,
   showTypeIcon = false,
+  showExplain = false,
   flush = false,
   emptyMessage = "Nenhum boleto encontrado.",
 }: {
@@ -74,6 +76,8 @@ export function DocumentsTable({
   subtleActions?: boolean;
   /** Mostra um ícone colorido por tipo de documento (telas do cliente). */
   showTypeIcon?: boolean;
+  /** Telas do cliente: botão "O que é isso?" que explica o tipo da guia (IA). */
+  showExplain?: boolean;
   /** Sem borda/cartão externo no desktop — para usar dentro de outro cartão. */
   flush?: boolean;
   emptyMessage?: string;
@@ -146,6 +150,13 @@ export function DocumentsTable({
     const nome =
       tipoLabel(doc) + (doc.competencia ? ` · ${doc.competencia}` : "");
     return <FilePreviewButton docId={doc.id} fileName={nome} />;
+  }
+
+  /** Botão "O que é isso?" — só para guias a pagar (que têm um imposto/tributo
+   *  no `type`). Documentos institucionais e folha não recebem. */
+  function explainButton(doc: DocumentWithCompany) {
+    if (!isPagavel(doc)) return null;
+    return <ExplicarGuiaButton type={doc.type} label={tipoLabel(doc)} />;
   }
 
   function downloadButton(doc: DocumentWithCompany) {
@@ -224,8 +235,9 @@ export function DocumentsTable({
                           "—"}
                       </div>
                     ) : null}
-                    <div className="font-medium leading-snug">
-                      {tipoLabel(doc)}
+                    <div className="flex items-center gap-1 font-medium leading-snug">
+                      <span className="min-w-0 truncate">{tipoLabel(doc)}</span>
+                      {showExplain ? explainButton(doc) : null}
                     </div>
                   </div>
                 </div>
@@ -340,7 +352,12 @@ export function DocumentsTable({
                     <div className="flex items-center gap-2.5">
                       {showTypeIcon ? <DocTypeIcon doc={doc} /> : null}
                       <div className="min-w-0">
-                        <div>{tipoLabel(doc)}</div>
+                        <div className="flex items-center gap-1">
+                          <span className="min-w-0 truncate">
+                            {tipoLabel(doc)}
+                          </span>
+                          {showExplain ? explainButton(doc) : null}
+                        </div>
                         {competenciaInline && doc.competencia ? (
                           <div className="text-xs text-muted-foreground">
                             Comp. {doc.competencia}
