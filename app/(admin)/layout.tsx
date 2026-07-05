@@ -1,5 +1,4 @@
 import { AppSidebar } from "@/components/app-sidebar";
-import { AssistenteChat } from "@/components/assistente-chat";
 import { SiteFooter } from "@/components/site-footer";
 import { requireAdmin } from "@/lib/auth";
 import { getBranding } from "@/lib/branding";
@@ -27,7 +26,6 @@ export default async function AdminLayout({
         {children}
         <SiteFooter />
       </div>
-      <AssistenteChat scope="contador" />
     </div>
   );
 }
