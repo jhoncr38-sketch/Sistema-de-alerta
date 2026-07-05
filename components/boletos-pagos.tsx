@@ -4,6 +4,7 @@ import { useState } from "react";
 import { ChevronDown, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ComprovanteButton } from "@/components/comprovante-button";
+import { ExplicarGuiaButton } from "@/components/explicar-guia-button";
 import { FilePreviewButton } from "@/components/file-preview-button";
 import { PaidToggle } from "@/components/paid-toggle";
 import { docTypeLabel } from "@/lib/constants";
@@ -22,6 +23,16 @@ function mesLabel(competencia: string | null): string {
   const m = competencia.match(/^(\d{2})\/(\d{4})$/);
   if (!m) return competencia;
   return `${MESES_LONGOS[Number(m[1]) - 1] ?? m[1]} / ${m[2]}`;
+}
+
+/** Rótulo da guia paga: parcela mostra "Parcela N"; "Outro" com descrição usa
+ *  a descrição; o resto, o tipo do imposto (igual à DocumentsTable). */
+function guiaLabel(d: DocumentWithCompany): string {
+  if (d.categoria === "parcelamento" && d.parcela_num) {
+    return `Parcela ${d.parcela_num}`;
+  }
+  if (d.type === "outro" && d.descricao) return d.descricao;
+  return docTypeLabel(d.type);
 }
 
 interface Grupo {
@@ -86,8 +97,13 @@ function MesBoletos({ grupo, defaultOpen }: { grupo: Grupo; defaultOpen: boolean
               className="flex flex-wrap items-center justify-between gap-3 px-4 py-3"
             >
               <div className="min-w-0">
-                <div className="truncate text-sm font-medium">
-                  {docTypeLabel(d.type)}
+                <div className="flex items-center gap-1 text-sm font-medium">
+                  <span className="min-w-0 truncate">{guiaLabel(d)}</span>
+                  <ExplicarGuiaButton
+                    type={d.type}
+                    label={guiaLabel(d)}
+                    categoria={d.categoria}
+                  />
                 </div>
                 <div className="text-xs text-muted-foreground tabular-nums">
                   {d.due_date ? `Venc. ${formatDate(d.due_date)} · ` : ""}
@@ -97,7 +113,7 @@ function MesBoletos({ grupo, defaultOpen }: { grupo: Grupo; defaultOpen: boolean
               <div className="flex shrink-0 items-center gap-2">
                 <FilePreviewButton
                   docId={d.id}
-                  fileName={`${docTypeLabel(d.type)}${d.competencia ? ` · ${d.competencia}` : ""}`}
+                  fileName={`${guiaLabel(d)}${d.competencia ? ` · ${d.competencia}` : ""}`}
                 />
                 <Button
                   variant="outline"
