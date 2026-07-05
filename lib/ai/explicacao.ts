@@ -58,10 +58,42 @@ const FALLBACK: Partial<Record<DocType, string>> = {
     "A folha de pagamento consolida salários, encargos e descontos dos " +
     "funcionários no mês. É um documento de referência para os pagamentos e " +
     "recolhimentos trabalhistas.",
+  // --- Documentos institucionais (não são guias de imposto) ---
+  cartao_cnpj:
+    "O Cartão CNPJ é o comprovante de inscrição da empresa na Receita Federal. " +
+    "Traz os dados oficiais do negócio (CNPJ, endereço, atividades). Serve para " +
+    "comprovar a existência e a situação da empresa em bancos, licitações e " +
+    "contratos.",
+  contrato_social:
+    "O Contrato Social é o documento que cria a empresa e define suas regras: " +
+    "sócios, participação de cada um, atividade e capital. É a “certidão de " +
+    "nascimento” do negócio, exigida em bancos e órgãos públicos.",
+  licenca:
+    "A Licença é a autorização de um órgão (ambiental, sanitário, etc.) para a " +
+    "empresa exercer determinada atividade. Costuma ter validade — fique atento " +
+    "à renovação para não funcionar irregular.",
+  alvara:
+    "O Alvará é a autorização da prefeitura para a empresa funcionar naquele " +
+    "endereço. Em geral precisa ser renovado periodicamente; mantê-lo em dia " +
+    "evita multas e problemas na fiscalização.",
+  relatorio_fiscal:
+    "O Relatório Fiscal é um documento preparado pela contabilidade com um " +
+    "resumo da situação fiscal da empresa no período. Serve para acompanhamento " +
+    "e conferência — guarde para consulta.",
   outro:
     "Guia de pagamento da sua empresa. Confira o valor e o vencimento; em caso " +
     "de dúvida sobre do que se trata, fale com seu contador.",
 };
+
+/** Tipos que são DOCUMENTO institucional (não guia de imposto) — muda o prompt
+ *  da IA (explicar o documento e pra que serve, sem falar de multa/juros). */
+const DOCUMENTO_TYPES: ReadonlySet<DocType> = new Set<DocType>([
+  "cartao_cnpj",
+  "contrato_social",
+  "licenca",
+  "alvara",
+  "relatorio_fiscal",
+]);
 
 /** Reserva final quando o tipo não está no mapa acima. */
 function fallbackGenerico(type: DocType): string {
@@ -99,8 +131,8 @@ const PARCELAMENTO_PROMPT =
 const SYSTEM =
   "Você explica termos contábeis brasileiros para leigos (donos de pequenas " +
   "empresas). Escreva em português do Brasil, tom cordial e tranquilizador, no " +
-  "máximo 3 frases curtas. Explique o que é a guia, para que serve e, em uma " +
-  "frase, o que acontece se atrasar (multa/juros) ou o que fazer. Não dê " +
+  "máximo 3 frases curtas. Explique o que é e para que serve, seguindo a " +
+  "instrução do pedido. Não dê " +
   "consultoria fiscal específica, não cite valores nem prazos exatos e não use " +
   "markdown. Não invente detalhes que não conheça com certeza.";
 
@@ -173,11 +205,13 @@ export async function explicarParcelamento(): Promise<Explicacao> {
  */
 export async function explicarTipo(type: DocType): Promise<Explicacao> {
   const label = docTypeLabel(type);
-  return explicarPorChave(
-    type,
-    `Explique de forma simples a guia: "${label}" (usada no Brasil).`,
-    textoReserva(type),
-  );
+  // Documento institucional: explicar o DOCUMENTO (não falar de guia/multa/juros).
+  const prompt = DOCUMENTO_TYPES.has(type)
+    ? `Explique de forma simples, para o dono de uma pequena empresa, o que é o ` +
+      `documento "${label}" (usado no Brasil) e para que serve. Não fale em ` +
+      `multa ou juros — não é uma guia de pagamento.`
+    : `Explique de forma simples a guia: "${label}" (usada no Brasil).`;
+  return explicarPorChave(type, prompt, textoReserva(type));
 }
 
 /**

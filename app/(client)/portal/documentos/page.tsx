@@ -29,6 +29,7 @@ export default async function PortalDocumentosPage() {
           documents={docs}
           showPreview
           showDownload
+          showExplain
           emptyMessage="Nenhum documento disponível. Aqui ficam os documentos da empresa publicados pelo seu contador."
         />
 

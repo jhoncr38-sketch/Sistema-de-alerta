@@ -12,13 +12,22 @@ import { RequireProofToggle } from "@/components/require-proof-toggle";
 import { StatusBadge } from "@/components/status-badge";
 import { docTypeLabel } from "@/lib/constants";
 import { formatCurrency, formatDate } from "@/lib/format";
-import type { DocumentWithCompany } from "@/lib/types";
+import type { DocType, DocumentWithCompany } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 /** "Guias a pagar" — têm valor, vencimento, status e podem ser marcadas pagas. */
 function isPagavel(d: DocumentWithCompany): boolean {
   return d.categoria === "boleto" || d.categoria === "parcelamento";
 }
+
+/** Documentos institucionais que têm explicação no botão "O que é isso?". */
+const EXPLAIN_DOC_TYPES: ReadonlySet<DocType> = new Set<DocType>([
+  "cartao_cnpj",
+  "contrato_social",
+  "licenca",
+  "alvara",
+  "relatorio_fiscal",
+]);
 
 /** Rótulo da coluna "Tipo": parcela mostra "Parcela N"; o resto, o tipo da guia.
  *  Quando o tipo é "Outro" e há descrição livre, usa a descrição (mais útil ao
@@ -152,10 +161,12 @@ export function DocumentsTable({
     return <FilePreviewButton docId={doc.id} fileName={nome} />;
   }
 
-  /** Botão "O que é isso?" — só para guias a pagar (que têm um imposto/tributo
-   *  no `type`). Documentos institucionais e folha não recebem. */
+  /** Botão "O que é isso?" — para guias a pagar (explica o tributo/parcelamento)
+   *  e para documentos institucionais conhecidos (explica o documento). Folha e
+   *  "Outro" sem descrição não recebem (não há o que explicar de útil). */
   function explainButton(doc: DocumentWithCompany) {
-    if (!isPagavel(doc)) return null;
+    const explicavel = isPagavel(doc) || EXPLAIN_DOC_TYPES.has(doc.type);
+    if (!explicavel) return null;
     return (
       <ExplicarGuiaButton
         type={doc.type}
