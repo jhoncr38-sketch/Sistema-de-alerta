@@ -215,13 +215,38 @@ export async function explicarTipo(type: DocType): Promise<Explicacao> {
 }
 
 /**
- * Explica uma guia: se for parcela de parcelamento, explica o parcelamento;
- * senão, explica o tipo do tributo. É o que o endpoint usa.
+ * Explica um documento "Outro" a partir da DESCRIÇÃO que o contador escreveu
+ * (ex.: "Cartão Municipal", "Certidão Negativa"). A IA explica com base nesse
+ * nome. Cache por descrição normalizada — cada nome tem seu próprio texto.
+ */
+export async function explicarDescricao(descricao: string): Promise<Explicacao> {
+  const desc = descricao.trim().slice(0, 120);
+  const chave = `desc:${desc.toLowerCase()}`;
+  const reserva =
+    `${desc}: documento da sua empresa. Em caso de dúvida sobre o que é ou ` +
+    "para que serve, fale com seu contador.";
+  const prompt =
+    `Um contador disponibilizou para o cliente um documento chamado "${desc}". ` +
+    "Explique de forma simples, para o dono de uma pequena empresa no Brasil, o " +
+    "que provavelmente é esse documento e para que serve. Se o nome for ambíguo, " +
+    "seja geral e sugira confirmar com o contador. Não fale em multa ou juros.";
+  return explicarPorChave(chave, prompt, reserva);
+}
+
+/**
+ * Explica uma guia/documento. Roteia:
+ *  - parcela de parcelamento -> explica o parcelamento;
+ *  - "Outro" com descrição   -> explica a partir da descrição;
+ *  - demais tipos            -> explica o tipo. É o que o endpoint usa.
  */
 export async function explicarGuia(
   type: DocType,
   categoria?: string,
+  descricao?: string | null,
 ): Promise<Explicacao> {
   if (categoria === "parcelamento") return explicarParcelamento();
+  if (type === "outro" && descricao && descricao.trim()) {
+    return explicarDescricao(descricao);
+  }
   return explicarTipo(type);
 }

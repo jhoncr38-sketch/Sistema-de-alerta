@@ -161,17 +161,21 @@ export function DocumentsTable({
     return <FilePreviewButton docId={doc.id} fileName={nome} />;
   }
 
-  /** Botão "O que é isso?" — para guias a pagar (explica o tributo/parcelamento)
-   *  e para documentos institucionais conhecidos (explica o documento). Folha e
-   *  "Outro" sem descrição não recebem (não há o que explicar de útil). */
+  /** Botão "O que é isso?" — para guias a pagar (explica o tributo/parcelamento),
+   *  documentos institucionais conhecidos (explica o documento) e "Outro" que
+   *  tenha descrição (a IA explica pela descrição). Folha e "Outro" sem
+   *  descrição não recebem (não há o que explicar de útil). */
   function explainButton(doc: DocumentWithCompany) {
-    const explicavel = isPagavel(doc) || EXPLAIN_DOC_TYPES.has(doc.type);
+    const outroComDescricao = doc.type === "outro" && !!doc.descricao?.trim();
+    const explicavel =
+      isPagavel(doc) || EXPLAIN_DOC_TYPES.has(doc.type) || outroComDescricao;
     if (!explicavel) return null;
     return (
       <ExplicarGuiaButton
         type={doc.type}
         label={tipoLabel(doc)}
         categoria={doc.categoria}
+        descricao={doc.descricao}
       />
     );
   }

@@ -19,12 +19,15 @@ export function ExplicarGuiaButton({
   type,
   label,
   categoria,
+  descricao,
 }: {
   type: DocType;
   /** Rótulo do tipo, exibido como título (ex.: "DAS - Simples Nacional"). */
   label: string;
   /** Categoria da guia. "parcelamento" faz explicar o parcelamento, não o tipo. */
   categoria?: string;
+  /** Descrição livre (tipo "Outro"): a IA explica com base nela. */
+  descricao?: string | null;
 }) {
   const [open, setOpen] = useState(false);
   const [texto, setTexto] = useState<string | null>(null);
@@ -48,7 +51,7 @@ export function ExplicarGuiaButton({
       const res = await fetch("/api/explicar-guia", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type, categoria }),
+        body: JSON.stringify({ type, categoria, descricao }),
       });
       const data = (await res.json().catch(() => ({}))) as { texto?: string };
       if (!res.ok || !data.texto) {

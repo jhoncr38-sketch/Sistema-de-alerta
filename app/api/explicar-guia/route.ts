@@ -30,13 +30,16 @@ export async function POST(request: Request) {
 
   let type = "";
   let categoria = "";
+  let descricao = "";
   try {
     const body = (await request.json()) as {
       type?: unknown;
       categoria?: unknown;
+      descricao?: unknown;
     };
     if (typeof body.type === "string") type = body.type;
     if (typeof body.categoria === "string") categoria = body.categoria;
+    if (typeof body.descricao === "string") descricao = body.descricao;
   } catch {
     return NextResponse.json({ error: "Requisição inválida." }, { status: 400 });
   }
@@ -57,7 +60,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const { texto } = await explicarGuia(type as DocType, categoria);
+    const { texto } = await explicarGuia(type as DocType, categoria, descricao);
     return NextResponse.json({ texto });
   } catch (err) {
     console.error("[explicar-guia] erro:", err);

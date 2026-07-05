@@ -103,6 +103,7 @@ function MesBoletos({ grupo, defaultOpen }: { grupo: Grupo; defaultOpen: boolean
                     type={d.type}
                     label={guiaLabel(d)}
                     categoria={d.categoria}
+                    descricao={d.descricao}
                   />
                 </div>
                 <div className="text-xs text-muted-foreground tabular-nums">
