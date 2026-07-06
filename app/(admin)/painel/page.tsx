@@ -1,6 +1,7 @@
 import { AlertTriangle, BadgeCheck, CalendarClock, CheckCircle2, Clock, Users } from "lucide-react";
 import { AlertBanner } from "@/components/alert-banner";
 import { AssistenteChat } from "@/components/assistente-chat";
+import { CompanyFilterSelect } from "@/components/company-filter-select";
 import { DocumentsTable } from "@/components/documents-table";
 import { MetricCard } from "@/components/metric-card";
 import { PageHeader } from "@/components/page-header";
@@ -65,7 +66,12 @@ const BUCKETS: {
   },
 ];
 
-export default async function PainelPage() {
+export default async function PainelPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ company?: string }>;
+}) {
+  const sp = await searchParams;
   const supabase = await createClient();
   const [{ data: companies }, { data: docsRaw }] = await Promise.all([
     supabase.from("companies").select("id").eq("active", true),
@@ -77,7 +83,27 @@ export default async function PainelPage() {
       .order("due_date", { ascending: true }),
   ]);
 
-  const docs = (docsRaw ?? []) as PainelDoc[];
+  const allDocs = (docsRaw ?? []) as PainelDoc[];
+
+  // Empresas que têm documento (para o filtro), ordenadas por nome.
+  const companyMap = new Map<string, string>();
+  for (const d of allDocs) {
+    if (d.company) {
+      companyMap.set(
+        d.company.id,
+        d.company.nome_fantasia || d.company.razao_social,
+      );
+    }
+  }
+  const companyOptions = Array.from(companyMap, ([id, label]) => ({ id, label }))
+    .sort((a, b) => a.label.localeCompare(b.label, "pt-BR"));
+
+  // Filtro por empresa: quando selecionada, TODO o painel (métricas, alertas e
+  // listas) passa a refletir só os documentos dela.
+  const filtrando = !!sp.company;
+  const docs = filtrando
+    ? allDocs.filter((d) => d.company?.id === sp.company)
+    : allDocs;
   // Boletos e parcelas de parcelamento são "guias a pagar" — entram no resumo.
   const boletos = docs.filter(
     (d) => d.categoria === "boleto" || d.categoria === "parcelamento",
@@ -108,6 +134,8 @@ export default async function PainelPage() {
   const pagos = pagosBoletos.length;
   const pagosValor = pagosBoletos.reduce((s, d) => s + (d.amount ?? 0), 0);
   const totalClientes = companies?.length ?? 0;
+  // Total a pagar em aberto (usado no card quando uma empresa está filtrada).
+  const abertoValor = open.reduce((s, d) => s + (d.amount ?? 0), 0);
 
   // Agrupa as obrigações em aberto por urgência — o contador age primeiro no
   // vermelho (vencidos), depois no amarelo, e o que está mais longe fica discreto.
@@ -128,7 +156,15 @@ export default async function PainelPage() {
       <PageHeader
         title="Dashboard"
         subtitle="Visão geral das obrigações dos seus clientes"
-      />
+      >
+        {companyOptions.length >= 2 ? (
+          <CompanyFilterSelect
+            options={companyOptions}
+            value={sp.company ?? ""}
+            allLabel="Todas as empresas"
+          />
+        ) : null}
+      </PageHeader>
       <div className="space-y-6 p-6">
         {vencidosHoje > 0 ? (
           <AlertBanner tone="danger" icon={<AlertTriangle className="size-4" />}>
@@ -169,7 +205,7 @@ export default async function PainelPage() {
             </p>
             <DocumentsTable
               documents={aguardando}
-              showClient
+              showClient={!filtrando}
               showDownload
               showPaid
               isAdmin
@@ -179,13 +215,23 @@ export default async function PainelPage() {
         ) : null}
 
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <MetricCard
-            label="Clientes ativos"
-            value={totalClientes}
-            sub="empresas"
-            tone="info"
-            icon={<Users className="size-4" />}
-          />
+          {filtrando ? (
+            <MetricCard
+              label="Total em aberto"
+              value={formatCurrency(abertoValor)}
+              sub={`${open.length} guia${open.length === 1 ? "" : "s"} a pagar`}
+              tone="info"
+              icon={<CalendarClock className="size-4" />}
+            />
+          ) : (
+            <MetricCard
+              label="Clientes ativos"
+              value={totalClientes}
+              sub="empresas"
+              tone="info"
+              icon={<Users className="size-4" />}
+            />
+          )}
           <MetricCard
             label="Vencidos / hoje"
             value={vencidosHoje}
@@ -238,7 +284,7 @@ export default async function PainelPage() {
                   </div>
                   <DocumentsTable
                     documents={items}
-                    showClient
+                    showClient={!filtrando}
                     showDownload
                     showPaid
                     isAdmin

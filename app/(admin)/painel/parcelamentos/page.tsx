@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { PageHeader } from "@/components/page-header";
 import { ParcelamentoCard } from "@/components/parcelamento-card";
+import { CompanyFilterSelect } from "@/components/company-filter-select";
 import { summarizePlan, type ParcelaLike } from "@/lib/parcelamento";
 import { createClient } from "@/lib/supabase/server";
 
@@ -16,7 +17,12 @@ interface PlanRow {
   parcelas: ParcelaLike[];
 }
 
-export default async function ParcelamentosPage() {
+export default async function ParcelamentosPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ company?: string }>;
+}) {
+  const sp = await searchParams;
   const supabase = await createClient();
   const { data } = await supabase
     .from("installment_plans")
@@ -27,12 +33,41 @@ export default async function ParcelamentosPage() {
 
   const plans = (data ?? []) as unknown as PlanRow[];
 
+  // Empresas que têm parcelamento (o filtro só lista quem realmente aparece
+  // aqui — não polui com clientes sem nenhum plano). Ordenadas por nome.
+  const companyMap = new Map<string, string>();
+  for (const p of plans) {
+    if (p.company) {
+      companyMap.set(
+        p.company.id,
+        p.company.nome_fantasia || p.company.razao_social,
+      );
+    }
+  }
+  const companyOptions = Array.from(companyMap, ([id, label]) => ({
+    id,
+    label,
+  })).sort((a, b) => a.label.localeCompare(b.label, "pt-BR"));
+
+  // Aplica o filtro selecionado (empresa ativa via ?company=<id>).
+  const filtrados = sp.company
+    ? plans.filter((p) => p.company?.id === sp.company)
+    : plans;
+
   return (
     <>
       <PageHeader
         title="Parcelamentos"
         subtitle="Parcelamentos de débitos por cliente"
       >
+        {/* O filtro só aparece quando há 2+ empresas com parcelamento. */}
+        {companyOptions.length >= 2 ? (
+          <CompanyFilterSelect
+            options={companyOptions}
+            value={sp.company ?? ""}
+            allLabel="Todas as empresas"
+          />
+        ) : null}
         <Button
           size="sm"
           nativeButton={false}
@@ -57,9 +92,13 @@ export default async function ParcelamentosPage() {
             </Link>
             .
           </Card>
+        ) : filtrados.length === 0 ? (
+          <Card className="px-6 py-12 text-center text-sm text-muted-foreground">
+            Nenhum parcelamento para esta empresa.
+          </Card>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {plans.map((plan) => (
+            {filtrados.map((plan) => (
               <ParcelamentoCard
                 key={plan.id}
                 nome={plan.nome}
