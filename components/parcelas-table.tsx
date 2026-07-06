@@ -1,5 +1,6 @@
 import { Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { AnexarBoletoParcela } from "@/components/anexar-boleto-parcela";
 import { ComprovanteButton } from "@/components/comprovante-button";
 import { ConfirmPaymentButtons } from "@/components/confirm-payment-buttons";
 import { DeleteParcelaButton } from "@/components/delete-parcela-button";
@@ -94,7 +95,14 @@ export function ParcelasTable({
     !(p.status === "aguardando" && !isAdmin);
 
   function downloadButton(doc: DocumentRow) {
-    // Parcela de débito automático não tem arquivo — nada para baixar.
+    // Débito automático, no painel do contador: pode anexar o boleto quando o
+    // débito não caiu (e baixar/trocar/remover depois). Cobre os dois estados.
+    if (debitoAutomatico && isAdmin) {
+      return (
+        <AnexarBoletoParcela docId={doc.id} hasBoleto={!!doc.file_path} />
+      );
+    }
+    // Sem arquivo (ex.: cliente vendo parcela de débito ainda sem boleto): nada.
     if (!doc.file_path) return null;
     return (
       <Button

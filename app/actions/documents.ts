@@ -275,6 +275,96 @@ export async function payWithComprovante(docId: string, formData: FormData) {
   revalidatePagamentos();
 }
 
+const BOLETO_MAX = 10 * 1024 * 1024; // 10MB
+const BOLETO_TIPOS = new Set(["application/pdf", "image/png", "image/jpeg"]);
+
+/**
+ * Anexa (ou substitui) o boleto de uma PARCELA de débito automático. Uso: o
+ * débito não caiu e o contador precisa mandar o boleto para o cliente pagar
+ * avulso. Só o contador (admin) — a RPC set_parcela_boleto valida no banco.
+ * Grava file_path/file_name (é o mesmo campo do "Baixar" já existente).
+ */
+export async function attachBoletoParcela(docId: string, formData: FormData) {
+  await requireAdmin();
+  const supabase = await createClient();
+
+  const { data: doc } = await supabase
+    .from("documents")
+    .select("id,company_id,categoria,file_path")
+    .eq("id", docId)
+    .single();
+  if (!doc) throw new Error("Parcela não encontrada ou sem permissão.");
+  if (doc.categoria !== "parcelamento") {
+    throw new Error("Só parcelas de parcelamento aceitam boleto por aqui.");
+  }
+
+  const file = formData.get("file");
+  if (!(file instanceof File) || file.size === 0) {
+    throw new Error("Selecione um arquivo.");
+  }
+  if (file.size > BOLETO_MAX) {
+    throw new Error("O boleto é muito grande (máx. 10MB).");
+  }
+  if (file.type && !BOLETO_TIPOS.has(file.type)) {
+    throw new Error("Formato inválido. Envie PDF, PNG ou JPG.");
+  }
+
+  const safeName = file.name.replace(/[^\w.\-]+/g, "_");
+  const path = `${doc.company_id}/parcelas/${docId}-${safeName}`;
+
+  const admin = createAdminClient();
+  const { error: upErr } = await admin.storage
+    .from("boletos")
+    .upload(path, file, {
+      contentType: file.type || "application/octet-stream",
+      upsert: true,
+    });
+  if (upErr) throw new Error(`Falha ao enviar o boleto: ${upErr.message}`);
+
+  const { error: rpcErr } = await supabase.rpc("set_parcela_boleto", {
+    doc_id: docId,
+    path,
+    name: file.name,
+  });
+  if (rpcErr) {
+    await admin.storage.from("boletos").remove([path]); // desfaz o órfão
+    throw new Error(rpcErr.message);
+  }
+
+  // Se havia um boleto em outro caminho (nome diferente), remove o antigo.
+  if (doc.file_path && doc.file_path !== path) {
+    await admin.storage.from("boletos").remove([doc.file_path]);
+  }
+
+  revalidatePagamentos();
+}
+
+/** Remove o boleto anexado a uma parcela (volta a "sem boleto"). Só admin. */
+export async function removeBoletoParcela(docId: string) {
+  await requireAdmin();
+  const supabase = await createClient();
+
+  const { data: doc } = await supabase
+    .from("documents")
+    .select("file_path")
+    .eq("id", docId)
+    .single();
+  if (!doc) throw new Error("Parcela não encontrada ou sem permissão.");
+
+  const { error } = await supabase.rpc("set_parcela_boleto", {
+    doc_id: docId,
+    path: null,
+    name: null,
+  });
+  if (error) throw new Error(error.message);
+
+  if (doc.file_path) {
+    await createAdminClient().storage.from("boletos").remove([doc.file_path]);
+  }
+
+  revalidatePagamentos();
+}
+
 /**
  * Liga/desliga a exigência de comprovante de uma guia. Só o contador (admin) —
  * a autorização é feita no banco por set_document_require_proof.
