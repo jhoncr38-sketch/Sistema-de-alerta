@@ -14,6 +14,7 @@ import {
   LayoutDashboard,
   Lock,
   LogOut,
+  MessageCircle,
   Menu,
   Settings,
   TrendingUp,
@@ -54,6 +55,7 @@ const ADMIN_NAV: NavItem[] = [
 
 const CLIENT_NAV: NavItem[] = [
   { label: "Início", href: "/portal", icon: LayoutDashboard },
+  { label: "Converse com sua empresa", href: "/portal/conversar", icon: MessageCircle },
   { label: "Meu faturamento", href: "/portal/faturamento", icon: TrendingUp },
   { label: "Meus boletos", href: "/portal/boletos", icon: FileText },
   { label: "Parcelamentos", href: "/portal/parcelamentos", icon: Layers },
@@ -83,6 +85,7 @@ export function AppSidebar({
   companies = [],
   activeCompanyId = null,
   rewardsEnabled = true,
+  chatEnabled = true,
 }: {
   role: Role;
   userName: string;
@@ -93,12 +96,17 @@ export function AppSidebar({
   /** Empresas que o cliente pode ver (o seletor só aparece com 2+). */
   companies?: Company[];
   activeCompanyId?: string | null;
-  /** SJ Rewards ligado para a empresa ativa; false esconde o item do menu. */
+  /** SJ Rewards ligado para a empresa ativa; false trava o item do menu. */
   rewardsEnabled?: boolean;
+  /** Aba "Converse com sua empresa" ligada; false remove o item do menu. */
+  chatEnabled?: boolean;
 }) {
   const pathname = usePathname();
   const router = useRouter();
-  const items = role === "admin" ? ADMIN_NAV : CLIENT_NAV;
+  // Aba de conversa desligada para a empresa ativa: remove o item do menu.
+  const items = (role === "admin" ? ADMIN_NAV : CLIENT_NAV).filter(
+    (item) => chatEnabled || item.href !== "/portal/conversar",
+  );
   const [open, setOpen] = useState(false);
 
   // Fecha o drawer com a tecla Esc.

@@ -1,4 +1,9 @@
 import { chatComplete, isAiConfigured } from "@/lib/ai/openai";
+import {
+  acoesParaContexto,
+  detectarAcoes,
+  type AcaoCard,
+} from "@/lib/ai/acoes";
 import { blocosAmpliados } from "@/lib/ai/contexto-empresa";
 import { docTypeLabel, isTributo } from "@/lib/constants";
 import { getUrgency } from "@/lib/dates";
@@ -420,28 +425,7 @@ export async function perguntarCliente(
   const q = pergunta.trim().slice(0, MAX_PERGUNTA);
   if (!q) return { disponivel: true, resposta: "Faça uma pergunta 🙂" };
 
-  const supabase = createAdminClient();
-  // Guias (para o bloco de boletos/parcelamentos) + flag de rewards da empresa.
-  const [{ data }, { data: company }] = await Promise.all([
-    supabase
-      .from("documents")
-      .select(DOC_SELECT)
-      .eq("company_id", companyId)
-      .in("categoria", ["boleto", "parcelamento"]),
-    supabase
-      .from("companies")
-      .select("rewards_enabled")
-      .eq("id", companyId)
-      .maybeSingle(),
-  ]);
-
-  // Contexto = boletos/parcelamentos (como antes) + faturamento, rewards e
-  // folha/documentos. Assim a IA responde sobre a empresa toda, não só guias.
-  const rewardsEnabled = company?.rewards_enabled !== false;
-  const blocoGuias = contextoCliente(normalizeDocs(data), companyName, today);
-  const extras = await blocosAmpliados(companyId, companyName, rewardsEnabled);
-  const ctx = [blocoGuias, ...extras].join("\n\n");
-
+  const ctx = await montarContextoCliente(companyId, companyName, today);
   const resposta = await chatComplete(
     [
       { role: "system", content: systemPrompt("cliente") + focoDaTela(tela) },
@@ -455,6 +439,102 @@ export async function perguntarCliente(
     resposta:
       resposta ??
       "Não consegui responder agora. Tente novamente em instantes ou fale com seu contador.",
+  };
+}
+
+/**
+ * Monta o CONTEXTO factual completo de um cliente (boletos/parcelamentos +
+ * faturamento, rewards, folha e documentos). Reusado por perguntarCliente
+ * (turno único) e conversarCliente (multi-turno).
+ */
+async function montarContextoCliente(
+  companyId: string,
+  companyName: string,
+  today: Date,
+): Promise<string> {
+  const supabase = createAdminClient();
+  const [{ data }, { data: company }] = await Promise.all([
+    supabase
+      .from("documents")
+      .select(DOC_SELECT)
+      .eq("company_id", companyId)
+      .in("categoria", ["boleto", "parcelamento"]),
+    supabase
+      .from("companies")
+      .select("rewards_enabled")
+      .eq("id", companyId)
+      .maybeSingle(),
+  ]);
+
+  const rewardsEnabled = company?.rewards_enabled !== false;
+  const blocoGuias = contextoCliente(normalizeDocs(data), companyName, today);
+  const extras = await blocosAmpliados(companyId, companyName, rewardsEnabled);
+  return [blocoGuias, ...extras].join("\n\n");
+}
+
+/** Um turno da conversa vindo do cliente (histórico do chat). */
+export interface TurnoChat {
+  autor: "voce" | "assistente";
+  texto: string;
+}
+
+const MAX_HISTORICO = 8; // últimos turnos considerados (limita custo/tokens)
+
+/**
+ * Conversa CONTÍNUA da aba "Converse com sua empresa": diferente de
+ * perguntarCliente (turno único), mantém o histórico recente para respostas em
+ * contexto ("e o mês passado?"). O CONTEXTO factual é reinjetado a cada turno
+ * (sempre atual) e o histórico entra como mensagens user/assistant.
+ */
+export interface ConversaResposta extends AssistenteResposta {
+  /** Cartões de ação (botões) que o front renderiza abaixo da resposta. */
+  acoes: AcaoCard[];
+}
+
+export async function conversarCliente(
+  pergunta: string,
+  historico: TurnoChat[],
+  companyId: string,
+  companyName: string,
+  today: Date = new Date(),
+): Promise<ConversaResposta> {
+  if (!isAiConfigured()) return { disponivel: false, resposta: null, acoes: [] };
+  const q = pergunta.trim().slice(0, MAX_PERGUNTA);
+  if (!q) return { disponivel: true, resposta: "Faça uma pergunta 🙂", acoes: [] };
+
+  // Contexto factual + ações (busca real no banco) em paralelo.
+  const [ctx, acoes] = await Promise.all([
+    montarContextoCliente(companyId, companyName, today),
+    detectarAcoes(q, companyId),
+  ]);
+  const blocoAcoes = acoesParaContexto(acoes);
+
+  const msgsHistorico = historico
+    .slice(-MAX_HISTORICO)
+    .map((t) => ({
+      role: (t.autor === "voce" ? "user" : "assistant") as "user" | "assistant",
+      content: t.texto.slice(0, MAX_PERGUNTA),
+    }));
+
+  const resposta = await chatComplete(
+    [
+      { role: "system", content: systemPrompt("cliente") },
+      {
+        role: "user",
+        content: `CONTEXTO (atualizado):\n${ctx}${blocoAcoes ? `\n\n${blocoAcoes}` : ""}`,
+      },
+      ...msgsHistorico,
+      { role: "user", content: q },
+    ],
+    { temperature: 0.2, maxTokens: 450 },
+  );
+
+  return {
+    disponivel: true,
+    resposta:
+      resposta ??
+      "Não consegui responder agora. Tente novamente em instantes ou fale com seu contador.",
+    acoes,
   };
 }
 

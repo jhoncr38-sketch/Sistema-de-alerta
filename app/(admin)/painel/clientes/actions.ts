@@ -351,6 +351,29 @@ export async function setCompanyRewardsEnabled(
   revalidatePath("/painel/rewards");
 }
 
+/**
+ * Liga ou desliga a aba "Converse com sua empresa" de uma EMPRESA. Quando
+ * desligado (chat_enabled=false), o item some do menu do portal e a página fica
+ * indisponível para aquela empresa. Não afeta o assistente flutuante ("Dúvidas?"),
+ * que segue disponível — esta flag governa só a ABA dedicada de conversa.
+ */
+export async function setCompanyChatEnabled(
+  companyId: string,
+  enabled: boolean,
+) {
+  await requireAdmin();
+  if (!companyId) return;
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("companies")
+    .update({ chat_enabled: enabled })
+    .eq("id", companyId);
+  if (error) throw new Error(error.message);
+
+  revalidateClientes();
+}
+
 /** Recusa um cadastro pendente. */
 export async function rejectClient(formData: FormData) {
   await requireAdmin();

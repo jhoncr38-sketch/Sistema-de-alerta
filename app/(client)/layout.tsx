@@ -1,5 +1,4 @@
 import { AppSidebar } from "@/components/app-sidebar";
-import { AssistentePortal } from "@/components/assistente-portal";
 import { SiteFooter } from "@/components/site-footer";
 import { requireClient } from "@/lib/auth";
 import { getBranding } from "@/lib/branding";
@@ -40,14 +39,12 @@ export default async function ClientLayout({
         companies={companies}
         activeCompanyId={active?.id ?? null}
         rewardsEnabled={active?.rewards_enabled !== false}
+        chatEnabled={active?.chat_enabled !== false}
       />
       <div className="flex min-w-0 flex-1 flex-col bg-muted/30">
         {children}
         <SiteFooter />
       </div>
-      {/* Botão flutuante do assistente em todas as telas do portal, com o
-          contexto da tela atual (detectado pela URL). */}
-      <AssistentePortal />
     </div>
   );
 }
