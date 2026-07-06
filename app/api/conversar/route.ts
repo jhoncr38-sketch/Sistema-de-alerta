@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { conversarCliente, type TurnoChat } from "@/lib/ai/assistente";
 import { rateLimit } from "@/lib/ai/rate-limit";
+import { consumirUsoIA } from "@/lib/ai/usage";
 import { getUserAndProfile } from "@/lib/auth";
 import { getClientCompanyContext } from "@/lib/companies";
 
@@ -81,6 +82,19 @@ export async function POST(request: Request) {
         error: `Muitas perguntas em pouco tempo. Aguarde ${rl.retryAfterSec}s e tente de novo.`,
       },
       { status: 429, headers: { "Retry-After": String(rl.retryAfterSec) } },
+    );
+  }
+
+  // Teto MENSAL por empresa (controle de custo). Consome 1 uso; se estourou,
+  // não chama a OpenAI (custo zero) e avisa que renova no mês que vem.
+  const uso = await consumirUsoIA(active.id);
+  if (!uso.allowed) {
+    return NextResponse.json(
+      {
+        error:
+          "Você atingiu o limite de perguntas deste mês. Ele renova no início do próximo mês — ou fale com seu contador.",
+      },
+      { status: 429 },
     );
   }
 

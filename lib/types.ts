@@ -33,6 +33,7 @@ export interface Company {
   active: boolean;
   rewards_enabled: boolean; // false = SJ Rewards desligado pelo contador para esta empresa
   chat_enabled: boolean; // false = aba "Converse com sua empresa" desligada pelo contador
+  ai_monthly_limit: number | null; // teto de perguntas/mês à IA (0=ilimitado, null=padrão global)
   created_at: string;
 }
 

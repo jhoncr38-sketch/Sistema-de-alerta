@@ -5,6 +5,7 @@ import {
   type TelaContexto,
 } from "@/lib/ai/assistente";
 import { rateLimit } from "@/lib/ai/rate-limit";
+import { consumirUsoIA } from "@/lib/ai/usage";
 import { getUserAndProfile } from "@/lib/auth";
 import { getClientCompanyContext } from "@/lib/companies";
 
@@ -87,6 +88,20 @@ export async function POST(request: Request) {
           "Você ainda não tem uma empresa vinculada. Fale com seu contador.",
       });
     }
+
+    // Teto MENSAL por empresa (só para o cliente; o contador não conta). Se
+    // estourou, não chama a OpenAI (custo zero).
+    const uso = await consumirUsoIA(active.id);
+    if (!uso.allowed) {
+      return NextResponse.json(
+        {
+          error:
+            "Você atingiu o limite de perguntas deste mês. Ele renova no início do próximo mês — ou fale com seu contador.",
+        },
+        { status: 429 },
+      );
+    }
+
     const companyName = active.nome_fantasia || active.razao_social || "sua empresa";
     const r = await perguntarCliente(pergunta, active.id, companyName, tela);
     return NextResponse.json(r);

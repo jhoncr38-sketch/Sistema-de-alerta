@@ -374,6 +374,36 @@ export async function setCompanyChatEnabled(
   revalidateClientes();
 }
 
+/**
+ * Define o teto MENSAL de perguntas à IA de uma EMPRESA (controle de custo).
+ *   • número > 0 = teto de perguntas/mês
+ *   • 0          = ilimitado (VIP)
+ *   • null       = usa o padrão global do código (AI_DEFAULT_LIMIT)
+ * Só admin. Não apaga o uso já contado — só muda o teto dali em diante.
+ */
+export async function setCompanyAiLimit(
+  companyId: string,
+  limit: number | null,
+) {
+  await requireAdmin();
+  if (!companyId) return;
+
+  // Sanitiza: inteiro >= 0, ou null (padrão). Negativo/ inválido vira null.
+  const value =
+    limit === null || !Number.isFinite(limit) || limit < 0
+      ? null
+      : Math.floor(limit);
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("companies")
+    .update({ ai_monthly_limit: value })
+    .eq("id", companyId);
+  if (error) throw new Error(error.message);
+
+  revalidateClientes();
+}
+
 /** Recusa um cadastro pendente. */
 export async function rejectClient(formData: FormData) {
   await requireAdmin();

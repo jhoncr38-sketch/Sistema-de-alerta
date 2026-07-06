@@ -7,6 +7,7 @@ import { PageHeader } from "@/components/page-header";
 import { ClientActionsMenu } from "@/components/client-actions-menu";
 import { CompanyRewardsToggle } from "@/components/company-rewards-toggle";
 import { CompanyChatToggle } from "@/components/company-chat-toggle";
+import { CompanyAiLimit } from "@/components/company-ai-limit";
 import { CnpjInput } from "@/components/masked-inputs";
 import { ConfirmActionButton } from "@/components/confirm-action-button";
 import { ConfirmDeleteButton } from "@/components/confirm-delete-button";
@@ -27,6 +28,7 @@ import {
   setClientActive,
   setCompanyRewardsEnabled,
   setCompanyChatEnabled,
+  setCompanyAiLimit,
 } from "./actions";
 
 const selectClass =
@@ -254,6 +256,7 @@ export default async function ClientesPage() {
                   <th className="px-4 py-2.5 font-medium">Clientes com acesso</th>
                   <th className="px-4 py-2.5 font-medium">SJ Rewards</th>
                   <th className="px-4 py-2.5 font-medium">Converse c/ empresa</th>
+                  <th className="px-4 py-2.5 font-medium">IA / mês</th>
                   <th className="px-4 py-2.5 font-medium" />
                 </tr>
               </thead>
@@ -261,7 +264,7 @@ export default async function ClientesPage() {
                 {companies.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={7}
+                      colSpan={8}
                       className="px-4 py-8 text-center text-muted-foreground"
                     >
                       Nenhuma empresa cadastrada. Use “Cadastrar empresa” para
@@ -302,6 +305,13 @@ export default async function ClientesPage() {
                             enabled={co.chat_enabled !== false}
                             companyName={nome}
                             toggleAction={setCompanyChatEnabled.bind(null, co.id)}
+                          />
+                        </td>
+                        <td className="px-4 py-3">
+                          <CompanyAiLimit
+                            value={co.ai_monthly_limit ?? null}
+                            companyName={nome}
+                            saveAction={setCompanyAiLimit.bind(null, co.id)}
                           />
                         </td>
                         <td className="px-4 py-3">
