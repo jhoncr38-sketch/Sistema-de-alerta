@@ -1,5 +1,4 @@
 import { AlertTriangle, CalendarClock, CheckCircle2, Info } from "lucide-react";
-import { AssistenteChat } from "@/components/assistente-chat";
 import { DocumentsTable } from "@/components/documents-table";
 import { MetricCard } from "@/components/metric-card";
 import { PageHeader } from "@/components/page-header";
@@ -135,7 +134,6 @@ export default async function PortalHome() {
           com seu contador.
         </div>
       </div>
-      <AssistenteChat scope="cliente" />
     </>
   );
 }

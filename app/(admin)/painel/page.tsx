@@ -1,6 +1,5 @@
 import { AlertTriangle, BadgeCheck, CalendarClock, CheckCircle2, Clock, Users } from "lucide-react";
 import { AlertBanner } from "@/components/alert-banner";
-import { AssistenteChat } from "@/components/assistente-chat";
 import { DocumentsTable } from "@/components/documents-table";
 import { MetricCard } from "@/components/metric-card";
 import { PageHeader } from "@/components/page-header";
@@ -256,7 +255,6 @@ export default async function PainelPage() {
           )}
         </section>
       </div>
-      <AssistenteChat scope="contador" />
     </>
   );
 }

@@ -1,4 +1,5 @@
 import { AppSidebar } from "@/components/app-sidebar";
+import { AssistenteChat } from "@/components/assistente-chat";
 import { SiteFooter } from "@/components/site-footer";
 import { requireAdmin } from "@/lib/auth";
 import { getBranding } from "@/lib/branding";
@@ -26,6 +27,8 @@ export default async function AdminLayout({
         {children}
         <SiteFooter />
       </div>
+      {/* Assistente do contador (visão de carteira) em todas as telas do painel. */}
+      <AssistenteChat scope="contador" />
     </div>
   );
 }

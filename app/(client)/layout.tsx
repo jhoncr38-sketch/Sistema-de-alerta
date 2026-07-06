@@ -1,4 +1,5 @@
 import { AppSidebar } from "@/components/app-sidebar";
+import { AssistentePortal } from "@/components/assistente-portal";
 import { SiteFooter } from "@/components/site-footer";
 import { requireClient } from "@/lib/auth";
 import { getBranding } from "@/lib/branding";
@@ -44,6 +45,9 @@ export default async function ClientLayout({
         {children}
         <SiteFooter />
       </div>
+      {/* Botão flutuante do assistente em todas as telas do portal, com o
+          contexto da tela atual (detectado pela URL). */}
+      <AssistentePortal />
     </div>
   );
 }
