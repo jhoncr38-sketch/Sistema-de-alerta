@@ -24,6 +24,26 @@ interface Msg {
 
 export type AssistenteScope = "cliente" | "contador";
 
+/** Tela em que o cliente está — a IA foca a resposta nesse contexto. */
+export type AssistenteTela =
+  | "geral"
+  | "boletos"
+  | "faturamento"
+  | "documentos"
+  | "folha"
+  | "rewards"
+  | "parcelamentos";
+
+/** Sugestões por tela (cliente). Sem tela específica, cai nas gerais. */
+const SUGESTOES_TELA: Partial<Record<AssistenteTela, string[]>> = {
+  boletos: ["Qual boleto vence primeiro?", "Tenho algo vencido?", "Quanto devo este mês?"],
+  faturamento: ["Como está meu faturamento?", "Meu faturamento cresceu?", "Qual minha carga tributária?"],
+  documentos: ["Quais documentos tenho disponíveis?", "Meu contrato social está aqui?"],
+  folha: ["Minha folha já está pronta?", "De qual mês é a folha disponível?"],
+  rewards: ["Quanto tenho no SJ Rewards?", "Qual meu nível?", "Quais missões faltam?"],
+  parcelamentos: ["Como estão meus parcelamentos?", "Qual parcela vence agora?"],
+};
+
 const SUGESTOES: Record<AssistenteScope, string[]> = {
   cliente: [
     "Qual boleto vence primeiro?",
@@ -45,9 +65,11 @@ const SUGESTOES: Record<AssistenteScope, string[]> = {
 
 export function AssistentePanel({
   scope = "cliente",
+  tela = "geral",
   className,
 }: {
   scope?: AssistenteScope;
+  tela?: AssistenteTela;
   className?: string;
 }) {
   const [pergunta, setPergunta] = useState("");
@@ -76,7 +98,8 @@ export function AssistentePanel({
       const res = await fetch("/api/assistente", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pergunta: q }),
+        // `tela` só faz efeito no escopo cliente (o servidor ignora p/ contador).
+        body: JSON.stringify({ pergunta: q, tela }),
       });
       const data = (await res.json().catch(() => ({}))) as {
         resposta?: string;
@@ -140,7 +163,12 @@ export function AssistentePanel({
               vencimentos — pode digitar livremente ou tocar num exemplo:
             </p>
             <div className="flex flex-wrap gap-2">
-              {SUGESTOES[scope].map((s) => (
+              {/* Cliente numa tela específica vê sugestões daquele contexto;
+                  senão (ou contador) cai nas gerais do escopo. */}
+              {(scope === "cliente" && tela !== "geral"
+                ? (SUGESTOES_TELA[tela] ?? SUGESTOES.cliente)
+                : SUGESTOES[scope]
+              ).map((s) => (
                 <button
                   key={s}
                   type="button"
@@ -224,7 +252,13 @@ export function AssistentePanel({
  * Botão flutuante que abre o assistente. Colocado só na aba Início.
  * Fechado: pílula com faísca + rótulo (o rótulo some no mobile, vira só ícone).
  */
-export function AssistenteChat({ scope = "cliente" }: { scope?: AssistenteScope }) {
+export function AssistenteChat({
+  scope = "cliente",
+  tela = "geral",
+}: {
+  scope?: AssistenteScope;
+  tela?: AssistenteTela;
+}) {
   const [aberto, setAberto] = useState(false);
 
   // Fecha com Esc.
@@ -284,7 +318,7 @@ export function AssistenteChat({ scope = "cliente" }: { scope?: AssistenteScope 
             </div>
           </div>
 
-          <AssistentePanel scope={scope} className="min-h-0 flex-1" />
+          <AssistentePanel scope={scope} tela={tela} className="min-h-0 flex-1" />
         </div>
       ) : null}
     </>

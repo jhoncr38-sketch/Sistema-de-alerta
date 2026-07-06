@@ -1,9 +1,24 @@
 import { chatComplete, isAiConfigured } from "@/lib/ai/openai";
+import { blocosAmpliados } from "@/lib/ai/contexto-empresa";
 import { docTypeLabel, isTributo } from "@/lib/constants";
 import { getUrgency } from "@/lib/dates";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { DocType } from "@/lib/types";
+
+/**
+ * Tela em que o cliente está quando pergunta. Ajusta o foco da resposta e as
+ * sugestões — a IA "sabe" o contexto da página. "geral" é a aba dedicada / sem
+ * tela específica.
+ */
+export type TelaContexto =
+  | "geral"
+  | "boletos"
+  | "faturamento"
+  | "documentos"
+  | "folha"
+  | "rewards"
+  | "parcelamentos";
 
 /**
  * Assistente de dúvidas em linguagem natural.
@@ -330,6 +345,50 @@ function systemPrompt(escopo: "cliente" | "contador"): string {
   );
 }
 
+/** Dica de foco conforme a tela em que o cliente está (parte do system prompt). */
+function focoDaTela(tela: TelaContexto): string {
+  switch (tela) {
+    case "boletos":
+      return " O cliente está na tela de BOLETOS: priorize guias a pagar, vencimentos e valores.";
+    case "faturamento":
+      return " O cliente está na tela de FATURAMENTO: priorize receita, tributos, carga e tendências (crescimento).";
+    case "documentos":
+      return " O cliente está na tela de DOCUMENTOS: priorize documentos disponíveis e onde encontrá-los.";
+    case "folha":
+      return " O cliente está na tela de FOLHA: priorize a folha de pagamento e sua disponibilidade.";
+    case "rewards":
+      return " O cliente está na tela de SJ REWARDS: priorize saldo de SJ Coins, nível, XP e missões.";
+    case "parcelamentos":
+      return " O cliente está na tela de PARCELAMENTOS: priorize planos, parcelas pagas/a vencer e risco.";
+    default:
+      return "";
+  }
+}
+
+/** Sugestões contextuais por tela (client scope). Cai nas gerais quando não há tela. */
+export function sugestoesPorTela(tela: TelaContexto): string[] {
+  switch (tela) {
+    case "boletos":
+      return ["Qual boleto vence primeiro?", "Tenho algo vencido?", "Quanto devo este mês?"];
+    case "faturamento":
+      return ["Como está meu faturamento?", "Meu faturamento cresceu?", "Qual minha carga tributária?"];
+    case "documentos":
+      return ["Quais documentos tenho disponíveis?", "Meu contrato social está aqui?"];
+    case "folha":
+      return ["Minha folha já está pronta?", "De qual mês é a folha disponível?"];
+    case "rewards":
+      return ["Quanto tenho no SJ Rewards?", "Qual meu nível?", "Quais missões faltam?"];
+    case "parcelamentos":
+      return ["Como estão meus parcelamentos?", "Qual parcela vence agora?"];
+    default:
+      return [
+        "Quanto paguei de imposto este ano?",
+        "Tenho boletos vencidos?",
+        "Como está meu faturamento?",
+      ];
+  }
+}
+
 /** Sugestões de perguntas exibidas na interface (por escopo). */
 export function sugestoes(escopo: "cliente" | "contador"): string[] {
   if (escopo === "contador") {
@@ -354,6 +413,7 @@ export async function perguntarCliente(
   pergunta: string,
   companyId: string,
   companyName: string,
+  tela: TelaContexto = "geral",
   today: Date = new Date(),
 ): Promise<AssistenteResposta> {
   if (!isAiConfigured()) return { disponivel: false, resposta: null };
@@ -361,16 +421,30 @@ export async function perguntarCliente(
   if (!q) return { disponivel: true, resposta: "Faça uma pergunta 🙂" };
 
   const supabase = createAdminClient();
-  const { data } = await supabase
-    .from("documents")
-    .select(DOC_SELECT)
-    .eq("company_id", companyId)
-    .in("categoria", ["boleto", "parcelamento"]);
+  // Guias (para o bloco de boletos/parcelamentos) + flag de rewards da empresa.
+  const [{ data }, { data: company }] = await Promise.all([
+    supabase
+      .from("documents")
+      .select(DOC_SELECT)
+      .eq("company_id", companyId)
+      .in("categoria", ["boleto", "parcelamento"]),
+    supabase
+      .from("companies")
+      .select("rewards_enabled")
+      .eq("id", companyId)
+      .maybeSingle(),
+  ]);
 
-  const ctx = contextoCliente(normalizeDocs(data), companyName, today);
+  // Contexto = boletos/parcelamentos (como antes) + faturamento, rewards e
+  // folha/documentos. Assim a IA responde sobre a empresa toda, não só guias.
+  const rewardsEnabled = company?.rewards_enabled !== false;
+  const blocoGuias = contextoCliente(normalizeDocs(data), companyName, today);
+  const extras = await blocosAmpliados(companyId, companyName, rewardsEnabled);
+  const ctx = [blocoGuias, ...extras].join("\n\n");
+
   const resposta = await chatComplete(
     [
-      { role: "system", content: systemPrompt("cliente") },
+      { role: "system", content: systemPrompt("cliente") + focoDaTela(tela) },
       { role: "user", content: `CONTEXTO:\n${ctx}\n\nPERGUNTA: ${q}` },
     ],
     { temperature: 0.2, maxTokens: 400 },

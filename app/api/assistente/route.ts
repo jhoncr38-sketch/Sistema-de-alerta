@@ -1,8 +1,23 @@
 import { NextResponse } from "next/server";
-import { perguntarCliente, perguntarContador } from "@/lib/ai/assistente";
+import {
+  perguntarCliente,
+  perguntarContador,
+  type TelaContexto,
+} from "@/lib/ai/assistente";
 import { rateLimit } from "@/lib/ai/rate-limit";
 import { getUserAndProfile } from "@/lib/auth";
 import { getClientCompanyContext } from "@/lib/companies";
+
+/** Telas aceitas no body (valida a entrada do cliente antes de repassar). */
+const TELAS_VALIDAS = new Set<string>([
+  "geral",
+  "boletos",
+  "faturamento",
+  "documentos",
+  "folha",
+  "rewards",
+  "parcelamentos",
+]);
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
@@ -29,9 +44,16 @@ export async function POST(request: Request) {
   }
 
   let pergunta = "";
+  let tela: TelaContexto = "geral";
   try {
-    const body = (await request.json()) as { pergunta?: unknown };
+    const body = (await request.json()) as {
+      pergunta?: unknown;
+      tela?: unknown;
+    };
     if (typeof body.pergunta === "string") pergunta = body.pergunta;
+    if (typeof body.tela === "string" && TELAS_VALIDAS.has(body.tela)) {
+      tela = body.tela as TelaContexto;
+    }
   } catch {
     return NextResponse.json({ error: "Requisição inválida." }, { status: 400 });
   }
@@ -66,7 +88,7 @@ export async function POST(request: Request) {
       });
     }
     const companyName = active.nome_fantasia || active.razao_social || "sua empresa";
-    const r = await perguntarCliente(pergunta, active.id, companyName);
+    const r = await perguntarCliente(pergunta, active.id, companyName, tela);
     return NextResponse.json(r);
   } catch (err) {
     console.error("[assistente] erro:", err);
