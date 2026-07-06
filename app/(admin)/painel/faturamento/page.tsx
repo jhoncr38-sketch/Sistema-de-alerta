@@ -1,5 +1,5 @@
-import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { CompanyFilterSelect } from "@/components/company-filter-select";
 import { FaturamentoDashboard } from "@/components/faturamento-dashboard";
 import { PageHeader } from "@/components/page-header";
 import {
@@ -9,9 +9,6 @@ import {
 } from "@/lib/faturamento";
 import { createClient } from "@/lib/supabase/server";
 import type { Company } from "@/lib/types";
-
-const selectClass =
-  "h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
 
 const CARTEIRA = "all";
 
@@ -85,19 +82,16 @@ export default async function FaturamentoPage({
         title="Faturamento"
         subtitle={`Faturamento e carga tributária — ${subtitleAlvo}`}
       >
-        <form method="get" className="flex items-center gap-2">
-          <select name="cliente" defaultValue={selectedValue} className={selectClass}>
-            <option value={CARTEIRA}>📊 Todos os clientes (carteira)</option>
-            {companies.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.nome_fantasia || c.razao_social}
-              </option>
-            ))}
-          </select>
-          <Button type="submit" variant="outline" size="sm">
-            Ver
-          </Button>
-        </form>
+        <CompanyFilterSelect
+          paramName="cliente"
+          options={companies.map((c) => ({
+            id: c.id,
+            label: c.nome_fantasia || c.razao_social,
+          }))}
+          value={selectedValue}
+          allLabel="📊 Todos os clientes (carteira)"
+          allValue={CARTEIRA}
+        />
       </PageHeader>
 
       <div className="space-y-6 p-6">

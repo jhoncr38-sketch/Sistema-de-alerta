@@ -1,11 +1,8 @@
+import { CompanyFilterSelect } from "@/components/company-filter-select";
 import { FolhaList } from "@/components/folha-list";
 import { PageHeader } from "@/components/page-header";
-import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/server";
-import type { Company, DocumentWithCompany } from "@/lib/types";
-
-const selectClass =
-  "h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
+import type { DocumentWithCompany } from "@/lib/types";
 
 function companyLabel(c: { nome_fantasia: string | null; razao_social: string }) {
   return c.nome_fantasia || c.razao_social;
@@ -19,20 +16,27 @@ export default async function FolhaPage({
   const sp = await searchParams;
   const supabase = await createClient();
 
-  const { data: companiesRaw } = await supabase
-    .from("companies")
-    .select("*")
-    .order("razao_social");
-  const companies = (companiesRaw ?? []) as Company[];
-
-  let query = supabase
+  // Todas as folhas (para derivar as empresas do filtro); a filtragem por
+  // empresa é aplicada em memória logo abaixo.
+  const { data: docsRaw } = await supabase
     .from("documents")
     .select("*, company:companies(id,razao_social,nome_fantasia,email)")
     .eq("categoria", "folha")
     .order("competencia_month", { ascending: false, nullsFirst: false });
-  if (sp.company) query = query.eq("company_id", sp.company);
-  const { data: docsRaw } = await query;
-  const docs = (docsRaw ?? []) as DocumentWithCompany[];
+  const allDocs = (docsRaw ?? []) as DocumentWithCompany[];
+
+  // Empresas que têm folha (o filtro só lista quem realmente aparece aqui).
+  const companyMap = new Map<string, string>();
+  for (const d of allDocs) {
+    const id = d.company?.id ?? d.company_id;
+    companyMap.set(id, d.company ? companyLabel(d.company) : "Cliente");
+  }
+  const companyOptions = Array.from(companyMap, ([id, label]) => ({ id, label }))
+    .sort((a, b) => a.label.localeCompare(b.label, "pt-BR"));
+
+  const docs = sp.company
+    ? allDocs.filter((d) => (d.company?.id ?? d.company_id) === sp.company)
+    : allDocs;
 
   // Com uma empresa filtrada, lista direta por mês. Sem filtro ("Todos"),
   // agrupa por empresa para não misturar folhas de clientes diferentes.
@@ -60,23 +64,13 @@ export default async function FolhaPage({
         title="Folha de pagamento"
         subtitle="Folhas mensais publicadas para seus clientes"
       >
-        <form method="get" className="flex items-center gap-2">
-          <select
-            name="company"
-            defaultValue={sp.company ?? ""}
-            className={selectClass}
-          >
-            <option value="">Todos os clientes</option>
-            {companies.map((c) => (
-              <option key={c.id} value={c.id}>
-                {companyLabel(c)}
-              </option>
-            ))}
-          </select>
-          <Button type="submit" variant="outline" size="sm">
-            Filtrar
-          </Button>
-        </form>
+        {companyOptions.length >= 2 ? (
+          <CompanyFilterSelect
+            options={companyOptions}
+            value={sp.company ?? ""}
+            allLabel="Todas as empresas"
+          />
+        ) : null}
       </PageHeader>
 
       <div className="space-y-6 p-6">
