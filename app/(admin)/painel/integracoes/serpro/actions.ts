@@ -1,6 +1,10 @@
 "use server";
 
+import { after } from "next/server";
+import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/auth";
+import { normalizeCompetencia } from "@/lib/dates";
+import { notifyNewDocument } from "@/lib/email/notify";
 import { getSerproTokens, serproConfigurado } from "@/lib/serpro/auth";
 import { chamarServico } from "@/lib/serpro/client";
 import { gerarDas } from "@/lib/serpro/das";
@@ -235,4 +239,192 @@ export async function emitirDasTeste(
       detalhe: err instanceof Error ? err.message : "Erro desconhecido.",
     };
   }
+}
+
+/** Resultado da publicação do DAS como boleto no portal do cliente. */
+export interface PublicarDasResult {
+  ok: boolean;
+  titulo: string;
+  detalhe: string;
+}
+
+/**
+ * "AAAAMM" -> "MM/AAAA" — MESMO formato que o resto do sistema usa (via
+ * normalizeCompetencia). Essencial para a regra de "DAS já existe" reconhecer
+ * também os DAS lançados manualmente e não duplicar.
+ */
+function competenciaDeApuracao(periodo: string): string {
+  return normalizeCompetencia(`${periodo.slice(4, 6)}/${periodo.slice(0, 4)}`);
+}
+
+/**
+ * Fatia 3 — PUBLICA o DAS como um boleto normal no portal do cliente.
+ *
+ * Regera o DAS no servidor (não confia em PDF vindo do navegador), sobe o PDF no
+ * bucket 'boletos' e cria a linha em documents (categoria 'boleto', type 'das')
+ * com o valor e o vencimento que a Receita informou. A partir daí é um boleto
+ * como qualquer outro: entra no portal, nos alertas de vencimento e no dashboard.
+ * Idempotência simples: evita duplicar o DAS do mesmo cliente/período.
+ */
+export async function publicarDas(
+  companyId: string,
+  periodoApuracao: string,
+): Promise<PublicarDasResult> {
+  const { profile } = await requireAdmin();
+
+  const contratante = digits(process.env.SERPRO_CONTRATANTE_CNPJ ?? "");
+  const periodo = digits(periodoApuracao);
+  if (!contratante || !/^\d{6}$/.test(periodo)) {
+    return {
+      ok: false,
+      titulo: "Parâmetros inválidos",
+      detalhe: "Verifique o CNPJ da contratante e o período (AAAAMM).",
+    };
+  }
+
+  const supabase = await createClient();
+  const { data: company } = await supabase
+    .from("companies")
+    .select("cnpj, razao_social, nome_fantasia")
+    .eq("id", companyId)
+    .single();
+  if (!company) {
+    return { ok: false, titulo: "Cliente não encontrado", detalhe: "" };
+  }
+  const contribuinte = digits(company.cnpj);
+  const nome = company.nome_fantasia || company.razao_social;
+  if (!contribuinte) {
+    return {
+      ok: false,
+      titulo: "Cliente sem CNPJ",
+      detalhe: `${nome} não tem CNPJ cadastrado.`,
+    };
+  }
+
+  const competencia = competenciaDeApuracao(periodo);
+  const mesRef = `${periodo.slice(4, 6)}/${periodo.slice(0, 4)}`;
+
+  // Já existe DAS deste cliente/competência (inclui os lançados manualmente)? A
+  // regra, agora tolerante a 1+ existentes:
+  //   • se QUALQUER um já está pago/aguardando -> bloqueia (preserva histórico);
+  //   • senão -> substitui todos os em aberto pelo novo (evita duplicatas).
+  const { data: existentes } = await supabase
+    .from("documents")
+    .select("id, status, file_path")
+    .eq("company_id", companyId)
+    .eq("categoria", "boleto")
+    .eq("type", "das")
+    .eq("competencia", competencia);
+  const antigos = existentes ?? [];
+  if (antigos.some((d) => d.status !== "open")) {
+    return {
+      ok: false,
+      titulo: "DAS já pago",
+      detalhe: `O DAS de ${nome} para ${mesRef} já foi marcado como pago/aguardando. Não substituí para não perder esse histórico. Se precisar reemitir, remova o antigo primeiro.`,
+    };
+  }
+
+  // Regera o DAS no servidor (fonte da verdade — não usa PDF do navegador).
+  const r = await gerarDas({
+    contratanteCnpj: contratante,
+    autorCnpj: contratante,
+    contribuinteCnpj: contribuinte,
+    periodoApuracao: periodo,
+  });
+  if (!r.ok || !r.das) {
+    return {
+      ok: false,
+      titulo: "Não foi possível gerar o DAS",
+      detalhe: r.erro ?? "A Receita não retornou o DAS.",
+    };
+  }
+  const { pdfBase64, valor, vencimento } = r.das;
+  if (valor == null || !vencimento) {
+    return {
+      ok: false,
+      titulo: "DAS sem valor ou vencimento",
+      detalhe:
+        "A Receita não informou valor/vencimento — não publiquei para evitar um boleto incorreto.",
+    };
+  }
+
+  // Sobe o PDF (base64 -> arquivo) no mesmo bucket dos boletos.
+  const docId = crypto.randomUUID();
+  const fileName = `DAS-${periodo}-${contribuinte}.pdf`;
+  const path = `${companyId}/${docId}-${fileName}`;
+  const pdfBytes = Buffer.from(pdfBase64, "base64");
+  const { error: upErr } = await supabase.storage
+    .from("boletos")
+    .upload(path, pdfBytes, { contentType: "application/pdf", upsert: false });
+  if (upErr) {
+    return {
+      ok: false,
+      titulo: "Falha ao salvar o PDF",
+      detalhe: upErr.message,
+    };
+  }
+
+  // Cria o boleto (mesma forma do envio manual em /painel/enviar).
+  const { error: insErr } = await supabase.from("documents").insert({
+    id: docId,
+    company_id: companyId,
+    type: "das",
+    categoria: "boleto",
+    competencia,
+    amount: valor,
+    due_date: vencimento,
+    file_path: path,
+    file_name: fileName,
+    uploaded_by: profile.id,
+  });
+  if (insErr) {
+    await supabase.storage.from("boletos").remove([path]); // desfaz o órfão
+    return {
+      ok: false,
+      titulo: "Falha ao registrar o boleto",
+      detalhe: insErr.message,
+    };
+  }
+
+  // Substituição: o novo DAS entrou; remove os antigos (todos em aberto) e os
+  // PDFs deles. Só chega aqui se nenhum estava pago (o pago já foi bloqueado).
+  const substituido = antigos.length > 0;
+  if (substituido) {
+    const ids = antigos.map((d) => d.id);
+    await supabase.from("documents").delete().in("id", ids);
+    const paths = antigos
+      .map((d) => d.file_path)
+      .filter((p): p is string => !!p);
+    if (paths.length) {
+      await supabase.storage.from("boletos").remove(paths);
+    }
+  }
+
+  // Avisa o cliente (mesmo aviso dos boletos manuais).
+  after(() =>
+    notifyNewDocument({
+      companyId,
+      documentId: docId,
+      categoria: "boleto",
+      type: "das",
+      competencia,
+      amount: valor,
+      dueDate: vencimento,
+      count: 1,
+    }).catch((err) => console.error("[notify] DAS publicado:", err)),
+  );
+
+  revalidatePath("/painel");
+  revalidatePath("/painel/documentos");
+  revalidatePath("/portal");
+  revalidatePath("/portal/boletos");
+
+  const venBR = vencimento.split("-").reverse().join("/");
+  return {
+    ok: true,
+    titulo: substituido ? "DAS atualizado no portal" : "DAS publicado no portal",
+    detalhe: substituido
+      ? `O DAS de ${nome} para ${mesRef} (que estava em aberto) foi substituído pelo novo (venc. ${venBR}). O cliente será avisado.`
+      : `DAS de ${nome} (venc. ${venBR}) publicado como boleto. O cliente já pode ver e será avisado.`,
+  };
 }

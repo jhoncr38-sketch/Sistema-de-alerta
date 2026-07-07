@@ -15,10 +15,13 @@ import { Card } from "@/components/ui/card";
 import {
   consultarCliente,
   emitirDasTeste,
+  publicarDas,
   testarConexao,
   type DasTesteResult,
+  type PublicarDasResult,
   type TesteResult,
 } from "@/app/(admin)/painel/integracoes/serpro/actions";
+import { Send } from "lucide-react";
 
 interface CompanyOpt {
   id: string;
@@ -58,6 +61,9 @@ export function SerproDiagnostico({
     return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}`;
   });
   const [das, setDas] = useState<DasTesteResult | null>(null);
+  // Publicação do DAS como boleto (Fatia 3).
+  const [publicando, startPublicar] = useTransition();
+  const [pubResult, setPubResult] = useState<PublicarDasResult | null>(null);
 
   function runConexao() {
     setAcao("conexao");
@@ -76,8 +82,16 @@ export function SerproDiagnostico({
   function runDas() {
     setAcao("das");
     setDas(null);
+    setPubResult(null);
     startTransition(async () =>
       setDas(await emitirDasTeste(dasCompanyId, periodo)),
+    );
+  }
+
+  function runPublicar() {
+    setPubResult(null);
+    startPublicar(async () =>
+      setPubResult(await publicarDas(dasCompanyId, periodo)),
     );
   }
 
@@ -330,20 +344,54 @@ export function SerproDiagnostico({
                     className="h-[70vh] w-full rounded-lg border bg-muted/30"
                   />
 
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    nativeButton={false}
-                    render={
-                      <a
-                        href={`data:application/pdf;base64,${das.pdfBase64}`}
-                        download={`DAS-${periodo}.pdf`}
-                      >
-                        <Download />
-                        Baixar PDF
-                      </a>
-                    }
-                  />
+                  <div className="flex flex-wrap items-center gap-2 border-t pt-3">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      nativeButton={false}
+                      render={
+                        <a
+                          href={`data:application/pdf;base64,${das.pdfBase64}`}
+                          download={`DAS-${periodo}.pdf`}
+                        >
+                          <Download />
+                          Baixar PDF
+                        </a>
+                      }
+                    />
+                    <Button
+                      type="button"
+                      size="sm"
+                      disabled={publicando || !!pubResult?.ok}
+                      onClick={runPublicar}
+                    >
+                      {publicando ? (
+                        <Loader2 className="animate-spin" />
+                      ) : (
+                        <Send />
+                      )}
+                      Publicar no portal do cliente
+                    </Button>
+                  </div>
+
+                  <p className="text-xs text-muted-foreground">
+                    Ao publicar, o DAS vira um boleto no portal do cliente: ele
+                    passa a ver, recebe os alertas de vencimento e entra no
+                    dashboard. Confira o valor e o vencimento acima antes.
+                  </p>
+
+                  {pubResult ? (
+                    <div
+                      className={
+                        pubResult.ok
+                          ? "rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm dark:border-emerald-900/50 dark:bg-emerald-950/30"
+                          : "rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-sm dark:border-red-900/50 dark:bg-red-950/30"
+                      }
+                    >
+                      <span className="font-medium">{pubResult.titulo}.</span>{" "}
+                      {pubResult.detalhe}
+                    </div>
+                  ) : null}
                 </div>
               ) : das.raw ? (
                 <pre className="mt-3 max-h-96 overflow-auto rounded-lg bg-muted p-3 text-xs">
