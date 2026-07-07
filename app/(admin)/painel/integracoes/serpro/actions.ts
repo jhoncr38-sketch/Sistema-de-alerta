@@ -3,6 +3,7 @@
 import { requireAdmin } from "@/lib/auth";
 import { getSerproTokens, serproConfigurado } from "@/lib/serpro/auth";
 import { chamarServico } from "@/lib/serpro/client";
+import { gerarDas } from "@/lib/serpro/das";
 import { createClient } from "@/lib/supabase/server";
 
 /** Resultado de um teste de diagnóstico da integração SERPRO. */
@@ -136,6 +137,101 @@ export async function consultarCliente(
     return {
       ok: false,
       titulo: "Erro na consulta",
+      detalhe: err instanceof Error ? err.message : "Erro desconhecido.",
+    };
+  }
+}
+
+/** Resultado da emissão de DAS de teste (com o PDF para conferência). */
+export interface DasTesteResult {
+  ok: boolean;
+  titulo: string;
+  detalhe: string;
+  /** PDF do DAS em base64 (para o navegador exibir/baixar). */
+  pdfBase64?: string;
+  valor?: number | null;
+  vencimento?: string | null;
+  numeroDocumento?: string | null;
+  raw?: string;
+}
+
+/**
+ * Emite o DAS de um cliente para um período (YYYYMM) — MAS NÃO PUBLICA NADA.
+ * Gera a guia na Receita e devolve o PDF para o contador conferir na tela antes
+ * de decidir o que fazer com ela. É o passo de validação da Fatia 2.
+ */
+export async function emitirDasTeste(
+  companyId: string,
+  periodoApuracao: string,
+): Promise<DasTesteResult> {
+  await requireAdmin();
+
+  const contratante = digits(process.env.SERPRO_CONTRATANTE_CNPJ ?? "");
+  if (!contratante) {
+    return {
+      ok: false,
+      titulo: "Falta o CNPJ da contratante",
+      detalhe: "Configure SERPRO_CONTRATANTE_CNPJ com o CNPJ da SJ Contabilidade.",
+    };
+  }
+
+  const periodo = digits(periodoApuracao);
+  if (!/^\d{6}$/.test(periodo)) {
+    return {
+      ok: false,
+      titulo: "Período inválido",
+      detalhe: "Informe o período de apuração no formato AAAAMM (ex.: 202506).",
+    };
+  }
+
+  const supabase = await createClient();
+  const { data: company } = await supabase
+    .from("companies")
+    .select("cnpj, razao_social, nome_fantasia")
+    .eq("id", companyId)
+    .single();
+  if (!company) {
+    return { ok: false, titulo: "Cliente não encontrado", detalhe: "" };
+  }
+  const contribuinte = digits(company.cnpj);
+  if (!contribuinte) {
+    return {
+      ok: false,
+      titulo: "Cliente sem CNPJ",
+      detalhe: `${company.nome_fantasia || company.razao_social} não tem CNPJ cadastrado.`,
+    };
+  }
+
+  try {
+    const r = await gerarDas({
+      contratanteCnpj: contratante,
+      autorCnpj: contratante,
+      contribuinteCnpj: contribuinte,
+      periodoApuracao: periodo,
+    });
+    if (!r.ok || !r.das) {
+      return {
+        ok: false,
+        titulo: `Não foi possível gerar o DAS (HTTP ${r.status})`,
+        detalhe: r.erro ?? "A Receita não retornou o DAS.",
+        raw: r.raw,
+      };
+    }
+    return {
+      ok: true,
+      titulo: "DAS gerado com sucesso",
+      detalhe:
+        "Confira o PDF abaixo antes de qualquer coisa. Nada foi publicado nem enviado ao cliente.",
+      pdfBase64: r.das.pdfBase64,
+      valor: r.das.valor,
+      vencimento: r.das.vencimento,
+      numeroDocumento: r.das.numeroDocumento,
+      raw: r.raw,
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      titulo: "Erro ao gerar DAS",
       detalhe: err instanceof Error ? err.message : "Erro desconhecido.",
     };
   }
