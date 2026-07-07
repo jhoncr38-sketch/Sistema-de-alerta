@@ -24,6 +24,12 @@
 .DS_Store
 *.pem
 
+# certificados digitais (NUNCA versionar — credencial fiscal sensível)
+*.pfx
+*.p12
+/certs/
+/certificados/
+
 # debug
 npm-debug.log*
 yarn-debug.log*
