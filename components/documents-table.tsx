@@ -42,20 +42,33 @@ function tipoLabel(d: DocumentWithCompany): string {
   return docTypeLabel(d.type);
 }
 
-/** Texto genérico padrão do relatório fiscal (quando NÃO houve resumo por IA). */
-const SITFIS_DESC_PADRAO = "Relatório de situação fiscal (Receita Federal)";
+/** Descrições genéricas/padrão (NÃO são resumo por IA — não usar no "?"). */
+const DESC_PADRAO = new Set([
+  "Relatório de situação fiscal (Receita Federal)",
+  "DARF DCTFWeb (tributos federais)",
+]);
+
+/** Tipos cuja descrição, quando presente e personalizada, é um resumo por IA. */
+const RESUMO_IA_TYPES: ReadonlySet<DocType> = new Set<DocType>([
+  "relatorio_fiscal",
+  "das",
+  "darf_piscofins",
+  "darf_irpj",
+  "darf_csll",
+  "gps_inss",
+]);
 
 /**
- * Resumo personalizado (gerado por IA) de um relatório fiscal, quando existe —
- * diferente do texto genérico padrão. Usado pelo botão "?" para explicar ESTE
- * relatório específico, em vez da explicação genérica do tipo.
+ * Resumo personalizado (gerado por IA) de uma guia/relatório da Receita, quando
+ * existe — diferente do texto genérico padrão. Usado pelo botão "?" para mostrar
+ * a explicação daquele documento específico, em vez da explicação genérica.
  */
 function resumoPersonalizado(d: DocumentWithCompany): string | null {
   if (
-    d.type === "relatorio_fiscal" &&
+    RESUMO_IA_TYPES.has(d.type) &&
     d.descricao &&
     d.descricao.trim() &&
-    d.descricao.trim() !== SITFIS_DESC_PADRAO
+    !DESC_PADRAO.has(d.descricao.trim())
   ) {
     return d.descricao.trim();
   }

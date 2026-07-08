@@ -4,6 +4,7 @@ import { after } from "next/server";
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/auth";
 import { explicarSitfis } from "@/lib/ai/explicar-sitfis";
+import { explicarGuiaPublicada } from "@/lib/ai/explicar-guia-publicada";
 import { normalizeCompetencia } from "@/lib/dates";
 import { notifyNewDocument } from "@/lib/email/notify";
 import { getSerproTokens, serproConfigurado } from "@/lib/serpro/auth";
@@ -368,6 +369,14 @@ export async function publicarDas(
     };
   }
 
+  // Explicação curta por IA (opcional, best-effort): o cliente lê no "?".
+  const explicacao = await explicarGuiaPublicada({
+    type: "das",
+    competencia,
+    valor,
+    vencimento,
+  });
+
   // Cria o boleto (mesma forma do envio manual em /painel/enviar).
   const { error: insErr } = await supabase.from("documents").insert({
     id: docId,
@@ -377,6 +386,7 @@ export async function publicarDas(
     competencia,
     amount: valor,
     due_date: vencimento,
+    descricao: explicacao,
     file_path: path,
     file_name: fileName,
     uploaded_by: profile.id,
@@ -822,6 +832,15 @@ export async function publicarDarf(params: {
     return { ok: false, titulo: "Falha ao salvar o PDF", detalhe: upErr.message };
   }
 
+  // Explicação curta por IA (best-effort); cai no texto fixo se a IA falhar.
+  const explicacao =
+    (await explicarGuiaPublicada({
+      type,
+      competencia,
+      valor: params.valor,
+      vencimento: params.vencimento,
+    })) ?? "DARF DCTFWeb (tributos federais)";
+
   const { error: insErr } = await supabase.from("documents").insert({
     id: docId,
     company_id: params.companyId,
@@ -830,7 +849,7 @@ export async function publicarDarf(params: {
     competencia,
     amount: params.valor,
     due_date: params.vencimento,
-    descricao: "DARF DCTFWeb (tributos federais)",
+    descricao: explicacao,
     file_path: path,
     file_name: fileName,
     uploaded_by: profile.id,

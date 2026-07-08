@@ -27,7 +27,8 @@ export async function blocosAmpliados(
   const supabase = createAdminClient();
 
   // Uma leitura por fonte, em paralelo. Tudo filtrado por company_id (escopo).
-  const [docsFatRes, revenuesRes, folhaRes, docInstRes] = await Promise.all([
+  const [docsFatRes, revenuesRes, folhaRes, docInstRes, sitfisRes] =
+    await Promise.all([
     // Faturamento: tributos vêm de documents; receita, de revenues.
     supabase
       .from("documents")
@@ -51,6 +52,15 @@ export async function blocosAmpliados(
       .select("id", { count: "exact", head: true })
       .eq("company_id", companyId)
       .eq("categoria", "documento"),
+    // Último relatório de situação fiscal publicado (com o resumo por IA na
+    // descrição, quando houve). É a fonte da situação fiscal para o chat.
+    supabase
+      .from("documents")
+      .select("descricao,created_at")
+      .eq("company_id", companyId)
+      .eq("type", "relatorio_fiscal")
+      .order("created_at", { ascending: false })
+      .limit(1),
   ]);
 
   const blocos: string[] = [];
@@ -114,6 +124,26 @@ export async function blocosAmpliados(
       ? `DOCUMENTOS: ${docsCount} documento(s) institucional(is) disponível(is) para consulta.`
       : "DOCUMENTOS: nenhum documento institucional disponível.",
   );
+
+  // ----- Situação fiscal na Receita (do último relatório publicado) -----
+  const sitfis = sitfisRes.data?.[0] as
+    | { descricao: string | null; created_at: string }
+    | undefined;
+  const DESC_PADRAO = "Relatório de situação fiscal (Receita Federal)";
+  if (sitfis?.descricao && sitfis.descricao.trim() !== DESC_PADRAO) {
+    // Há um resumo por IA salvo — reaproveita como a "verdade" da situação fiscal.
+    blocos.push(
+      `SITUAÇÃO FISCAL (Receita Federal, relatório de ${formatDate(sitfis.created_at)}):\n${sitfis.descricao.trim()}`,
+    );
+  } else if (sitfis) {
+    blocos.push(
+      `SITUAÇÃO FISCAL: há um relatório de situação fiscal publicado (${formatDate(sitfis.created_at)}). Para detalhes, o cliente deve abri-lo em Documentos.`,
+    );
+  } else {
+    blocos.push(
+      "SITUAÇÃO FISCAL: não há relatório de situação fiscal publicado. Se o cliente perguntar sobre pendências na Receita, oriente-o a pedir ao contador para gerar o relatório.",
+    );
+  }
 
   return blocos;
 }
