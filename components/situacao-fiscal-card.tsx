@@ -8,12 +8,14 @@ import {
   Search,
   Send,
   ShieldCheck,
+  Sparkles,
   XCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import {
   consultarSitfis,
+  explicarSituacaoFiscal,
   publicarSitfis,
   type SitfisConsultaResult,
 } from "@/app/(admin)/painel/integracoes/serpro/actions";
@@ -32,33 +34,56 @@ interface CompanyOpt {
 export function SituacaoFiscalCard({
   companies,
   configurado,
+  bare = false,
 }: {
   companies: CompanyOpt[];
   configurado: boolean;
+  bare?: boolean;
 }) {
   const [companyId, setCompanyId] = useState(companies[0]?.id ?? "");
   const [consultando, startConsultar] = useTransition();
   const [publicando, startPublicar] = useTransition();
+  const [explicando, startExplicar] = useTransition();
   const [res, setRes] = useState<SitfisConsultaResult | null>(null);
   const [pub, setPub] = useState<SitfisConsultaResult | null>(null);
+  // Resumo por IA (opcional): quando presente, vai junto ao publicar.
+  const [resumo, setResumo] = useState<string | null>(null);
+  const [erroIa, setErroIa] = useState<string | null>(null);
 
   function consultar() {
     setRes(null);
     setPub(null);
+    setResumo(null);
+    setErroIa(null);
     startConsultar(async () => setRes(await consultarSitfis(companyId)));
+  }
+
+  function explicar() {
+    setErroIa(null);
+    startExplicar(async () => {
+      const r = await explicarSituacaoFiscal(companyId);
+      if (r.ok && r.resumo) setResumo(r.resumo);
+      else setErroIa(r.erro ?? "Não foi possível explicar agora.");
+    });
   }
 
   function publicar() {
     setPub(null);
-    startPublicar(async () => setPub(await publicarSitfis(companyId)));
+    // Se há resumo por IA, ele vai junto (vira a descrição que o cliente lê).
+    startPublicar(async () =>
+      setPub(await publicarSitfis(companyId, resumo ?? undefined)),
+    );
   }
 
+  const Wrapper = bare ? "div" : Card;
   return (
-    <Card className="max-w-3xl px-6 py-6">
+    <Wrapper className={bare ? "" : "max-w-3xl px-6 py-6"}>
       <div className="flex items-start gap-3">
-        <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-          <ShieldCheck className="size-5" />
-        </div>
+        {bare ? null : (
+          <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+            <ShieldCheck className="size-5" />
+          </div>
+        )}
         <div className="flex-1 space-y-4">
           <div>
             <h2 className="text-sm font-semibold">Situação fiscal na Receita</h2>
@@ -162,6 +187,20 @@ export function SituacaoFiscalCard({
                             />
                             <Button
                               type="button"
+                              variant="outline"
+                              size="sm"
+                              disabled={explicando}
+                              onClick={explicar}
+                            >
+                              {explicando ? (
+                                <Loader2 className="animate-spin" />
+                              ) : (
+                                <Sparkles />
+                              )}
+                              {resumo ? "Refazer explicação" : "Explicar com IA"}
+                            </Button>
+                            <Button
+                              type="button"
                               size="sm"
                               disabled={publicando || !!pub?.ok}
                               onClick={publicar}
@@ -174,6 +213,26 @@ export function SituacaoFiscalCard({
                               Publicar no portal do cliente
                             </Button>
                           </div>
+
+                          {/* Resumo da IA (opcional) — vai junto ao publicar. */}
+                          {erroIa ? (
+                            <p className="text-sm text-destructive">{erroIa}</p>
+                          ) : null}
+                          {resumo ? (
+                            <div className="rounded-lg border border-primary/30 bg-primary/5 p-3">
+                              <div className="mb-1 flex items-center gap-1.5 text-xs font-medium text-primary">
+                                <Sparkles className="size-3.5" />
+                                Explicação para o cliente (gerada por IA)
+                              </div>
+                              <p className="text-sm whitespace-pre-line">
+                                {resumo}
+                              </p>
+                              <p className="mt-2 text-xs text-muted-foreground">
+                                Confira antes de publicar — este texto vai junto
+                                do relatório no portal do cliente.
+                              </p>
+                            </div>
+                          ) : null}
 
                           {pub ? (
                             <div
@@ -197,6 +256,6 @@ export function SituacaoFiscalCard({
           )}
         </div>
       </div>
-    </Card>
+    </Wrapper>
   );
 }

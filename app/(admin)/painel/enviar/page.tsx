@@ -1,7 +1,8 @@
 import Link from "next/link";
+import { Paperclip } from "lucide-react";
 import { Card } from "@/components/ui/card";
-import { EmitirDasCard } from "@/components/emitir-das-card";
-import { SituacaoFiscalCard } from "@/components/situacao-fiscal-card";
+import { CollapsibleSection } from "@/components/collapsible-section";
+import { ReceitaFederalPanel } from "@/components/receita-federal-panel";
 import { PageHeader } from "@/components/page-header";
 import { serproConfigurado } from "@/lib/serpro/auth";
 import { createClient } from "@/lib/supabase/server";
@@ -65,25 +66,22 @@ export default async function EnviarPage() {
           </Card>
         ) : (
           <>
-            {/* Emitir DAS pela Receita — atalho para não anexar guia na mão. */}
+            {/* Receita Federal (DAS, DARF/DCTFWeb, Situação fiscal) em abas. */}
             {dasCompanies.length > 0 ? (
-              <EmitirDasCard
+              <ReceitaFederalPanel
                 companies={dasCompanies}
                 configurado={serproOn}
               />
             ) : null}
 
-            {/* Situação fiscal na Receita (SITFIS) — consultar e publicar. */}
-            {dasCompanies.length > 0 ? (
-              <SituacaoFiscalCard
-                companies={dasCompanies}
-                configurado={serproOn}
-              />
-            ) : null}
-
-            <Card className="max-w-3xl px-6 py-6">
+            {/* Envio manual — recolhido por padrão para não poluir a tela. */}
+            <CollapsibleSection
+              title="Envio manual"
+              subtitle="Anexar um boleto ou documento à mão"
+              icon={<Paperclip />}
+            >
               <UploadForm companies={companies} revenues={revenues} />
-            </Card>
+            </CollapsibleSection>
           </>
         )}
       </div>

@@ -42,6 +42,26 @@ function tipoLabel(d: DocumentWithCompany): string {
   return docTypeLabel(d.type);
 }
 
+/** Texto genérico padrão do relatório fiscal (quando NÃO houve resumo por IA). */
+const SITFIS_DESC_PADRAO = "Relatório de situação fiscal (Receita Federal)";
+
+/**
+ * Resumo personalizado (gerado por IA) de um relatório fiscal, quando existe —
+ * diferente do texto genérico padrão. Usado pelo botão "?" para explicar ESTE
+ * relatório específico, em vez da explicação genérica do tipo.
+ */
+function resumoPersonalizado(d: DocumentWithCompany): string | null {
+  if (
+    d.type === "relatorio_fiscal" &&
+    d.descricao &&
+    d.descricao.trim() &&
+    d.descricao.trim() !== SITFIS_DESC_PADRAO
+  ) {
+    return d.descricao.trim();
+  }
+  return null;
+}
+
 export function DocumentsTable({
   documents,
   showClient = false,
@@ -170,12 +190,16 @@ export function DocumentsTable({
     const explicavel =
       isPagavel(doc) || EXPLAIN_DOC_TYPES.has(doc.type) || outroComDescricao;
     if (!explicavel) return null;
+    // Relatório fiscal com resumo por IA: o botão mostra ESSE texto (a análise
+    // real do documento), sem chamar a IA de novo com uma explicação genérica.
+    const textoPronto = resumoPersonalizado(doc);
     return (
       <ExplicarGuiaButton
         type={doc.type}
         label={tipoLabel(doc)}
         categoria={doc.categoria}
         descricao={doc.descricao}
+        textoPronto={textoPronto}
       />
     );
   }

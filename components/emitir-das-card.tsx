@@ -43,10 +43,13 @@ function mesAnterior(): string {
 export function EmitirDasCard({
   companies,
   configurado,
+  bare = false,
 }: {
   companies: CompanyOpt[];
   /** Credenciais SERPRO presentes? Se não, mostra aviso e desabilita. */
   configurado: boolean;
+  /** Sem o <Card> externo (quando já vem dentro de um painel com abas). */
+  bare?: boolean;
 }) {
   const [companyId, setCompanyId] = useState(companies[0]?.id ?? "");
   const [periodo, setPeriodo] = useState(mesAnterior);
@@ -69,12 +72,15 @@ export function EmitirDasCard({
 
   const venBR = das?.vencimento?.split("-").reverse().join("/");
 
+  const Wrapper = bare ? "div" : Card;
   return (
-    <Card className="max-w-3xl px-6 py-6">
+    <Wrapper className={bare ? "" : "max-w-3xl px-6 py-6"}>
       <div className="flex items-start gap-3">
-        <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-          <FileText className="size-5" />
-        </div>
+        {bare ? null : (
+          <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+            <FileText className="size-5" />
+          </div>
+        )}
         <div className="flex-1 space-y-4">
           <div>
             <h2 className="text-sm font-semibold">Emitir DAS pela Receita</h2>
@@ -82,6 +88,11 @@ export function EmitirDasCard({
               Gera o DAS do Simples Nacional direto na Receita e publica no
               portal do cliente — sem baixar e anexar na mão. Você confere o
               valor e o vencimento antes de publicar.
+            </p>
+            <p className="mt-1.5 text-sm text-muted-foreground">
+              A 2ª via serve para reemitir a guia quando o cliente perdeu o
+              boleto ou o vencimento passou — a Receita gera com o valor
+              atualizado (juros e multa, se houver).
             </p>
           </div>
 
@@ -135,7 +146,7 @@ export function EmitirDasCard({
                 onClick={gerar}
               >
                 {gerando ? <Loader2 className="animate-spin" /> : <FileText />}
-                Gerar DAS
+                Gerar 2ª via
               </Button>
 
               {/* ----- Resultado da geração ----- */}
@@ -243,6 +254,6 @@ export function EmitirDasCard({
           )}
         </div>
       </div>
-    </Card>
+    </Wrapper>
   );
 }

@@ -20,6 +20,7 @@ export function ExplicarGuiaButton({
   label,
   categoria,
   descricao,
+  textoPronto,
 }: {
   type: DocType;
   /** Rótulo do tipo, exibido como título (ex.: "DAS - Simples Nacional"). */
@@ -28,9 +29,11 @@ export function ExplicarGuiaButton({
   categoria?: string;
   /** Descrição livre (tipo "Outro"): a IA explica com base nela. */
   descricao?: string | null;
+  /** Texto já pronto (ex.: análise do relatório fiscal): mostra sem chamar a IA. */
+  textoPronto?: string | null;
 }) {
   const [open, setOpen] = useState(false);
-  const [texto, setTexto] = useState<string | null>(null);
+  const [texto, setTexto] = useState<string | null>(textoPronto ?? null);
   const [carregando, setCarregando] = useState(false);
   const [erro, setErro] = useState(false);
 
@@ -44,6 +47,7 @@ export function ExplicarGuiaButton({
     : label;
 
   async function carregar() {
+    if (textoPronto) return; // já veio pronto (não gasta IA)
     if (texto || carregando) return; // já temos (ou já buscando)
     setCarregando(true);
     setErro(false);
@@ -111,8 +115,9 @@ export function ExplicarGuiaButton({
           )}
 
           <p className="border-t pt-2 text-xs text-muted-foreground">
-            Explicação geral, gerada automaticamente. Não substitui a orientação
-            do seu contador.
+            {textoPronto
+              ? "Análise da situação fiscal, gerada automaticamente. Não substitui a orientação do seu contador."
+              : "Explicação geral, gerada automaticamente. Não substitui a orientação do seu contador."}
           </p>
         </DialogContent>
       </Dialog>

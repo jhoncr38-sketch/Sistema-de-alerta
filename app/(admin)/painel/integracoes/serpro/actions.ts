@@ -3,13 +3,16 @@
 import { after } from "next/server";
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/auth";
+import { explicarSitfis } from "@/lib/ai/explicar-sitfis";
 import { normalizeCompetencia } from "@/lib/dates";
 import { notifyNewDocument } from "@/lib/email/notify";
 import { getSerproTokens, serproConfigurado } from "@/lib/serpro/auth";
 import { chamarServico } from "@/lib/serpro/client";
 import { gerarDas } from "@/lib/serpro/das";
+import { gerarDarfDctfweb } from "@/lib/serpro/dctfweb";
 import { consultarSituacaoFiscal } from "@/lib/serpro/sitfis";
 import { createClient } from "@/lib/supabase/server";
+import type { DocType } from "@/lib/types";
 
 /** Resultado de um teste de diagnóstico da integração SERPRO. */
 export interface TesteResult {
@@ -520,6 +523,7 @@ export async function consultarSitfis(
  */
 export async function publicarSitfis(
   companyId: string,
+  resumoIa?: string,
 ): Promise<SitfisConsultaResult> {
   const { profile } = await requireAdmin();
   const r = await rodarSitfis(companyId);
@@ -539,12 +543,19 @@ export async function publicarSitfis(
     return { ok: false, titulo: "Falha ao salvar o PDF", detalhe: upErr.message };
   }
 
+  // Se o contador gerou o resumo por IA, ele vira a descrição que o cliente lê
+  // no portal (em vez do rótulo técnico). Limitamos o tamanho por segurança.
+  const descricao =
+    resumoIa && resumoIa.trim()
+      ? resumoIa.trim().slice(0, 1000)
+      : "Relatório de situação fiscal (Receita Federal)";
+
   const { error: insErr } = await supabase.from("documents").insert({
     id: docId,
     company_id: companyId,
     type: "relatorio_fiscal",
     categoria: "documento",
-    descricao: "Relatório de situação fiscal (Receita Federal)",
+    descricao,
     file_path: path,
     file_name: fileName,
     uploaded_by: profile.id,
@@ -608,5 +619,253 @@ export async function publicarSitfis(
       ? `O relatório de ${r.nome} foi atualizado no portal (o anterior foi substituído). O cliente será avisado.`
       : `O relatório de ${r.nome} foi publicado no portal como documento. O cliente será avisado.`,
     pdfBase64: r.pdfBase64,
+  };
+}
+
+export interface ExplicarSitfisResult {
+  ok: boolean;
+  /** Resumo em linguagem simples (quando ok). */
+  resumo?: string;
+  erro?: string;
+}
+
+/**
+ * Gera um resumo em português simples da situação fiscal de um cliente, via IA.
+ * Regera o SITFIS no servidor (fonte da verdade) e manda o PDF para a IA ler.
+ * Custa tokens — por isso é acionado por um botão separado, não automático.
+ */
+export async function explicarSituacaoFiscal(
+  companyId: string,
+): Promise<ExplicarSitfisResult> {
+  await requireAdmin();
+  const r = await rodarSitfis(companyId);
+  if ("erro" in r) return { ok: false, erro: r.erro.detalhe || r.erro.titulo };
+
+  const resumo = await explicarSitfis(r.pdfBase64);
+  if (!resumo) {
+    return {
+      ok: false,
+      erro: "A IA não está disponível agora (verifique a chave OpenAI) ou falhou. Tente de novo.",
+    };
+  }
+  return { ok: true, resumo };
+}
+
+// ============================================================
+// DCTFWeb — gerar DARF (INSS/PIS/COFINS/IRPJ/CSLL) e publicar como boleto
+// ============================================================
+
+export interface DarfGerarResult {
+  ok: boolean;
+  titulo: string;
+  detalhe: string;
+  /** PDF do DARF em base64 (para conferência). */
+  pdfBase64?: string;
+}
+
+/** Tipos de DARF que o contador pode rotular ao publicar. */
+const DARF_TYPES: DocType[] = [
+  "darf_piscofins",
+  "darf_irpj",
+  "darf_csll",
+  "gps_inss",
+  "outro",
+];
+
+/** Busca o CNPJ do cliente e gera o DARF da DCTFWeb. Reusado por gerar/publicar. */
+async function rodarDarf(
+  companyId: string,
+  categoria: string,
+  anoPA: string,
+  mesPA: string,
+): Promise<{ erro: DarfGerarResult } | { nome: string; pdfBase64: string }> {
+  const contratante = digits(process.env.SERPRO_CONTRATANTE_CNPJ ?? "");
+  if (!contratante) {
+    return {
+      erro: {
+        ok: false,
+        titulo: "Falta o CNPJ da contratante",
+        detalhe: "Configure SERPRO_CONTRATANTE_CNPJ.",
+      },
+    };
+  }
+  if (!/^\d{4}$/.test(anoPA) || !/^\d{2}$/.test(mesPA)) {
+    return {
+      erro: {
+        ok: false,
+        titulo: "Período inválido",
+        detalhe: "Informe ano (AAAA) e mês (MM) válidos.",
+      },
+    };
+  }
+
+  const supabase = await createClient();
+  const { data: company } = await supabase
+    .from("companies")
+    .select("cnpj, razao_social, nome_fantasia")
+    .eq("id", companyId)
+    .single();
+  if (!company) {
+    return { erro: { ok: false, titulo: "Cliente não encontrado", detalhe: "" } };
+  }
+  const contribuinte = digits(company.cnpj);
+  const nome = company.nome_fantasia || company.razao_social;
+  if (!contribuinte) {
+    return {
+      erro: {
+        ok: false,
+        titulo: "Cliente sem CNPJ",
+        detalhe: `${nome} não tem CNPJ cadastrado.`,
+      },
+    };
+  }
+
+  const r = await gerarDarfDctfweb({
+    contratanteCnpj: contratante,
+    autorCnpj: contratante,
+    contribuinteCnpj: contribuinte,
+    categoria,
+    anoPA,
+    mesPA,
+  });
+  if (!r.ok || !r.pdfBase64) {
+    return {
+      erro: {
+        ok: false,
+        titulo: `Não foi possível gerar o DARF (DCTFWeb)`,
+        detalhe: r.erro ?? "A Receita não retornou o DARF.",
+      },
+    };
+  }
+  return { nome, pdfBase64: r.pdfBase64 };
+}
+
+/**
+ * Gera o DARF da DCTFWeb para conferência (só leitura). Devolve o PDF — o
+ * contador confere o valor e o vencimento nele antes de publicar.
+ */
+export async function gerarDarf(
+  companyId: string,
+  categoria: string,
+  anoPA: string,
+  mesPA: string,
+): Promise<DarfGerarResult> {
+  await requireAdmin();
+  const r = await rodarDarf(companyId, categoria, anoPA, mesPA);
+  if ("erro" in r) return r.erro;
+  return {
+    ok: true,
+    titulo: "DARF gerado com sucesso",
+    detalhe:
+      "Confira o PDF: informe abaixo o valor e o vencimento que aparecem no DARF para publicar como boleto. Nada foi publicado ainda.",
+    pdfBase64: r.pdfBase64,
+  };
+}
+
+export interface PublicarDarfResult {
+  ok: boolean;
+  titulo: string;
+  detalhe: string;
+}
+
+/**
+ * Publica o DARF da DCTFWeb como BOLETO no portal. Como a Receita não devolve
+ * valor/vencimento nesse serviço, eles vêm do contador (que os leu no PDF).
+ * Regera o DARF no servidor (fonte da verdade) e cria o boleto.
+ */
+export async function publicarDarf(params: {
+  companyId: string;
+  categoria: string;
+  anoPA: string;
+  mesPA: string;
+  type: string; // rótulo do DARF (darf_piscofins, gps_inss, ...)
+  valor: number;
+  vencimento: string; // YYYY-MM-DD
+}): Promise<PublicarDarfResult> {
+  const { profile } = await requireAdmin();
+
+  if (!(params.valor > 0)) {
+    return { ok: false, titulo: "Valor inválido", detalhe: "Informe o valor do DARF." };
+  }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(params.vencimento)) {
+    return {
+      ok: false,
+      titulo: "Vencimento inválido",
+      detalhe: "Informe o vencimento (data) do DARF.",
+    };
+  }
+  const type: DocType = DARF_TYPES.includes(params.type as DocType)
+    ? (params.type as DocType)
+    : "outro";
+
+  const r = await rodarDarf(
+    params.companyId,
+    params.categoria,
+    params.anoPA,
+    params.mesPA,
+  );
+  if ("erro" in r) {
+    return { ok: false, titulo: r.erro.titulo, detalhe: r.erro.detalhe };
+  }
+
+  const competencia = normalizeCompetencia(`${params.mesPA}/${params.anoPA}`);
+  const supabase = await createClient();
+  const docId = crypto.randomUUID();
+  const fileName = `DARF-${params.anoPA}${params.mesPA}-${params.categoria}.pdf`;
+  const path = `${params.companyId}/${docId}-${fileName}`;
+  const pdfBytes = Buffer.from(r.pdfBase64, "base64");
+
+  const { error: upErr } = await supabase.storage
+    .from("boletos")
+    .upload(path, pdfBytes, { contentType: "application/pdf", upsert: false });
+  if (upErr) {
+    return { ok: false, titulo: "Falha ao salvar o PDF", detalhe: upErr.message };
+  }
+
+  const { error: insErr } = await supabase.from("documents").insert({
+    id: docId,
+    company_id: params.companyId,
+    type,
+    categoria: "boleto",
+    competencia,
+    amount: params.valor,
+    due_date: params.vencimento,
+    descricao: "DARF DCTFWeb (tributos federais)",
+    file_path: path,
+    file_name: fileName,
+    uploaded_by: profile.id,
+  });
+  if (insErr) {
+    await supabase.storage.from("boletos").remove([path]);
+    return {
+      ok: false,
+      titulo: "Falha ao registrar o boleto",
+      detalhe: insErr.message,
+    };
+  }
+
+  after(() =>
+    notifyNewDocument({
+      companyId: params.companyId,
+      documentId: docId,
+      categoria: "boleto",
+      type,
+      competencia,
+      amount: params.valor,
+      dueDate: params.vencimento,
+      count: 1,
+    }).catch((err) => console.error("[notify] DARF publicado:", err)),
+  );
+
+  revalidatePath("/painel");
+  revalidatePath("/painel/documentos");
+  revalidatePath("/portal");
+  revalidatePath("/portal/boletos");
+
+  const venBR = params.vencimento.split("-").reverse().join("/");
+  return {
+    ok: true,
+    titulo: "DARF publicado no portal",
+    detalhe: `DARF de ${r.nome} (venc. ${venBR}) publicado como boleto. O cliente já pode ver e será avisado.`,
   };
 }
