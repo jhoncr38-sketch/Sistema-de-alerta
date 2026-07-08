@@ -6,11 +6,13 @@ import { DocTypeIcon } from "@/components/doc-type-icon";
 import { ConfirmDeleteButton } from "@/components/confirm-delete-button";
 import { ExplicarGuiaButton } from "@/components/explicar-guia-button";
 import { FilePreviewButton } from "@/components/file-preview-button";
+import { PedirSegundaVia } from "@/components/pedir-segunda-via";
 import { Button } from "@/components/ui/button";
 import { PaidToggle } from "@/components/paid-toggle";
 import { RequireProofToggle } from "@/components/require-proof-toggle";
 import { StatusBadge } from "@/components/status-badge";
 import { docTypeLabel } from "@/lib/constants";
+import { getUrgency } from "@/lib/dates";
 import { formatCurrency, formatDate } from "@/lib/format";
 import type { DocType, DocumentWithCompany } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -90,6 +92,8 @@ export function DocumentsTable({
   subtleActions = false,
   showTypeIcon = false,
   showExplain = false,
+  showReissue = false,
+  reissueRequestedIds,
   flush = false,
   emptyMessage = "Nenhum boleto encontrado.",
 }: {
@@ -120,6 +124,10 @@ export function DocumentsTable({
   showTypeIcon?: boolean;
   /** Telas do cliente: botão "O que é isso?" que explica o tipo da guia (IA). */
   showExplain?: boolean;
+  /** Telas do cliente: link "Pedir 2ª via" em boletos vencidos. */
+  showReissue?: boolean;
+  /** IDs de boletos que já têm um pedido de 2ª via pendente (mostra o selo). */
+  reissueRequestedIds?: Set<string>;
   /** Sem borda/cartão externo no desktop — para usar dentro de outro cartão. */
   flush?: boolean;
   emptyMessage?: string;
@@ -177,6 +185,21 @@ export function DocumentsTable({
         requireComprovante={enforceProof && doc.exige_comprovante}
         hasComprovante={!!doc.comprovante_path}
         unpaidVariant={subtleActions ? "outline" : "default"}
+      />
+    );
+  }
+
+  /** Link "Pedir 2ª via" — só no portal do cliente (showReissue), em guia a
+   *  pagar VENCIDA e não paga. Some quando está em dia/paga (não polui). */
+  function reissueLink(doc: DocumentWithCompany) {
+    if (!showReissue || isAdmin || !isPagavel(doc) || !doc.due_date) return null;
+    if (doc.status === "paid") return null;
+    const { urgency } = getUrgency(doc.due_date, doc.status);
+    if (urgency !== "vencido") return null;
+    return (
+      <PedirSegundaVia
+        docId={doc.id}
+        jaSolicitado={reissueRequestedIds?.has(doc.id) ?? false}
       />
     );
   }
@@ -279,7 +302,8 @@ export function DocumentsTable({
       <div className={cn("space-y-2.5 md:hidden", flush ? "p-2.5" : "")}>
         {documents.map((doc) => {
           const pagavel = isPagavel(doc);
-          const hasActions = (showPaid && pagavel) || showActions;
+          const reissue = reissueLink(doc);
+          const hasActions = (showPaid && pagavel) || showActions || !!reissue;
           return (
             <div key={doc.id} className="space-y-3 rounded-xl border bg-card p-4">
               <div className="flex items-start justify-between gap-3">
@@ -347,6 +371,7 @@ export function DocumentsTable({
                   ) : null}
                   {showPreview ? previewButton(doc) : null}
                   {showDownload ? downloadButton(doc) : null}
+                  {reissue ? <span className="ml-auto">{reissue}</span> : null}
                   {showDelete ? (
                     <div className="ml-auto">{deleteButton(doc)}</div>
                   ) : null}
@@ -445,20 +470,23 @@ export function DocumentsTable({
                   {showPaidCol ? (
                     <td className="px-4 py-3">
                       {pagavel ? (
-                        <div className="flex items-center gap-1">
-                          {paidControl(doc, true)}
-                          <ComprovanteButton
-                            docId={doc.id}
-                            paid={doc.status === "paid"}
-                            hasComprovante={!!doc.comprovante_path}
-                            fileName={doc.comprovante_name}
-                          />
-                          {showRequireProof ? (
-                            <RequireProofToggle
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-1">
+                            {paidControl(doc, true)}
+                            <ComprovanteButton
                               docId={doc.id}
-                              value={doc.exige_comprovante}
+                              paid={doc.status === "paid"}
+                              hasComprovante={!!doc.comprovante_path}
+                              fileName={doc.comprovante_name}
                             />
-                          ) : null}
+                            {showRequireProof ? (
+                              <RequireProofToggle
+                                docId={doc.id}
+                                value={doc.exige_comprovante}
+                              />
+                            ) : null}
+                          </div>
+                          {reissueLink(doc)}
                         </div>
                       ) : null}
                     </td>

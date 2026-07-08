@@ -26,14 +26,27 @@ function mesGrupo(d: DocumentWithCompany): { key: string; label: string } {
 export default async function MeusBoletosPage() {
   const supabase = await createClient();
   const activeCompanyId = await getActiveCompanyId();
-  const { data } = await supabase
-    .from("documents")
-    .select("*, company:companies(id,razao_social,nome_fantasia,email)")
-    .eq("categoria", "boleto")
-    .eq("company_id", activeCompanyId ?? "00000000-0000-0000-0000-000000000000")
-    .order("due_date", { ascending: true });
+  const companyId =
+    activeCompanyId ?? "00000000-0000-0000-0000-000000000000";
+  const [{ data }, { data: reissues }] = await Promise.all([
+    supabase
+      .from("documents")
+      .select("*, company:companies(id,razao_social,nome_fantasia,email)")
+      .eq("categoria", "boleto")
+      .eq("company_id", companyId)
+      .order("due_date", { ascending: true }),
+    // Boletos que já têm um pedido de 2ª via pendente (para mostrar o selo).
+    supabase
+      .from("boleto_reissue_requests")
+      .select("document_id")
+      .eq("company_id", companyId)
+      .eq("status", "pending"),
+  ]);
 
   const docs = (data ?? []) as DocumentWithCompany[];
+  const reissueIds = new Set(
+    (reissues ?? []).map((r) => (r as { document_id: string }).document_id),
+  );
 
   // Em aberto fica em destaque (mais urgente primeiro); pagos viram histórico.
   // 'aguardando' (pagamento declarado, à espera do contador) continua entre os
@@ -97,6 +110,8 @@ export default async function MeusBoletosPage() {
                   enforceProof
                   showTypeIcon
                   showExplain
+                  showReissue
+                  reissueRequestedIds={reissueIds}
                   hideCompetencia
                 />
               </div>

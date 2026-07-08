@@ -305,6 +305,32 @@ export function pagamentoAguardandoEmail(opts: {
   return { subject, html: shell({ headline, accent: WARN, bodyHtml: body }) };
 }
 
+/** Cliente pediu a 2ª via de um boleto vencido — avisa o contador. */
+export function segundaViaEmail(opts: {
+  companyName: string;
+  type: DocType;
+  competencia: string | null;
+  amount: number | null;
+  dueDate: string | null;
+  painelUrl: string;
+}) {
+  const { companyName, type, competencia, amount, dueDate, painelUrl } = opts;
+  const headline = "Pedido de 2ª via";
+  const subject = `2ª via solicitada — ${companyName} · ${docTypeLabel(type)}`;
+  const body = `
+        ${p(`O cliente ${b(companyName)} pediu a ${b("2ª via")} de um boleto vencido.`)}
+        ${infoTable(`
+          ${row("Cliente", companyName)}
+          ${row("Guia", docTypeLabel(type))}
+          ${competencia ? row("Competência", competencia) : ""}
+          ${amount != null ? row("Valor", formatCurrency(amount)) : ""}
+          ${dueDate ? row("Venceu em", formatDate(dueDate), WARN) : ""}
+        `)}
+        ${p("Emita a 2ª via atualizada e publique no portal do cliente.")}
+        ${button(painelUrl, "Abrir no painel")}`;
+  return { subject, html: shell({ headline, accent: WARN, bodyHtml: body }) };
+}
+
 /** Resumo mensal (gerado por IA/cron): panorama do mês para o cliente. */
 export function resumoMensalEmail(opts: {
   companyName: string;

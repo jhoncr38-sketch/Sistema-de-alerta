@@ -5,7 +5,11 @@ import { revalidatePath } from "next/cache";
 import { getUserAndProfile, requireAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { notifyPaid, notifyPagamentoAguardando } from "@/lib/email/notify";
+import {
+  notifyPaid,
+  notifyPagamentoAguardando,
+  notifyReissueRequest,
+} from "@/lib/email/notify";
 import { creditPaymentOnTime, reversePaymentCredit } from "@/lib/rewards-credit";
 import type { DocCategoria, DocType } from "@/lib/types";
 
@@ -442,4 +446,60 @@ export async function deleteDocument(docId: string) {
   revalidatePath("/portal");
   revalidatePath("/portal/boletos");
   revalidatePath("/portal/folha");
+}
+
+/**
+ * Cliente pede a 2ª via de um boleto vencido. Registra o pedido no banco (a RPC
+ * valida dono e que a guia é a pagar/não paga) e avisa o contador por e-mail.
+ * Idempotente: um pedido pendente por boleto (a RPC reaproveita o existente).
+ */
+export async function requestBoletoReissue(docId: string) {
+  const supabase = await createClient();
+
+  const { error } = await supabase.rpc("request_boleto_reissue", {
+    p_document_id: docId,
+  });
+  if (error) throw new Error(error.message);
+
+  // Dados do boleto para o e-mail do contador (best-effort; não bloqueia).
+  const { data: doc } = await supabase
+    .from("documents")
+    .select("company_id,type,competencia,amount,due_date")
+    .eq("id", docId)
+    .single();
+  if (doc) {
+    after(() =>
+      notifyReissueRequest({
+        companyId: doc.company_id,
+        type: doc.type as DocType,
+        competencia: doc.competencia,
+        amount: doc.amount,
+        dueDate: doc.due_date,
+      }).catch((err) => console.error("[notify] 2a via:", err)),
+    );
+  }
+
+  revalidatePath("/portal");
+  revalidatePath("/portal/boletos");
+  revalidatePath("/painel");
+}
+
+/**
+ * O contador marca um pedido de 2ª via como resolvido (após emitir e publicar a
+ * nova guia). Só admin — a RLS da tabela restringe o UPDATE ao admin.
+ */
+export async function resolveReissueRequest(requestId: string) {
+  await requireAdmin();
+  const supabase = await createClient();
+  const { profile } = await getUserAndProfile();
+  const { error } = await supabase
+    .from("boleto_reissue_requests")
+    .update({
+      status: "resolved",
+      resolved_at: new Date().toISOString(),
+      resolved_by: profile?.id ?? null,
+    })
+    .eq("id", requestId);
+  if (error) throw new Error(error.message);
+  revalidatePath("/painel");
 }

@@ -4,6 +4,7 @@ import {
   novoDocumentoEmail,
   pagamentoAguardandoEmail,
   pagamentoConfirmadoEmail,
+  segundaViaEmail,
 } from "@/lib/email/templates";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { DocCategoria, DocType } from "@/lib/types";
@@ -163,4 +164,34 @@ export async function notifyPagamentoAguardando(opts: {
     .from("notifications")
     .insert({ document_id: opts.documentId, channel, kind: "aguardando" });
   if (error) console.warn("[notify] aguardando não registrado:", error.message);
+}
+
+/**
+ * Avisa o contador que o cliente pediu a 2ª via de um boleto vencido.
+ * Best-effort (não bloqueia a ação): manda e-mail para o contador se houver
+ * destinatário; o pedido em si já ficou registrado na tabela do banco.
+ */
+export async function notifyReissueRequest(opts: {
+  companyId: string;
+  type: DocType;
+  competencia: string | null;
+  amount: number | null;
+  dueDate: string | null;
+}): Promise<void> {
+  const supabase = createAdminClient();
+  const [{ companyName }, { recipients }] = await Promise.all([
+    companyNotifyTarget(supabase, opts.companyId),
+    adminNotifyTarget(supabase),
+  ]);
+  if (recipients.length === 0) return;
+
+  const { subject, html } = segundaViaEmail({
+    companyName,
+    type: opts.type,
+    competencia: opts.competencia,
+    amount: opts.amount,
+    dueDate: opts.dueDate,
+    painelUrl: `${portalBase()}/painel`,
+  });
+  await sendEmail({ to: recipients, subject, html });
 }

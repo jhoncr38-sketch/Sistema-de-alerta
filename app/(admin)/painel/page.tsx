@@ -5,6 +5,7 @@ import { CompanyFilterSelect } from "@/components/company-filter-select";
 import { DocumentsTable } from "@/components/documents-table";
 import { MetricCard } from "@/components/metric-card";
 import { PageHeader } from "@/components/page-header";
+import { ReissueRequests, type ReissueItem } from "@/components/reissue-requests";
 import { getUrgency, type Urgency } from "@/lib/dates";
 import { formatCurrency } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
@@ -73,17 +74,27 @@ export default async function PainelPage({
 }) {
   const sp = await searchParams;
   const supabase = await createClient();
-  const [{ data: companies }, { data: docsRaw }] = await Promise.all([
-    supabase.from("companies").select("id").eq("active", true),
-    supabase
-      .from("documents")
-      .select(
-        "*, company:companies(id,razao_social,nome_fantasia,email), plan:installment_plans(forma_pagamento)",
-      )
-      .order("due_date", { ascending: true }),
-  ]);
+  const [{ data: companies }, { data: docsRaw }, { data: reissuesRaw }] =
+    await Promise.all([
+      supabase.from("companies").select("id").eq("active", true),
+      supabase
+        .from("documents")
+        .select(
+          "*, company:companies(id,razao_social,nome_fantasia,email), plan:installment_plans(forma_pagamento)",
+        )
+        .order("due_date", { ascending: true }),
+      // Pedidos de 2ª via pendentes (cliente pediu; contador ainda não reenviou).
+      supabase
+        .from("boleto_reissue_requests")
+        .select(
+          "id, requested_at, document:documents(id,type,competencia,amount,due_date,company:companies(razao_social,nome_fantasia))",
+        )
+        .eq("status", "pending")
+        .order("requested_at", { ascending: false }),
+    ]);
 
   const allDocs = (docsRaw ?? []) as PainelDoc[];
+  const reissueItems = (reissuesRaw ?? []) as unknown as ReissueItem[];
 
   // Empresas que têm documento (para o filtro), ordenadas por nome.
   const companyMap = new Map<string, string>();
@@ -213,6 +224,9 @@ export default async function PainelPage({
             />
           </section>
         ) : null}
+
+        {/* Pedidos de 2ª via (só na visão geral, sem filtro por empresa). */}
+        {!filtrando ? <ReissueRequests items={reissueItems} /> : null}
 
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {filtrando ? (

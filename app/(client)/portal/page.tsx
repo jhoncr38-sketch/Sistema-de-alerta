@@ -34,15 +34,25 @@ export default async function PortalHome() {
   const supabase = await createClient();
   const { active } = await getClientCompanyContext();
   const activeId = active?.id ?? "00000000-0000-0000-0000-000000000000";
-  const { data } = await supabase
-    .from("documents")
-    .select(
-      "*, company:companies(id,razao_social,nome_fantasia,email), plan:installment_plans(forma_pagamento)",
-    )
-    .eq("company_id", activeId)
-    .order("due_date", { ascending: true });
+  const [{ data }, { data: reissues }] = await Promise.all([
+    supabase
+      .from("documents")
+      .select(
+        "*, company:companies(id,razao_social,nome_fantasia,email), plan:installment_plans(forma_pagamento)",
+      )
+      .eq("company_id", activeId)
+      .order("due_date", { ascending: true }),
+    supabase
+      .from("boleto_reissue_requests")
+      .select("document_id")
+      .eq("company_id", activeId)
+      .eq("status", "pending"),
+  ]);
 
   const docs = (data ?? []) as PortalDoc[];
+  const reissueIds = new Set(
+    (reissues ?? []).map((r) => (r as { document_id: string }).document_id),
+  );
   // Boletos e parcelas de parcelamento são "guias a pagar" — entram no resumo.
   const pagaveis = docs.filter(
     (d) => d.categoria === "boleto" || d.categoria === "parcelamento",
@@ -125,6 +135,8 @@ export default async function PortalHome() {
             enforceProof
             showTypeIcon
             showExplain
+            showReissue
+            reissueRequestedIds={reissueIds}
             emptyMessage="Você não tem boletos ou parcelas em aberto."
           />
         </section>
