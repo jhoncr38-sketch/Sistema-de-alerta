@@ -4,6 +4,7 @@ import { useState } from "react";
 import { HelpCircle, Loader2, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { MarkdownLite } from "@/components/markdown-lite";
 import type { DocType } from "@/lib/types";
 
 /**
@@ -108,11 +109,9 @@ export function ExplicarGuiaButton({
               Não consegui carregar a explicação agora. Tente novamente em
               instantes ou fale com seu contador.
             </p>
-          ) : (
-            <p className="text-sm leading-relaxed whitespace-pre-wrap text-foreground">
-              {texto}
-            </p>
-          )}
+          ) : texto ? (
+            <MarkdownLite text={texto} className="text-foreground" />
+          ) : null}
 
           <p className="border-t pt-2 text-xs text-muted-foreground">
             {textoPronto

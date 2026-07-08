@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { MarkdownLite } from "@/components/markdown-lite";
 import {
   consultarSitfis,
   explicarSituacaoFiscal,
@@ -67,11 +68,13 @@ export function SituacaoFiscalCard({
     });
   }
 
-  function publicar() {
+  // Publica o relatório. Por padrão leva o resumo da IA (se houver); com
+  // comIa=false, publica só o PDF, sem a explicação automática.
+  function publicar(comIa = true) {
     setPub(null);
-    // Se há resumo por IA, ele vai junto (vira a descrição que o cliente lê).
+    const descricao = comIa ? (resumo ?? undefined) : undefined;
     startPublicar(async () =>
-      setPub(await publicarSitfis(companyId, resumo ?? undefined)),
+      setPub(await publicarSitfis(companyId, descricao)),
     );
   }
 
@@ -199,19 +202,47 @@ export function SituacaoFiscalCard({
                               )}
                               {resumo ? "Refazer explicação" : "Explicar com IA"}
                             </Button>
-                            <Button
-                              type="button"
-                              size="sm"
-                              disabled={publicando || !!pub?.ok}
-                              onClick={publicar}
-                            >
-                              {publicando ? (
-                                <Loader2 className="animate-spin" />
-                              ) : (
-                                <Send />
-                              )}
-                              Publicar no portal do cliente
-                            </Button>
+                            {resumo ? (
+                              <>
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  disabled={publicando || !!pub?.ok}
+                                  onClick={() => publicar(true)}
+                                >
+                                  {publicando ? (
+                                    <Loader2 className="animate-spin" />
+                                  ) : (
+                                    <Send />
+                                  )}
+                                  Publicar com explicação
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  disabled={publicando || !!pub?.ok}
+                                  onClick={() => publicar(false)}
+                                >
+                                  <Send />
+                                  Publicar só o PDF
+                                </Button>
+                              </>
+                            ) : (
+                              <Button
+                                type="button"
+                                size="sm"
+                                disabled={publicando || !!pub?.ok}
+                                onClick={() => publicar(false)}
+                              >
+                                {publicando ? (
+                                  <Loader2 className="animate-spin" />
+                                ) : (
+                                  <Send />
+                                )}
+                                Publicar no portal do cliente
+                              </Button>
+                            )}
                           </div>
 
                           {/* Resumo da IA (opcional) — vai junto ao publicar. */}
@@ -224,9 +255,7 @@ export function SituacaoFiscalCard({
                                 <Sparkles className="size-3.5" />
                                 Explicação para o cliente (gerada por IA)
                               </div>
-                              <p className="text-sm whitespace-pre-line">
-                                {resumo}
-                              </p>
+                              <MarkdownLite text={resumo} />
                               <p className="mt-2 text-xs text-muted-foreground">
                                 Confira antes de publicar — este texto vai junto
                                 do relatório no portal do cliente.
