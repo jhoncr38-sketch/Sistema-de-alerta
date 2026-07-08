@@ -8,6 +8,7 @@ import { notifyNewDocument } from "@/lib/email/notify";
 import { getSerproTokens, serproConfigurado } from "@/lib/serpro/auth";
 import { chamarServico } from "@/lib/serpro/client";
 import { gerarDas } from "@/lib/serpro/das";
+import { consultarSituacaoFiscal } from "@/lib/serpro/sitfis";
 import { createClient } from "@/lib/supabase/server";
 
 /** Resultado de um teste de diagnóstico da integração SERPRO. */
@@ -426,5 +427,186 @@ export async function publicarDas(
     detalhe: substituido
       ? `O DAS de ${nome} para ${mesRef} (que estava em aberto) foi substituído pelo novo (venc. ${venBR}). O cliente será avisado.`
       : `DAS de ${nome} (venc. ${venBR}) publicado como boleto. O cliente já pode ver e será avisado.`,
+  };
+}
+
+// ============================================================
+// Situação Fiscal (SITFIS) — consultar e publicar como documento
+// ============================================================
+
+export interface SitfisConsultaResult {
+  ok: boolean;
+  titulo: string;
+  detalhe: string;
+  /** PDF do relatório em base64 (para exibir/baixar). */
+  pdfBase64?: string;
+}
+
+/** Busca o CNPJ do cliente e roda o SITFIS. Reaproveitado por consulta/publicação. */
+async function rodarSitfis(companyId: string): Promise<
+  | { erro: SitfisConsultaResult }
+  | { nome: string; pdfBase64: string }
+> {
+  const contratante = digits(process.env.SERPRO_CONTRATANTE_CNPJ ?? "");
+  if (!contratante) {
+    return {
+      erro: {
+        ok: false,
+        titulo: "Falta o CNPJ da contratante",
+        detalhe: "Configure SERPRO_CONTRATANTE_CNPJ.",
+      },
+    };
+  }
+  const supabase = await createClient();
+  const { data: company } = await supabase
+    .from("companies")
+    .select("cnpj, razao_social, nome_fantasia")
+    .eq("id", companyId)
+    .single();
+  if (!company) {
+    return { erro: { ok: false, titulo: "Cliente não encontrado", detalhe: "" } };
+  }
+  const contribuinte = digits(company.cnpj);
+  const nome = company.nome_fantasia || company.razao_social;
+  if (!contribuinte) {
+    return {
+      erro: {
+        ok: false,
+        titulo: "Cliente sem CNPJ",
+        detalhe: `${nome} não tem CNPJ cadastrado.`,
+      },
+    };
+  }
+
+  const r = await consultarSituacaoFiscal({
+    contratanteCnpj: contratante,
+    autorCnpj: contratante,
+    contribuinteCnpj: contribuinte,
+  });
+  if (!r.ok || !r.pdfBase64) {
+    return {
+      erro: {
+        ok: false,
+        titulo: "Não foi possível obter a situação fiscal",
+        detalhe: r.erro ?? "A Receita não retornou o relatório.",
+      },
+    };
+  }
+  return { nome, pdfBase64: r.pdfBase64 };
+}
+
+/**
+ * Consulta a situação fiscal de um cliente na Receita (SITFIS) — só leitura.
+ * Devolve o PDF do relatório para o contador conferir. Não publica nada.
+ */
+export async function consultarSitfis(
+  companyId: string,
+): Promise<SitfisConsultaResult> {
+  await requireAdmin();
+  const r = await rodarSitfis(companyId);
+  if ("erro" in r) return r.erro;
+  return {
+    ok: true,
+    titulo: "Situação fiscal obtida",
+    detalhe: `Relatório de ${r.nome} gerado. Confira abaixo. Nada foi publicado.`,
+    pdfBase64: r.pdfBase64,
+  };
+}
+
+/**
+ * Publica o relatório de situação fiscal no portal do cliente, como DOCUMENTO
+ * informativo (categoria 'documento', type 'relatorio_fiscal'). Regera na
+ * Receita (fonte da verdade) e sobe o PDF. Avisa o cliente.
+ */
+export async function publicarSitfis(
+  companyId: string,
+): Promise<SitfisConsultaResult> {
+  const { profile } = await requireAdmin();
+  const r = await rodarSitfis(companyId);
+  if ("erro" in r) return r.erro;
+
+  const supabase = await createClient();
+  const docId = crypto.randomUUID();
+  const hoje = new Date().toISOString().slice(0, 10);
+  const fileName = `Situacao-Fiscal-${hoje}.pdf`;
+  const path = `${companyId}/${docId}-${fileName}`;
+  const pdfBytes = Buffer.from(r.pdfBase64, "base64");
+
+  const { error: upErr } = await supabase.storage
+    .from("boletos")
+    .upload(path, pdfBytes, { contentType: "application/pdf", upsert: false });
+  if (upErr) {
+    return { ok: false, titulo: "Falha ao salvar o PDF", detalhe: upErr.message };
+  }
+
+  const { error: insErr } = await supabase.from("documents").insert({
+    id: docId,
+    company_id: companyId,
+    type: "relatorio_fiscal",
+    categoria: "documento",
+    descricao: "Relatório de situação fiscal (Receita Federal)",
+    file_path: path,
+    file_name: fileName,
+    uploaded_by: profile.id,
+  });
+  if (insErr) {
+    await supabase.storage.from("boletos").remove([path]);
+    return {
+      ok: false,
+      titulo: "Falha ao registrar o documento",
+      detalhe: insErr.message,
+    };
+  }
+
+  // A situação fiscal é uma "foto do momento": só o relatório mais recente
+  // interessa. O novo já entrou — remove os relatórios fiscais anteriores deste
+  // cliente (registro + PDF), mantendo apenas este.
+  const { data: antigos } = await supabase
+    .from("documents")
+    .select("id, file_path")
+    .eq("company_id", companyId)
+    .eq("categoria", "documento")
+    .eq("type", "relatorio_fiscal")
+    .neq("id", docId);
+  const substituiu = !!(antigos && antigos.length);
+  if (substituiu) {
+    await supabase
+      .from("documents")
+      .delete()
+      .in(
+        "id",
+        antigos!.map((d) => d.id),
+      );
+    const paths = antigos!
+      .map((d) => d.file_path)
+      .filter((p): p is string => !!p);
+    if (paths.length) {
+      await supabase.storage.from("boletos").remove(paths);
+    }
+  }
+
+  after(() =>
+    notifyNewDocument({
+      companyId,
+      documentId: docId,
+      categoria: "documento",
+      type: "relatorio_fiscal",
+      competencia: null,
+      amount: null,
+      dueDate: null,
+      count: 1,
+    }).catch((err) => console.error("[notify] situação fiscal:", err)),
+  );
+
+  revalidatePath("/painel/documentos");
+  revalidatePath("/portal");
+
+  return {
+    ok: true,
+    titulo: substituiu ? "Situação fiscal atualizada" : "Situação fiscal publicada",
+    detalhe: substituiu
+      ? `O relatório de ${r.nome} foi atualizado no portal (o anterior foi substituído). O cliente será avisado.`
+      : `O relatório de ${r.nome} foi publicado no portal como documento. O cliente será avisado.`,
+    pdfBase64: r.pdfBase64,
   };
 }

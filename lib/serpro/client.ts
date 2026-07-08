@@ -40,8 +40,9 @@ export interface SerproEnvelope {
   idSistema: string;
   idServico: string;
   versaoSistema?: string;
-  /** Payload específico do serviço (varia por idServico). */
-  dados: Record<string, unknown>;
+  /** Payload específico do serviço (varia por idServico). Alguns serviços
+   *  (ex.: SITFIS solicitar protocolo) exigem string vazia em vez de objeto. */
+  dados: Record<string, unknown> | string;
   /**
    * Token do autenticarProcurador, quando o serviço exige (XML assinado).
    * A maioria dos serviços com procuração no e-CAC NÃO precisa disto.
