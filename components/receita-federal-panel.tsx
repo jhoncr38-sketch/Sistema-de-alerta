@@ -1,10 +1,11 @@
 "use client";
 
-import { FileText, Landmark, ShieldCheck } from "lucide-react";
+import { FileText, Landmark, Layers, ShieldCheck } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { EmitirDasCard } from "@/components/emitir-das-card";
 import { EmitirDarfCard } from "@/components/emitir-darf-card";
+import { EmitirParcelamentoCard } from "@/components/emitir-parcelamento-card";
 import { SituacaoFiscalCard } from "@/components/situacao-fiscal-card";
 
 interface CompanyOpt {
@@ -53,6 +54,10 @@ export function ReceitaFederalPanel({
             <Landmark />
             DARF (DCTFWeb)
           </TabsTrigger>
+          <TabsTrigger value="parcelamento">
+            <Layers />
+            Parcelamento
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="sitfis" className="pt-4">
@@ -67,6 +72,13 @@ export function ReceitaFederalPanel({
         </TabsContent>
         <TabsContent value="darf" className="pt-4">
           <EmitirDarfCard companies={companies} configurado={configurado} bare />
+        </TabsContent>
+        <TabsContent value="parcelamento" className="pt-4">
+          <EmitirParcelamentoCard
+            companies={companies}
+            configurado={configurado}
+            bare
+          />
         </TabsContent>
       </Tabs>
     </Card>

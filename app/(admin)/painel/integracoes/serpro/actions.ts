@@ -11,6 +11,11 @@ import { getSerproTokens, serproConfigurado } from "@/lib/serpro/auth";
 import { chamarServico } from "@/lib/serpro/client";
 import { gerarDas } from "@/lib/serpro/das";
 import { gerarDarfDctfweb } from "@/lib/serpro/dctfweb";
+import {
+  emitirParcela,
+  listarParcelas,
+  PARCELAMENTO_SISTEMAS,
+} from "@/lib/serpro/parcelamento";
 import { consultarSituacaoFiscal } from "@/lib/serpro/sitfis";
 import { createClient } from "@/lib/supabase/server";
 import type { DocType } from "@/lib/types";
@@ -886,5 +891,237 @@ export async function publicarDarf(params: {
     ok: true,
     titulo: "DARF publicado no portal",
     detalhe: `DARF de ${r.nome} (venc. ${venBR}) publicado como boleto. O cliente já pode ver e será avisado.`,
+  };
+}
+
+// ============================================================
+// Parcelamento — lista as parcelas REAIS da Receita e publica a escolhida como
+// boleto no portal (não depende do parcelamento cadastrado no site).
+// ============================================================
+
+export interface ParcelaReceita {
+  parcela: number; // AAAAMM
+  valor: number | null;
+  sistema: string; // qual sistema tem essa parcela (PARCSN, PARCMEI, ...)
+  label: string; // "05/2026"
+}
+
+export interface ListarParcelasResult {
+  ok: boolean;
+  parcelas: ParcelaReceita[];
+  titulo?: string;
+  detalhe?: string;
+}
+
+/** AAAAMM (número) -> "MM/AAAA" para exibir e casar com a competência do sistema. */
+function aaaammParaCompetencia(pa: number): string {
+  const s = String(pa);
+  return `${s.slice(4, 6)}/${s.slice(0, 4)}`;
+}
+
+/**
+ * Lista as parcelas disponíveis na Receita para um cliente, varrendo os sistemas
+ * suportados (PARCSN, PARCMEI, PERTSN, RELPSN). Só leitura — mostra o que existe
+ * de verdade, com o valor de cada parcela.
+ */
+export async function listarParcelasReceita(
+  companyId: string,
+): Promise<ListarParcelasResult> {
+  await requireAdmin();
+  const contratante = digits(process.env.SERPRO_CONTRATANTE_CNPJ ?? "");
+  if (!contratante) {
+    return {
+      ok: false,
+      parcelas: [],
+      titulo: "Falta o CNPJ da contratante",
+      detalhe: "Configure SERPRO_CONTRATANTE_CNPJ.",
+    };
+  }
+
+  const supabase = await createClient();
+  const { data: company } = await supabase
+    .from("companies")
+    .select("cnpj, razao_social, nome_fantasia")
+    .eq("id", companyId)
+    .single();
+  const contribuinte = digits(company?.cnpj ?? "");
+  if (!contribuinte) {
+    return { ok: false, parcelas: [], titulo: "Cliente sem CNPJ", detalhe: "" };
+  }
+
+  const encontradas: ParcelaReceita[] = [];
+  for (const s of PARCELAMENTO_SISTEMAS) {
+    const lista = await listarParcelas({
+      sistema: s.id,
+      contratanteCnpj: contratante,
+      autorCnpj: contratante,
+      contribuinteCnpj: contribuinte,
+    });
+    if (!lista.ok) continue;
+    for (const p of lista.parcelas) {
+      if (!p.parcela) continue;
+      encontradas.push({
+        parcela: p.parcela,
+        valor: p.valor,
+        sistema: s.id,
+        label: aaaammParaCompetencia(p.parcela),
+      });
+    }
+  }
+
+  if (encontradas.length === 0) {
+    return {
+      ok: true,
+      parcelas: [],
+      titulo: "Nenhuma parcela disponível",
+      detalhe:
+        "A Receita não retornou parcelas para emissão deste cliente (pode não ter parcelamento ativo na Receita, ou faltar procuração).",
+    };
+  }
+  encontradas.sort((a, b) => a.parcela - b.parcela);
+  return { ok: true, parcelas: encontradas };
+}
+
+export interface PublicarParcelaResult {
+  ok: boolean;
+  titulo: string;
+  detalhe: string;
+}
+
+/**
+ * Emite a guia de UMA parcela (sistema + AAAAMM) na Receita e publica como boleto
+ * no portal do cliente. Evita duplicar: se já existir um boleto de parcelamento
+ * dessa competência para o cliente em aberto, substitui; se pago, bloqueia.
+ */
+export async function publicarParcelaReceita(params: {
+  companyId: string;
+  sistema: string;
+  parcela: number; // AAAAMM
+  valor: number | null;
+}): Promise<PublicarParcelaResult> {
+  const { profile } = await requireAdmin();
+  const contratante = digits(process.env.SERPRO_CONTRATANTE_CNPJ ?? "");
+  if (!contratante) {
+    return { ok: false, titulo: "Falta o CNPJ da contratante", detalhe: "" };
+  }
+
+  const supabase = await createClient();
+  const { data: company } = await supabase
+    .from("companies")
+    .select("cnpj, razao_social, nome_fantasia")
+    .eq("id", params.companyId)
+    .single();
+  const contribuinte = digits(company?.cnpj ?? "");
+  const nome = company?.nome_fantasia || company?.razao_social || "cliente";
+  if (!contribuinte) {
+    return { ok: false, titulo: "Cliente sem CNPJ", detalhe: "" };
+  }
+
+  const competencia = aaaammParaCompetencia(params.parcela);
+
+  // Já existe boleto de parcela dessa competência? (mesma regra do DAS)
+  const { data: existentes } = await supabase
+    .from("documents")
+    .select("id, status, file_path")
+    .eq("company_id", params.companyId)
+    .eq("categoria", "boleto")
+    .eq("type", "outro")
+    .eq("competencia", competencia);
+  const antigos = existentes ?? [];
+  if (antigos.some((d) => d.status !== "open")) {
+    return {
+      ok: false,
+      titulo: "Parcela já paga",
+      detalhe: `A guia da parcela ${competencia} já foi marcada como paga/aguardando. Remova a antiga antes de reemitir.`,
+    };
+  }
+
+  // Emite na Receita.
+  const emit = await emitirParcela({
+    sistema: params.sistema,
+    contratanteCnpj: contratante,
+    autorCnpj: contratante,
+    contribuinteCnpj: contribuinte,
+    parcela: params.parcela,
+  });
+  if (!emit.ok || !emit.pdfBase64) {
+    return {
+      ok: false,
+      titulo: "Não foi possível emitir a parcela",
+      detalhe: emit.erro ?? "A Receita não retornou a guia.",
+    };
+  }
+
+  const docId = crypto.randomUUID();
+  const fileName = `Parcela-${params.parcela}.pdf`;
+  const path = `${params.companyId}/${docId}-${fileName}`;
+  const { error: upErr } = await supabase.storage
+    .from("boletos")
+    .upload(path, Buffer.from(emit.pdfBase64, "base64"), {
+      contentType: "application/pdf",
+      upsert: false,
+    });
+  if (upErr) {
+    return { ok: false, titulo: "Falha ao salvar o PDF", detalhe: upErr.message };
+  }
+
+  const { error: insErr } = await supabase.from("documents").insert({
+    id: docId,
+    company_id: params.companyId,
+    type: "outro",
+    categoria: "boleto",
+    competencia,
+    amount: params.valor,
+    descricao: "Parcela de parcelamento (Receita Federal)",
+    file_path: path,
+    file_name: fileName,
+    uploaded_by: profile.id,
+  });
+  if (insErr) {
+    await supabase.storage.from("boletos").remove([path]);
+    return {
+      ok: false,
+      titulo: "Falha ao registrar o boleto",
+      detalhe: insErr.message,
+    };
+  }
+
+  // Substitui os antigos em aberto dessa competência (evita duplicata).
+  const substituiu = antigos.length > 0;
+  if (substituiu) {
+    await supabase
+      .from("documents")
+      .delete()
+      .in(
+        "id",
+        antigos.map((d) => d.id),
+      );
+    const paths = antigos
+      .map((d) => d.file_path)
+      .filter((p): p is string => !!p);
+    if (paths.length) await supabase.storage.from("boletos").remove(paths);
+  }
+
+  after(() =>
+    notifyNewDocument({
+      companyId: params.companyId,
+      documentId: docId,
+      categoria: "boleto",
+      type: "outro",
+      competencia,
+      amount: params.valor,
+      dueDate: null,
+      count: 1,
+    }).catch((err) => console.error("[notify] parcela publicada:", err)),
+  );
+
+  revalidatePath("/painel");
+  revalidatePath("/portal");
+  revalidatePath("/portal/boletos");
+
+  return {
+    ok: true,
+    titulo: substituiu ? "Parcela atualizada no portal" : "Parcela publicada no portal",
+    detalhe: `A guia da parcela ${competencia} de ${nome} foi ${substituiu ? "atualizada" : "publicada"} como boleto. O cliente já pode baixá-la.`,
   };
 }
