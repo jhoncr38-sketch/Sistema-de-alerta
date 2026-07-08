@@ -46,11 +46,10 @@ export default async function SerproIntegracaoPage() {
                 <code>SERPRO_CONSUMER_SECRET</code>
               </li>
               <li>
-                <code>SERPRO_CERT_PFX_BASE64</code> (o certificado .pfx em
-                base64)
+                <code>SERPRO_CERT_PEM_BASE64</code> (certificado em PEM/base64)
               </li>
               <li>
-                <code>SERPRO_CERT_PASSWORD</code> (senha do certificado)
+                <code>SERPRO_KEY_PEM_BASE64</code> (chave privada em PEM/base64)
               </li>
               <li>
                 <code>SERPRO_CONTRATANTE_CNPJ</code> (CNPJ da SJ Contabilidade)
