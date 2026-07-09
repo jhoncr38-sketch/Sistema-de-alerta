@@ -904,6 +904,8 @@ export interface ParcelaReceita {
   valor: number | null;
   sistema: string; // qual sistema tem essa parcela (PARCSN, PARCMEI, ...)
   label: string; // "05/2026"
+  /** Já existe uma guia dessa parcela no portal (evita republicar/duplicar). */
+  jaNoPortal: boolean;
 }
 
 export interface ListarParcelasResult {
@@ -949,6 +951,21 @@ export async function listarParcelasReceita(
     return { ok: false, parcelas: [], titulo: "Cliente sem CNPJ", detalhe: "" };
   }
 
+  // Guias "a pagar" que o cliente já tem no portal — para não duplicar. Casamos
+  // por COMPETÊNCIA (boleto solto que esta feature cria) e também por VALOR
+  // (parcelas de parcelamento cadastradas à mão, que não têm competência).
+  const { data: existentesRaw } = await supabase
+    .from("documents")
+    .select("competencia, amount")
+    .eq("company_id", companyId)
+    .in("categoria", ["boleto", "parcelamento"]);
+  const compsExistentes = new Set<string>();
+  const valoresExistentes = new Set<number>();
+  for (const e of existentesRaw ?? []) {
+    if (e.competencia) compsExistentes.add(e.competencia);
+    if (e.amount != null) valoresExistentes.add(Number(e.amount));
+  }
+
   const encontradas: ParcelaReceita[] = [];
   for (const s of PARCELAMENTO_SISTEMAS) {
     const lista = await listarParcelas({
@@ -960,11 +977,16 @@ export async function listarParcelasReceita(
     if (!lista.ok) continue;
     for (const p of lista.parcelas) {
       if (!p.parcela) continue;
+      const comp = aaaammParaCompetencia(p.parcela);
+      const jaNoPortal =
+        compsExistentes.has(comp) ||
+        (p.valor != null && valoresExistentes.has(Number(p.valor)));
       encontradas.push({
         parcela: p.parcela,
         valor: p.valor,
         sistema: s.id,
-        label: aaaammParaCompetencia(p.parcela),
+        label: comp,
+        jaNoPortal,
       });
     }
   }

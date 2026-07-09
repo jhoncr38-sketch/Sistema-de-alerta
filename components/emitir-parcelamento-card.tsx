@@ -1,7 +1,15 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { CheckCircle2, Layers, Loader2, Search, Send, XCircle } from "lucide-react";
+import {
+  AlertTriangle,
+  CheckCircle2,
+  Layers,
+  Loader2,
+  Search,
+  Send,
+  XCircle,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import {
@@ -40,10 +48,13 @@ export function EmitirParcelamentoCard({
   const [pubMsg, setPubMsg] = useState<Record<string, { ok: boolean; texto: string }>>(
     {},
   );
+  // Parcelas "já no portal" que o contador escolheu publicar mesmo assim.
+  const [forcar, setForcar] = useState<Record<string, boolean>>({});
 
   function buscar() {
     setRes(null);
     setPubMsg({});
+    setForcar({});
     startBuscar(async () => setRes(await listarParcelasReceita(companyId)));
   }
 
@@ -156,6 +167,24 @@ export function EmitirParcelamentoCard({
                               <span className="inline-flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400">
                                 <CheckCircle2 className="size-3.5" />
                                 Publicada
+                              </span>
+                            ) : p.jaNoPortal && !forcar[chave] ? (
+                              // Já existe uma guia dessa parcela (competência ou
+                              // valor iguais) no portal — evita duplicar.
+                              <span className="inline-flex items-center gap-2">
+                                <span className="inline-flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400">
+                                  <AlertTriangle className="size-3.5" />
+                                  Já no portal
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setForcar((f) => ({ ...f, [chave]: true }))
+                                  }
+                                  className="text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+                                >
+                                  publicar mesmo assim
+                                </button>
                               </span>
                             ) : (
                               <Button
