@@ -104,6 +104,19 @@ function isoDay(v: string): string {
   return v.split("T")[0];
 }
 
+const MESES_ABREV = [
+  "jan", "fev", "mar", "abr", "mai", "jun",
+  "jul", "ago", "set", "out", "nov", "dez",
+];
+
+/** "2026-03" -> "mar/2026". Rótulo curto de mês para o contexto da IA. */
+function labelMes(yyyymm: string): string {
+  const [y, m] = yyyymm.split("-");
+  const idx = Number(m) - 1;
+  const abrev = MESES_ABREV[idx] ?? m;
+  return `${abrev}/${y}`;
+}
+
 /** Resultado da pergunta. `disponivel=false` => IA não configurada. */
 export interface AssistenteResposta {
   disponivel: boolean;
@@ -127,6 +140,9 @@ function contextoCliente(
   let tributosMesValor = 0;
   let pagasAnoValor = 0;
   const ano = mes.slice(0, 4);
+  // Imposto pago por MÊS DE PAGAMENTO ("YYYY-MM" -> total). Alimenta a pergunta
+  // "qual mês paguei mais imposto?" (visão de caixa: quando saiu do bolso).
+  const tributosPagosPorMes = new Map<string, number>();
 
   // Progresso dos parcelamentos: por plano, quantas parcelas pagas de quantas.
   const planos = new Map<
@@ -160,10 +176,17 @@ function contextoCliente(
       const ref = d.marcado_pago_at ?? d.paid_at;
       if (ref) {
         const day = isoDay(ref);
-        if (day.slice(0, 7) === mes) {
+        const mesPagto = day.slice(0, 7);
+        if (mesPagto === mes) {
           pagasMesQtd++;
           pagasMesValor += valor;
           if (isTributo(d.type)) tributosMesValor += valor;
+        }
+        if (isTributo(d.type)) {
+          tributosPagosPorMes.set(
+            mesPagto,
+            (tributosPagosPorMes.get(mesPagto) ?? 0) + valor,
+          );
         }
         if (day.slice(0, 4) === ano) pagasAnoValor += valor;
       }
@@ -219,6 +242,17 @@ function contextoCliente(
     `Pagas no mês atual: ${pagasMesQtd} guia(s), total ${formatCurrency(pagasMesValor)} (dos quais ${formatCurrency(tributosMesValor)} em impostos).`,
   );
   partes.push(`Total pago no ano de ${ano}: ${formatCurrency(pagasAnoValor)}.`);
+
+  // Série mensal de imposto PAGO (por mês de pagamento), do mais antigo ao mais
+  // recente. Responde "qual mês paguei mais imposto?" na visão de caixa.
+  const linhasPagos = Array.from(tributosPagosPorMes.entries())
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([m, v]) => `${labelMes(m)}: ${formatCurrency(v)}`);
+  if (linhasPagos.length) {
+    partes.push(
+      `Imposto pago por mês (pela data de pagamento — visão de caixa):\n- ${linhasPagos.join("\n- ")}`,
+    );
+  }
 
   return partes.join("\n\n");
 }

@@ -88,6 +88,23 @@ export async function blocosAmpliados(
       linhas.push(
         `Melhor mês: ${fat.melhorMes.label} (${formatCurrency(fat.melhorMes.faturamento)})`,
       );
+    // Série de guias LANÇADAS por competência (mês a que se referem). Soma TODAS
+    // as guias por tipo (inclui INSS, FGTS...) — exatamente o total das barras do
+    // gráfico "Tributos por tipo" da tela. Bate com o que o cliente vê ali.
+    // (Nota: fat.tributos é só a carga — DAS/DARF/ISS/ICMS, sem INSS — por isso
+    // não serve para bater com o gráfico; somamos porTipo.)
+    const linhasTributos = fat.data
+      .map((p) => {
+        const total = Object.values(p.porTipo).reduce((s, v) => s + v, 0);
+        return { label: p.label, total };
+      })
+      .filter((p) => p.total > 0)
+      .map((p) => `${p.label}: ${formatCurrency(p.total)}`);
+    if (linhasTributos.length) {
+      linhas.push(
+        `Guias lançadas por mês (por competência — mesma base do gráfico "Tributos por tipo", inclui INSS/FGTS):\n  - ${linhasTributos.join("\n  - ")}`,
+      );
+    }
     blocos.push(`FATURAMENTO (${companyName}):\n- ${linhas.join("\n- ")}`);
   } else {
     blocos.push("FATURAMENTO: nenhum faturamento lançado ainda.");
