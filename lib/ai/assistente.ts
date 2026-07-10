@@ -348,7 +348,11 @@ function systemPrompt(escopo: "cliente" | "contador"): string {
     "que a guia foi marcada como paga como se fosse o mês do imposto. Se um mês " +
     "NÃO aparece nessa série (não há imposto/faturamento lançado para ele), diga " +
     "claramente que ainda não há esse dado para o mês (ex.: 'ainda não há imposto " +
-    "lançado para julho') em vez de mostrar valor de outro mês. Não invente meses.";
+    "lançado para julho') em vez de mostrar valor de outro mês. Não invente meses. " +
+    "IMPOSTO ≠ ENCARGO: 'imposto' é só a carga (DAS/DARFs/ISS/ICMS). INSS e FGTS " +
+    "são ENCARGOS, não imposto — ao responder 'quanto de imposto', use só o valor " +
+    "de imposto, sem somar os encargos. Só inclua os encargos se o cliente pedir o " +
+    "total de guias/tudo que foi lançado, e então deixe claro o que é cada parte.";
   if (escopo === "contador") {
     return (
       base +

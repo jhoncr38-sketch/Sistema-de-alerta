@@ -10,10 +10,19 @@
 
 import {
   buildFaturamento,
+  TRIBUTO_GROUPS,
   type DocInput,
   type RevenueInput,
 } from "@/lib/faturamento";
+import { isTributo } from "@/lib/constants";
 import { formatCurrency, formatDate } from "@/lib/format";
+
+// Grupos do gráfico (chaves de porTipo) que são IMPOSTO (entram na carga:
+// DAS/DARFs/ISS/ICMS). Derivado de TRIBUTO_GROUPS + isTributo para não
+// dessincronizar se um tipo novo for adicionado. Ex.: "inss"/"fgts" ficam de fora.
+const GRUPOS_IMPOSTO = new Set(
+  TRIBUTO_GROUPS.filter((g) => g.types.some((t) => isTributo(t))).map((g) => g.key),
+);
 import { getRewardsState } from "@/lib/rewards-data";
 import { levelForXp } from "@/lib/rewards";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -88,21 +97,31 @@ export async function blocosAmpliados(
       linhas.push(
         `Melhor mês: ${fat.melhorMes.label} (${formatCurrency(fat.melhorMes.faturamento)})`,
       );
-    // Série de guias LANÇADAS por competência (mês a que se referem). Soma TODAS
-    // as guias por tipo (inclui INSS, FGTS...) — exatamente o total das barras do
-    // gráfico "Tributos por tipo" da tela. Bate com o que o cliente vê ali.
-    // (Nota: fat.tributos é só a carga — DAS/DARF/ISS/ICMS, sem INSS — por isso
-    // não serve para bater com o gráfico; somamos porTipo.)
+    // Série por COMPETÊNCIA (mês a que as guias se referem), com IMPOSTO e
+    // ENCARGO separados. Imposto = carga (DAS/DARFs/ISS/ICMS). Encargo = INSS,
+    // FGTS, ISS-RPA e Outro. O total (imposto+encargo) por mês = altura das
+    // barras do gráfico "Tributos por tipo"; o imposto sozinho é o que a IA deve
+    // usar quando o cliente pergunta "imposto".
     const linhasTributos = fat.data
       .map((p) => {
-        const total = Object.values(p.porTipo).reduce((s, v) => s + v, 0);
-        return { label: p.label, total };
+        let imposto = 0;
+        let encargo = 0;
+        for (const [grupo, v] of Object.entries(p.porTipo)) {
+          if (GRUPOS_IMPOSTO.has(grupo)) imposto += v;
+          else encargo += v;
+        }
+        return { label: p.label, imposto, encargo };
       })
-      .filter((p) => p.total > 0)
-      .map((p) => `${p.label}: ${formatCurrency(p.total)}`);
+      .filter((p) => p.imposto > 0 || p.encargo > 0)
+      .map((p) => {
+        const partes = [`imposto ${formatCurrency(p.imposto)}`];
+        if (p.encargo > 0)
+          partes.push(`encargos (INSS/FGTS) ${formatCurrency(p.encargo)}`);
+        return `${p.label}: ${partes.join(" + ")}`;
+      });
     if (linhasTributos.length) {
       linhas.push(
-        `Imposto/guias por mês (por COMPETÊNCIA — mês a que se referem; mesma base do gráfico "Tributos por tipo", inclui INSS/FGTS). Esta é a fonte para "imposto de um mês". Só os meses abaixo têm imposto lançado; qualquer mês que NÃO esteja nesta lista ainda não tem imposto/faturamento lançado:\n  - ${linhasTributos.join("\n  - ")}`,
+        `Por mês, por COMPETÊNCIA (mês a que as guias se referem; total imposto+encargos = base do gráfico "Tributos por tipo"). "IMPOSTO" é só a carga (DAS/DARFs/ISS/ICMS); INSS/FGTS são ENCARGOS e NÃO entram no imposto. Ao responder sobre "imposto", use o valor de imposto (não some os encargos). Só os meses abaixo têm dado lançado; mês que não estiver na lista ainda não tem imposto/faturamento:\n  - ${linhasTributos.join("\n  - ")}`,
       );
     }
     blocos.push(`FATURAMENTO (${companyName}):\n- ${linhas.join("\n- ")}`);
