@@ -261,7 +261,9 @@ function contextoCliente(
   partes.push(
     `Pagas no mês atual: ${pagasMesQtd} guia(s), total ${formatCurrency(pagasMesValor)} (dos quais ${formatCurrency(tributosMesValor)} em impostos).`,
   );
-  partes.push(`Total pago no ano de ${ano}: ${formatCurrency(pagasAnoValor)}.`);
+  partes.push(
+    `Total pago no ano de ${ano} (todas as guias — impostos + encargos como INSS/FGTS): ${formatCurrency(pagasAnoValor)}.`,
+  );
 
   // Série mensal de imposto PAGO (por mês de pagamento), do mais antigo ao mais
   // recente. Responde "qual mês paguei mais imposto?" na visão de caixa.
@@ -270,7 +272,7 @@ function contextoCliente(
     .map(([m, v]) => `${labelMes(m)}: ${formatCurrency(v)}`);
   if (linhasPagos.length) {
     partes.push(
-      `Imposto pago por mês (pela data de pagamento — visão de caixa):\n- ${linhasPagos.join("\n- ")}`,
+      `Imposto pago por mês (pela data de pagamento — visão de caixa; cada valor é o total de imposto pago NAQUELE mês, não é acumulado nem anual):\n- ${linhasPagos.join("\n- ")}`,
     );
 
     // Detalhe das guias pagas em cada mês (para "detalha o imposto de julho").
@@ -409,7 +411,13 @@ function systemPrompt(escopo: "cliente" | "contador"): string {
     "informação não estiver no contexto, diga que não tem esse dado e sugira " +
     "falar com o contador. Não dê consultoria fiscal nem opinião jurídica. " +
     "Valores em reais, datas no formato dia/mês/ano. Não use markdown pesado; " +
-    "listas curtas são bem-vindas quando ajudarem.";
+    "listas curtas são bem-vindas quando ajudarem. " +
+    "SEMPRE rotule o que cada valor representa, para não confundir: o valor de " +
+    "UM mês é 'o total pago em <mês>' (nunca comece a frase com 'No ano de X' " +
+    "quando o número for de um único mês); o total do ano só pode ser chamado " +
+    "de 'total do ano' e é um número diferente do de qualquer mês isolado. Ao " +
+    "responder qual mês teve/pagou mais imposto, diga o mês e deixe claro que o " +
+    "valor é o total DAQUELE mês.";
   if (escopo === "contador") {
     return (
       base +
