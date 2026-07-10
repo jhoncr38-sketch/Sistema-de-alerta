@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useMemo, useRef, useState } from "react";
-import { Info, UploadCloud } from "lucide-react";
+import { Info, Loader2, Sparkles, UploadCloud } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
@@ -22,7 +22,7 @@ import {
 import { normalizeCompetencia } from "@/lib/dates";
 import { formatCurrency } from "@/lib/format";
 import type { DocCategoria } from "@/lib/types";
-import { uploadDocument, type UploadState } from "./actions";
+import { lerBoletoUpload, uploadDocument, type UploadState } from "./actions";
 
 const selectClass =
   "h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
@@ -63,8 +63,66 @@ export function UploadForm({
   const [competencia, setCompetencia] = useState("");
   const [faturamento, setFaturamento] = useState("");
   const [confirmOpen, setConfirmOpen] = useState(false);
+  // Valor e vencimento controlados — para a importação por IA pré-preencher.
+  const [amount, setAmount] = useState("");
+  const [dueDate, setDueDate] = useState("");
+  // Estado da leitura de boleto por IA.
+  const [lendo, setLendo] = useState(false);
+  const [importMsg, setImportMsg] = useState<{
+    ok: boolean;
+    texto: string;
+  } | null>(null);
+
+  async function importarBoleto(file: File) {
+    setImportMsg(null);
+    setLendo(true);
+    try {
+      const fd = new FormData();
+      fd.set("file", file);
+      const r = await lerBoletoUpload(fd);
+      if (!r.ok) {
+        setImportMsg({ ok: false, texto: r.erro ?? "Não consegui ler." });
+        return;
+      }
+      // Reaproveita o MESMO PDF como o arquivo do boleto (sem anexar de novo).
+      if (fileInputRef.current) {
+        const dt = new DataTransfer();
+        dt.items.add(file);
+        fileInputRef.current.files = dt.files;
+        setArquivoAnexado(file.name);
+      }
+      // Pré-preenche o que a IA achou.
+      setCategoria("boleto");
+      if (r.companyId) setCompanyId(r.companyId);
+      if (r.valor != null)
+        setAmount(
+          r.valor.toLocaleString("pt-BR", {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          }),
+        );
+      if (r.vencimento) setDueDate(r.vencimento);
+      const partes = [
+        r.companyLabel ? `Cliente: ${r.companyLabel}` : null,
+        r.valor != null ? "valor" : null,
+        r.vencimento ? "vencimento" : null,
+      ].filter(Boolean);
+      setImportMsg({
+        ok: true,
+        texto:
+          (partes.length ? `Li: ${partes.join(", ")}. ` : "") +
+          (r.aviso ?? "Arquivo já anexado. Confira os campos e publique."),
+      });
+    } finally {
+      setLendo(false);
+    }
+  }
 
   const formRef = useRef<HTMLFormElement>(null);
+  const importInputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  // Nome do arquivo já anexado (via importação por IA), para o aviso na tela.
+  const [arquivoAnexado, setArquivoAnexado] = useState<string | null>(null);
   // Modo do faturamento quando já existe um no mês: replace | add | skip.
   // Imperativo (ref) para o valor estar no DOM antes do requestSubmit.
   const modeRef = useRef<HTMLInputElement>(null);
@@ -112,6 +170,46 @@ export function UploadForm({
 
   return (
     <form ref={formRef} action={action} className="space-y-5">
+      {/* Importar boleto com IA: lê o PDF e pré-preenche cliente/valor/venc. */}
+      <div className="rounded-lg border border-dashed border-primary/40 bg-primary/5 p-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <Sparkles className="size-4 shrink-0 text-primary" />
+          <span className="text-sm font-medium">Importar boleto com IA</span>
+          <span className="text-xs text-muted-foreground">
+            Envie o PDF e eu preencho cliente, valor e vencimento.
+          </span>
+          <input
+            ref={importInputRef}
+            type="file"
+            accept="application/pdf"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              e.target.value = "";
+              if (f) void importarBoleto(f);
+            }}
+          />
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="ml-auto"
+            disabled={lendo}
+            onClick={() => importInputRef.current?.click()}
+          >
+            {lendo ? <Loader2 className="animate-spin" /> : <UploadCloud />}
+            {lendo ? "Lendo…" : "Enviar PDF"}
+          </Button>
+        </div>
+        {importMsg ? (
+          <p
+            className={`mt-2 text-xs ${importMsg.ok ? "text-muted-foreground" : "text-destructive"}`}
+          >
+            {importMsg.texto}
+          </p>
+        ) : null}
+      </div>
+
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-1.5">
           <Label htmlFor="company_id">Cliente</Label>
@@ -246,12 +344,26 @@ export function UploadForm({
           <>
             <div className="space-y-1.5">
               <Label htmlFor="amount">Valor (R$)</Label>
-              <CurrencyInput id="amount" name="amount" placeholder="1.240,00" required />
+              <CurrencyInput
+                key={`amount-${amount}`}
+                id="amount"
+                name="amount"
+                placeholder="1.240,00"
+                defaultValue={amount}
+                required
+              />
             </div>
 
             <div className="space-y-1.5">
               <Label htmlFor="due_date">Data de vencimento</Label>
-              <Input id="due_date" name="due_date" type="date" required />
+              <Input
+                id="due_date"
+                name="due_date"
+                type="date"
+                value={dueDate}
+                onChange={(e) => setDueDate(e.target.value)}
+                required
+              />
             </div>
 
             {mostraFaturamento ? (
@@ -339,6 +451,7 @@ export function UploadForm({
               : `Selecione o PDF ${isBoleto ? "do boleto" : "do documento"} (até 10MB)`}
           </p>
           <Input
+            ref={fileInputRef}
             id="file"
             name="file"
             type="file"
@@ -346,7 +459,13 @@ export function UploadForm({
             required
             multiple={isFolha}
             className="mx-auto mt-3 max-w-xs"
+            onChange={() => setArquivoAnexado(null)}
           />
+          {arquivoAnexado ? (
+            <p className="mt-2 text-xs text-emerald-600 dark:text-emerald-400">
+              ✓ {arquivoAnexado} já anexado (o mesmo PDF que a IA leu).
+            </p>
+          ) : null}
           {isFolha ? (
             <p className="mt-2 text-xs text-muted-foreground">
               Dica: segure Ctrl (ou Cmd) para escolher vários arquivos de uma

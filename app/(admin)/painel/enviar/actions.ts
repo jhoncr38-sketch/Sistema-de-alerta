@@ -4,6 +4,7 @@ import { after } from "next/server";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/auth";
+import { lerBoleto } from "@/lib/ai/ler-boleto";
 import { createClient } from "@/lib/supabase/server";
 import { normalizeCompetencia } from "@/lib/dates";
 import { notifyNewDocument } from "@/lib/email/notify";
@@ -207,4 +208,79 @@ export async function uploadDocument(
   // Já abre a tela filtrada pela empresa recém-enviada — o contador vê logo o
   // que acabou de publicar, sem precisar procurar entre todos os clientes.
   redirect(`/painel/documentos?company=${companyId}&ok=1`);
+}
+
+export interface LerBoletoResult {
+  ok: boolean;
+  erro?: string;
+  /** Dados extraídos para pré-preencher o formulário. */
+  companyId?: string | null;
+  companyLabel?: string | null;
+  valor?: number | null;
+  vencimento?: string | null;
+  /** Avisos para o contador conferir (ex.: cliente não encontrado). */
+  aviso?: string;
+}
+
+/**
+ * Lê um boleto (PDF) com IA e extrai cliente (pelo CNPJ), valor e vencimento,
+ * para PRÉ-PREENCHER a publicação. Não publica nada — o contador confere e
+ * confirma. A IA nunca inventa: campos não achados voltam null.
+ */
+export async function lerBoletoUpload(
+  formData: FormData,
+): Promise<LerBoletoResult> {
+  await requireAdmin();
+
+  const file = formData.get("file");
+  if (!(file instanceof File) || file.size === 0) {
+    return { ok: false, erro: "Selecione um arquivo PDF." };
+  }
+  if (file.type && file.type !== "application/pdf") {
+    return { ok: false, erro: "Envie o boleto em PDF." };
+  }
+  if (file.size > 10 * 1024 * 1024) {
+    return { ok: false, erro: "Arquivo muito grande (máx. 10MB)." };
+  }
+
+  const b64 = Buffer.from(await file.arrayBuffer()).toString("base64");
+  const lido = await lerBoleto(b64);
+  if (!lido) {
+    return {
+      ok: false,
+      erro: "A IA não conseguiu ler o boleto agora. Preencha manualmente.",
+    };
+  }
+
+  // Acha o cliente pelo CNPJ extraído (só dígitos; a coluna tem máscara).
+  let companyId: string | null = null;
+  let companyLabel: string | null = null;
+  let aviso: string | undefined;
+  if (lido.cnpj) {
+    const supabase = await createClient();
+    const { data: companies } = await supabase
+      .from("companies")
+      .select("id, cnpj, razao_social, nome_fantasia")
+      .eq("active", true);
+    const match = (companies ?? []).find(
+      (c) => (c.cnpj ?? "").replace(/\D/g, "") === lido.cnpj,
+    );
+    if (match) {
+      companyId = match.id;
+      companyLabel = match.nome_fantasia || match.razao_social;
+    } else {
+      aviso = `Nenhum cliente ativo com o CNPJ ${lido.cnpj}. Selecione o cliente manualmente.`;
+    }
+  } else {
+    aviso = "Não identifiquei o CNPJ no boleto. Selecione o cliente manualmente.";
+  }
+
+  return {
+    ok: true,
+    companyId,
+    companyLabel,
+    valor: lido.valor,
+    vencimento: lido.vencimento,
+    aviso,
+  };
 }
