@@ -102,7 +102,7 @@ export async function blocosAmpliados(
       .map((p) => `${p.label}: ${formatCurrency(p.total)}`);
     if (linhasTributos.length) {
       linhas.push(
-        `Guias lançadas por mês (por competência — mesma base do gráfico "Tributos por tipo", inclui INSS/FGTS):\n  - ${linhasTributos.join("\n  - ")}`,
+        `Imposto/guias por mês (por COMPETÊNCIA — mês a que se referem; mesma base do gráfico "Tributos por tipo", inclui INSS/FGTS). Esta é a fonte para "imposto de um mês". Só os meses abaixo têm imposto lançado; qualquer mês que NÃO esteja nesta lista ainda não tem imposto/faturamento lançado:\n  - ${linhasTributos.join("\n  - ")}`,
       );
     }
     blocos.push(`FATURAMENTO (${companyName}):\n- ${linhas.join("\n- ")}`);

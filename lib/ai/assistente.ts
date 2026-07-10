@@ -105,19 +105,6 @@ function isoDay(v: string): string {
   return v.split("T")[0];
 }
 
-const MESES_ABREV = [
-  "jan", "fev", "mar", "abr", "mai", "jun",
-  "jul", "ago", "set", "out", "nov", "dez",
-];
-
-/** "2026-03" -> "mar/2026". Rótulo curto de mês para o contexto da IA. */
-function labelMes(yyyymm: string): string {
-  const [y, m] = yyyymm.split("-");
-  const idx = Number(m) - 1;
-  const abrev = MESES_ABREV[idx] ?? m;
-  return `${abrev}/${y}`;
-}
-
 /** Resultado da pergunta. `disponivel=false` => IA não configurada. */
 export interface AssistenteResposta {
   disponivel: boolean;
@@ -141,18 +128,6 @@ function contextoCliente(
   let tributosMesValor = 0;
   let pagasAnoValor = 0;
   const ano = mes.slice(0, 4);
-  // Imposto pago por MÊS DE PAGAMENTO ("YYYY-MM" -> total). Alimenta a pergunta
-  // "qual mês paguei mais imposto?" (visão de caixa: quando saiu do bolso).
-  const tributosPagosPorMes = new Map<string, number>();
-  // Guias pagas DETALHADAS por mês de pagamento — permite a IA discriminar
-  // "detalha o imposto de julho" (cada guia com tipo, competência e valor).
-  interface GuiaPaga {
-    tipo: string; // rótulo por extenso: "DAS", "GPS - INSS"...
-    competencia: string | null; // mês a que a guia se refere
-    valor: number;
-    imposto: boolean; // entra na conta de "imposto" (isTributo)?
-  }
-  const pagasPorMes = new Map<string, GuiaPaga[]>();
 
   // Progresso dos parcelamentos: por plano, quantas parcelas pagas de quantas.
   const planos = new Map<
@@ -192,22 +167,6 @@ function contextoCliente(
           pagasMesValor += valor;
           if (isTributo(d.type)) tributosMesValor += valor;
         }
-        const ehImposto = isTributo(d.type);
-        if (ehImposto) {
-          tributosPagosPorMes.set(
-            mesPagto,
-            (tributosPagosPorMes.get(mesPagto) ?? 0) + valor,
-          );
-        }
-        // Guarda a guia detalhada (imposto ou não) para "detalhe do mês".
-        const lista = pagasPorMes.get(mesPagto) ?? [];
-        lista.push({
-          tipo: rotuloGuia(d),
-          competencia: d.competencia,
-          valor,
-          imposto: ehImposto,
-        });
-        pagasPorMes.set(mesPagto, lista);
         if (day.slice(0, 4) === ano) pagasAnoValor += valor;
       }
       continue;
@@ -262,38 +221,8 @@ function contextoCliente(
     `Pagas no mês atual: ${pagasMesQtd} guia(s), total ${formatCurrency(pagasMesValor)} (dos quais ${formatCurrency(tributosMesValor)} em impostos).`,
   );
   partes.push(
-    `Total pago no ano de ${ano} (todas as guias — impostos + encargos como INSS/FGTS): ${formatCurrency(pagasAnoValor)}.`,
+    `Total quitado no ano de ${ano} pela DATA em que as guias foram marcadas como pagas (visão de caixa; inclui impostos + encargos como INSS/FGTS): ${formatCurrency(pagasAnoValor)}. ATENÇÃO: isto é quando o pagamento foi registrado, NÃO o mês a que o imposto se refere. Para "imposto de um mês" use sempre a competência (bloco FATURAMENTO).`,
   );
-
-  // Série mensal de imposto PAGO (por mês de pagamento), do mais antigo ao mais
-  // recente. Responde "qual mês paguei mais imposto?" na visão de caixa.
-  const linhasPagos = Array.from(tributosPagosPorMes.entries())
-    .sort((a, b) => a[0].localeCompare(b[0]))
-    .map(([m, v]) => `${labelMes(m)}: ${formatCurrency(v)}`);
-  if (linhasPagos.length) {
-    partes.push(
-      `Imposto pago por mês (pela data de pagamento — visão de caixa; cada valor é o total de imposto pago NAQUELE mês, não é acumulado nem anual):\n- ${linhasPagos.join("\n- ")}`,
-    );
-
-    // Detalhe das guias pagas em cada mês (para "detalha o imposto de julho").
-    // Uma guia por linha: tipo, competência a que se refere e valor. Inclui as
-    // não-impostos (INSS/FGTS) para o detalhe bater com o extrato do mês.
-    const blocosDetalhe = Array.from(pagasPorMes.entries())
-      .sort((a, b) => a[0].localeCompare(b[0]))
-      .map(([m, guias]) => {
-        const linhas = guias
-          .sort((g1, g2) => g2.valor - g1.valor)
-          .map((g) => {
-            const comp = g.competencia ? ` (competência ${g.competencia})` : "";
-            const tag = g.imposto ? "" : " [encargo/retenção, não entra na conta de imposto]";
-            return `${g.tipo}${comp}: ${formatCurrency(g.valor)}${tag}`;
-          });
-        return `${labelMes(m)}:\n  - ${linhas.join("\n  - ")}`;
-      });
-    partes.push(
-      `Detalhe das guias pagas por mês (por data de pagamento):\n- ${blocosDetalhe.join("\n- ")}`,
-    );
-  }
 
   return partes.join("\n\n");
 }
@@ -412,12 +341,14 @@ function systemPrompt(escopo: "cliente" | "contador"): string {
     "falar com o contador. Não dê consultoria fiscal nem opinião jurídica. " +
     "Valores em reais, datas no formato dia/mês/ano. Não use markdown pesado; " +
     "listas curtas são bem-vindas quando ajudarem. " +
-    "SEMPRE rotule o que cada valor representa, para não confundir: o valor de " +
-    "UM mês é 'o total pago em <mês>' (nunca comece a frase com 'No ano de X' " +
-    "quando o número for de um único mês); o total do ano só pode ser chamado " +
-    "de 'total do ano' e é um número diferente do de qualquer mês isolado. Ao " +
-    "responder qual mês teve/pagou mais imposto, diga o mês e deixe claro que o " +
-    "valor é o total DAQUELE mês.";
+    "IMPOSTO POR MÊS: quando o cliente perguntar sobre imposto/faturamento de um " +
+    "mês (ex.: 'qual mês paguei mais imposto', 'quanto de imposto em julho'), use " +
+    "SEMPRE a série por COMPETÊNCIA do bloco FATURAMENTO (mês a que o imposto se " +
+    "refere) — é a que bate com o gráfico que o cliente vê. NUNCA use a data em " +
+    "que a guia foi marcada como paga como se fosse o mês do imposto. Se um mês " +
+    "NÃO aparece nessa série (não há imposto/faturamento lançado para ele), diga " +
+    "claramente que ainda não há esse dado para o mês (ex.: 'ainda não há imposto " +
+    "lançado para julho') em vez de mostrar valor de outro mês. Não invente meses.";
   if (escopo === "contador") {
     return (
       base +
