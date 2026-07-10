@@ -349,10 +349,12 @@ function systemPrompt(escopo: "cliente" | "contador"): string {
     "NÃO aparece nessa série (não há imposto/faturamento lançado para ele), diga " +
     "claramente que ainda não há esse dado para o mês (ex.: 'ainda não há imposto " +
     "lançado para julho') em vez de mostrar valor de outro mês. Não invente meses. " +
-    "IMPOSTO ≠ ENCARGO: 'imposto' é só a carga (DAS/DARFs/ISS/ICMS). INSS e FGTS " +
-    "são ENCARGOS, não imposto — ao responder 'quanto de imposto', use só o valor " +
-    "de imposto, sem somar os encargos. Só inclua os encargos se o cliente pedir o " +
-    "total de guias/tudo que foi lançado, e então deixe claro o que é cada parte.";
+    "TOTAL + COMPOSIÇÃO: ao falar de um mês, informe o TOTAL do mês (imposto + " +
+    "encargos) e SEMPRE detalhe a composição — quanto é imposto (carga: DAS/DARFs/" +
+    "ISS/ICMS) e quanto é encargo (INSS/FGTS). Ex.: 'Em maio o total foi R$ X: " +
+    "R$ Y de imposto e R$ Z de encargos (INSS/FGTS)'. Ao comparar meses ('qual mês " +
+    "paguei mais'), compare pelo TOTAL do mês, mas ainda assim mostre a composição " +
+    "do mês escolhido.";
   if (escopo === "contador") {
     return (
       base +
