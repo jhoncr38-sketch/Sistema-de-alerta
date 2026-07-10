@@ -50,12 +50,13 @@ interface DocCtx {
   marcado_pago_at: string | null;
   paid_at: string | null;
   parcela_num: number | null; // nº da parcela no plano (só em parcelamento)
+  competencia: string | null; // mês a que a guia se refere (MM/AAAA)
   plan: { nome: string; total: number } | null; // plano ao qual a parcela pertence
 }
 
 /** Colunas buscadas em documents (inclui o plano da parcela). */
 const DOC_SELECT =
-  "company_id,type,categoria,amount,due_date,status,marcado_pago_at,paid_at,parcela_num,plan:installment_plans(nome,total)";
+  "company_id,type,categoria,amount,due_date,status,marcado_pago_at,paid_at,parcela_num,competencia,plan:installment_plans(nome,total)";
 
 /**
  * Normaliza o retorno cru do Supabase em DocCtx[]. O join `plan` pode vir como
@@ -143,6 +144,15 @@ function contextoCliente(
   // Imposto pago por MÊS DE PAGAMENTO ("YYYY-MM" -> total). Alimenta a pergunta
   // "qual mês paguei mais imposto?" (visão de caixa: quando saiu do bolso).
   const tributosPagosPorMes = new Map<string, number>();
+  // Guias pagas DETALHADAS por mês de pagamento — permite a IA discriminar
+  // "detalha o imposto de julho" (cada guia com tipo, competência e valor).
+  interface GuiaPaga {
+    tipo: string; // rótulo por extenso: "DAS", "GPS - INSS"...
+    competencia: string | null; // mês a que a guia se refere
+    valor: number;
+    imposto: boolean; // entra na conta de "imposto" (isTributo)?
+  }
+  const pagasPorMes = new Map<string, GuiaPaga[]>();
 
   // Progresso dos parcelamentos: por plano, quantas parcelas pagas de quantas.
   const planos = new Map<
@@ -182,12 +192,22 @@ function contextoCliente(
           pagasMesValor += valor;
           if (isTributo(d.type)) tributosMesValor += valor;
         }
-        if (isTributo(d.type)) {
+        const ehImposto = isTributo(d.type);
+        if (ehImposto) {
           tributosPagosPorMes.set(
             mesPagto,
             (tributosPagosPorMes.get(mesPagto) ?? 0) + valor,
           );
         }
+        // Guarda a guia detalhada (imposto ou não) para "detalhe do mês".
+        const lista = pagasPorMes.get(mesPagto) ?? [];
+        lista.push({
+          tipo: rotuloGuia(d),
+          competencia: d.competencia,
+          valor,
+          imposto: ehImposto,
+        });
+        pagasPorMes.set(mesPagto, lista);
         if (day.slice(0, 4) === ano) pagasAnoValor += valor;
       }
       continue;
@@ -251,6 +271,25 @@ function contextoCliente(
   if (linhasPagos.length) {
     partes.push(
       `Imposto pago por mês (pela data de pagamento — visão de caixa):\n- ${linhasPagos.join("\n- ")}`,
+    );
+
+    // Detalhe das guias pagas em cada mês (para "detalha o imposto de julho").
+    // Uma guia por linha: tipo, competência a que se refere e valor. Inclui as
+    // não-impostos (INSS/FGTS) para o detalhe bater com o extrato do mês.
+    const blocosDetalhe = Array.from(pagasPorMes.entries())
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([m, guias]) => {
+        const linhas = guias
+          .sort((g1, g2) => g2.valor - g1.valor)
+          .map((g) => {
+            const comp = g.competencia ? ` (competência ${g.competencia})` : "";
+            const tag = g.imposto ? "" : " [encargo/retenção, não entra na conta de imposto]";
+            return `${g.tipo}${comp}: ${formatCurrency(g.valor)}${tag}`;
+          });
+        return `${labelMes(m)}:\n  - ${linhas.join("\n  - ")}`;
+      });
+    partes.push(
+      `Detalhe das guias pagas por mês (por data de pagamento):\n- ${blocosDetalhe.join("\n- ")}`,
     );
   }
 
