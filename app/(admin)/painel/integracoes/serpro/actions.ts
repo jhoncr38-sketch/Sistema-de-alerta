@@ -3,6 +3,7 @@
 import { after } from "next/server";
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/auth";
+import { docTypeLabel } from "@/lib/constants";
 import { explicarSitfis } from "@/lib/ai/explicar-sitfis";
 import { explicarGuiaPublicada } from "@/lib/ai/explicar-guia-publicada";
 import { normalizeCompetencia } from "@/lib/dates";
@@ -813,6 +814,31 @@ export async function publicarDarf(params: {
     ? (params.type as DocType)
     : "outro";
 
+  const competencia = normalizeCompetencia(`${params.mesPA}/${params.anoPA}`);
+  const supabase = await createClient();
+
+  // Idempotência (mesma regra do DAS): evita publicar 2× o mesmo DARF. Casamos
+  // por cliente + competência + TYPE — GPS-INSS, IRPJ, PIS/COFINS e CSLL podem
+  // coexistir na mesma competência, então cada tributo é tratado à parte.
+  //   • se QUALQUER guia já está pago/aguardando -> bloqueia (preserva histórico);
+  //   • senão -> substitui as em aberto pela nova (evita duplicatas).
+  const { data: existentes } = await supabase
+    .from("documents")
+    .select("id, status, file_path")
+    .eq("company_id", params.companyId)
+    .eq("categoria", "boleto")
+    .eq("type", type)
+    .eq("competencia", competencia);
+  const antigos = existentes ?? [];
+  if (antigos.some((d) => d.status !== "open")) {
+    const rotulo = docTypeLabel(type);
+    return {
+      ok: false,
+      titulo: `${rotulo} já paga`,
+      detalhe: `A guia ${rotulo} de ${competencia} já foi marcada como paga/aguardando. Não substituí para não perder esse histórico. Se precisar reemitir, remova a antiga primeiro.`,
+    };
+  }
+
   const r = await rodarDarf(
     params.companyId,
     params.categoria,
@@ -823,8 +849,6 @@ export async function publicarDarf(params: {
     return { ok: false, titulo: r.erro.titulo, detalhe: r.erro.detalhe };
   }
 
-  const competencia = normalizeCompetencia(`${params.mesPA}/${params.anoPA}`);
-  const supabase = await createClient();
   const docId = crypto.randomUUID();
   const fileName = `DARF-${params.anoPA}${params.mesPA}-${params.categoria}.pdf`;
   const path = `${params.companyId}/${docId}-${fileName}`;
@@ -868,6 +892,21 @@ export async function publicarDarf(params: {
     };
   }
 
+  // Substituição: a nova guia entrou; remove as antigas (todas em aberto, do
+  // mesmo tipo/competência) e os PDFs delas. Só chega aqui se nenhuma estava
+  // paga (o pago já foi bloqueado acima).
+  const substituido = antigos.length > 0;
+  if (substituido) {
+    const ids = antigos.map((d) => d.id);
+    await supabase.from("documents").delete().in("id", ids);
+    const paths = antigos
+      .map((d) => d.file_path)
+      .filter((p): p is string => !!p);
+    if (paths.length) {
+      await supabase.storage.from("boletos").remove(paths);
+    }
+  }
+
   after(() =>
     notifyNewDocument({
       companyId: params.companyId,
@@ -889,8 +928,10 @@ export async function publicarDarf(params: {
   const venBR = params.vencimento.split("-").reverse().join("/");
   return {
     ok: true,
-    titulo: "DARF publicado no portal",
-    detalhe: `DARF de ${r.nome} (venc. ${venBR}) publicado como boleto. O cliente já pode ver e será avisado.`,
+    titulo: substituido ? "DARF atualizado no portal" : "DARF publicado no portal",
+    detalhe: substituido
+      ? `A guia de ${r.nome} para ${competencia} (que estava em aberto) foi substituída pela nova (venc. ${venBR}). O cliente será avisado.`
+      : `DARF de ${r.nome} (venc. ${venBR}) publicado como boleto. O cliente já pode ver e será avisado.`,
   };
 }
 
