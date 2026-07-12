@@ -69,11 +69,12 @@ interface DocRow {
   amount: number | null;
   due_date: string | null;
   file_path: string | null;
+  file_name: string | null;
   created_at: string;
 }
 
 const DOC_COLS =
-  "id,type,categoria,competencia,descricao,amount,due_date,file_path,created_at";
+  "id,type,categoria,competencia,descricao,amount,due_date,file_path,file_name,created_at";
 
 /** Nome amigável de um documento (usa descrição do "outro", senão o rótulo do tipo). */
 function nomeDoc(d: DocRow): string {
@@ -114,7 +115,8 @@ export async function detectarAcoes(
 
   // ----- Documento institucional pedido (contrato, CNPJ, alvará...) -----
   if (docIntent) {
-    const { data } = await supabase
+    // 1) Tenta pelo TIPO estruturado (ex.: type = "contrato_social").
+    const { data: porTipo } = await supabase
       .from("documents")
       .select(DOC_COLS)
       .eq("company_id", companyId)
@@ -123,7 +125,31 @@ export async function detectarAcoes(
       .not("file_path", "is", null)
       .order("created_at", { ascending: false })
       .limit(2);
-    for (const d of (data ?? []) as DocRow[]) {
+
+    let achados = (porTipo ?? []) as DocRow[];
+
+    // 2) Fallback: muitos documentos são publicados como "Outro" com o nome só
+    // na descrição (ex.: "2ª Aditivo Contratual", "Alvará de Licença"). Se o
+    // tipo não achou nada, procura entre os institucionais e casa a mesma
+    // intenção contra a descrição / nome do arquivo.
+    if (achados.length === 0) {
+      const { data: institucionais } = await supabase
+        .from("documents")
+        .select(DOC_COLS)
+        .eq("company_id", companyId)
+        .eq("categoria", "documento")
+        .not("file_path", "is", null)
+        .order("created_at", { ascending: false });
+      achados = ((institucionais ?? []) as DocRow[])
+        .filter((d) =>
+          docIntent.termos.test(
+            `${d.descricao ?? ""} ${d.file_name ?? ""} ${nomeDoc(d)}`,
+          ),
+        )
+        .slice(0, 2);
+    }
+
+    for (const d of achados) {
       cards.push({
         tipo: "download",
         titulo: nomeDoc(d),
