@@ -14,7 +14,8 @@ import {
   type DocInput,
   type RevenueInput,
 } from "@/lib/faturamento";
-import { isTributo } from "@/lib/constants";
+import { docTypeLabel, isTributo } from "@/lib/constants";
+import type { DocType } from "@/lib/types";
 import { formatCurrency, formatDate } from "@/lib/format";
 
 // Grupos do gráfico (chaves de porTipo) que são IMPOSTO (entram na carga:
@@ -55,12 +56,15 @@ export async function blocosAmpliados(
       .eq("categoria", "folha")
       .order("created_at", { ascending: false })
       .limit(1),
-    // Documentos institucionais disponíveis (contrato social etc.).
+    // Documentos institucionais disponíveis (contrato social, alvará, cartão
+    // CNPJ etc.). Traz tipo + descrição para LISTAR pelo nome — a IA precisa
+    // saber quais existem para responder "quero meu contrato social".
     supabase
       .from("documents")
-      .select("id", { count: "exact", head: true })
+      .select("type,descricao,competencia,created_at")
       .eq("company_id", companyId)
-      .eq("categoria", "documento"),
+      .eq("categoria", "documento")
+      .order("created_at", { ascending: false }),
     // Último relatório de situação fiscal publicado (com o resumo por IA na
     // descrição, quando houve). É a fonte da situação fiscal para o chat.
     supabase
@@ -154,12 +158,33 @@ export async function blocosAmpliados(
   }
 
   // ----- Documentos institucionais -----
-  const docsCount = docInstRes.count ?? 0;
-  blocos.push(
-    docsCount > 0
-      ? `DOCUMENTOS: ${docsCount} documento(s) institucional(is) disponível(is) para consulta.`
-      : "DOCUMENTOS: nenhum documento institucional disponível.",
-  );
+  // Lista pelo NOME (não só a contagem): assim a IA reconhece pedidos como
+  // "quero meu contrato social" e diz se ele está disponível — ou, se não
+  // estiver, quais documentos o cliente de fato tem no portal.
+  const docsInst = (docInstRes.data ?? []) as {
+    type: DocType;
+    descricao: string | null;
+    competencia: string | null;
+    created_at: string;
+  }[];
+  if (docsInst.length > 0) {
+    const linhasDoc = docsInst.map((d) => {
+      // Nome amigável: descrição livre (tipo "Outro") tem prioridade; senão o
+      // rótulo do tipo. Sem duplicar quando a descrição é só o rótulo padrão.
+      const rotulo = docTypeLabel(d.type);
+      const desc = d.descricao?.trim();
+      const nome = desc && desc !== rotulo ? desc : rotulo;
+      const ref = d.competencia ? ` (competência ${d.competencia})` : "";
+      return `${nome}${ref}`;
+    });
+    blocos.push(
+      `DOCUMENTOS institucionais disponíveis no portal (o cliente encontra em Documentos):\n- ${linhasDoc.join("\n- ")}\nSe o cliente pedir um documento que ESTÁ nesta lista, confirme que está disponível e oriente-o a abrir a aba Documentos para baixá-lo. Se pedir um que NÃO está na lista (ex.: contrato social quando só há aditivo), diga que não localizou esse documento específico, liste o que há disponível e sugira pedir ao contador.`,
+    );
+  } else {
+    blocos.push(
+      "DOCUMENTOS: nenhum documento institucional disponível no portal. Se o cliente pedir um documento (contrato social etc.), oriente-o a solicitar ao contador.",
+    );
+  }
 
   // ----- Situação fiscal na Receita (do último relatório publicado) -----
   const sitfis = sitfisRes.data?.[0] as
