@@ -41,12 +41,14 @@ function useMaxMonths(): number {
   return max;
 }
 
-/** 1240 -> "1,2k"; 980 -> "980". Rótulo curto para barras. */
+/** 1240 -> "1,24k"; 24950,2 -> "24,95k"; 980 -> "980". Rótulo curto para barras.
+ *  Uma casa decimal a mais que o usual, para não perder precisão no arredondamento
+ *  (ex.: 24.950,2 vira "24,95k" em vez de arredondar para "25,0k"). */
 function compact(v: number): string {
-  if (v >= 1_000_000) return `${(v / 1_000_000).toFixed(1).replace(".", ",")}M`;
+  if (v >= 1_000_000) return `${(v / 1_000_000).toFixed(2).replace(".", ",")}M`;
   if (v >= 1_000) {
     const k = v / 1_000;
-    return `${k.toFixed(k >= 100 ? 0 : 1).replace(".", ",")}k`;
+    return `${k.toFixed(k >= 100 ? 1 : 2).replace(".", ",")}k`;
   }
   return String(Math.round(v));
 }
