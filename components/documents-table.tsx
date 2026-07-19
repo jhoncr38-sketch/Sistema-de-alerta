@@ -1,4 +1,4 @@
-import { Download, EyeOff, FileText } from "lucide-react";
+import { Check, Download, EyeOff, FileText } from "lucide-react";
 import { deleteDocument } from "@/app/actions/documents";
 import { ComprovanteButton } from "@/components/comprovante-button";
 import { ConfirmPaymentButtons } from "@/components/confirm-payment-buttons";
@@ -167,25 +167,43 @@ export function DocumentsTable({
     );
   }
 
-  /** Selo "não visto" (só na visão do contador): guia a pagar ainda não aberta
-   *  pelo cliente no portal. Aparece só quando é acionável (não pago) e some
-   *  assim que o cliente abre/baixa. "Visto" não vira selo — evita poluir. */
-  function naoVistoBadge(doc: DocumentWithCompany) {
-    if (
-      !isAdmin ||
-      !isPagavel(doc) ||
-      doc.status === "paid" ||
-      doc.first_viewed_at
-    ) {
-      return null;
+  /** Selo de leitura (só na visão do contador), nas guias a pagar em aberto:
+   *  "não visto" (âmbar) enquanto o cliente não abriu, e "✓ visto DD/MM" (verde)
+   *  depois que ele abre/baixa. Guias pagas não recebem selo (já resolvidas). */
+  function vistoBadge(doc: DocumentWithCompany) {
+    if (!isAdmin || !isPagavel(doc) || doc.status === "paid") return null;
+
+    if (!doc.first_viewed_at) {
+      return (
+        <span
+          className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-700 ring-1 ring-inset ring-amber-200 dark:bg-amber-950/30 dark:text-amber-300 dark:ring-amber-900/60"
+          title="O cliente ainda não abriu este documento no portal"
+        >
+          <EyeOff className="size-3" />
+          não visto
+        </span>
+      );
     }
+
+    const tz = "America/Sao_Paulo";
+    const dia = new Date(doc.first_viewed_at).toLocaleDateString("pt-BR", {
+      timeZone: tz,
+      day: "2-digit",
+      month: "2-digit",
+    });
+    const completo = new Date(doc.first_viewed_at).toLocaleDateString("pt-BR", {
+      timeZone: tz,
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    });
     return (
       <span
-        className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-700 ring-1 ring-inset ring-amber-200 dark:bg-amber-950/30 dark:text-amber-300 dark:ring-amber-900/60"
-        title="O cliente ainda não abriu este documento no portal"
+        className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700 ring-1 ring-inset ring-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-300 dark:ring-emerald-900/60"
+        title={`Visto pelo cliente em ${completo}`}
       >
-        <EyeOff className="size-3" />
-        não visto
+        <Check className="size-3" />
+        visto {dia}
       </span>
     );
   }
@@ -349,7 +367,7 @@ export function DocumentsTable({
                 {hasPagavel ? (
                   <div className="flex shrink-0 flex-col items-end gap-1">
                     {statusBadge(doc)}
-                    {naoVistoBadge(doc)}
+                    {vistoBadge(doc)}
                   </div>
                 ) : null}
               </div>
@@ -494,7 +512,7 @@ export function DocumentsTable({
                     <td className="px-4 py-3">
                       <div className="flex flex-wrap items-center gap-1.5">
                         {statusBadge(doc)}
-                        {naoVistoBadge(doc)}
+                        {vistoBadge(doc)}
                       </div>
                     </td>
                   ) : null}
