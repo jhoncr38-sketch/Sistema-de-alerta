@@ -1,4 +1,4 @@
-import { AlertTriangle, BadgeCheck, CalendarClock, CheckCircle2, Clock, Users } from "lucide-react";
+import { AlertTriangle, BadgeCheck, CalendarClock, CheckCircle2, Clock, EyeOff, Users } from "lucide-react";
 import { AlertBanner } from "@/components/alert-banner";
 import { AssistenteChat } from "@/components/assistente-chat";
 import { CollapsibleBucket } from "@/components/collapsible-bucket";
@@ -126,6 +126,8 @@ export default async function PainelPage({
   const aguardandoValor = aguardando.reduce((s, d) => s + (d.amount ?? 0), 0);
   // Lista "em aberto": oculta as parcelas futuras de débito automático.
   const openList = open.filter((d) => !ehDebitoAutomaticoFuturo(d));
+  // Guias acionáveis que o cliente ainda não abriu no portal (para o follow-up).
+  const naoVistos = openList.filter((d) => !d.first_viewed_at).length;
 
   let vencidosHoje = 0;
   let vencendo = 0;
@@ -194,6 +196,19 @@ export default async function PainelPage({
             </strong>{" "}
             vencem nos próximos 7 dias. Mantenha seus clientes informados.
           </AlertBanner>
+        ) : null}
+
+        {naoVistos > 0 ? (
+          <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <EyeOff className="size-3.5 text-amber-600 dark:text-amber-400" />
+            <span>
+              <strong className="text-foreground">{naoVistos}</strong>{" "}
+              {naoVistos === 1
+                ? "obrigação em aberto ainda não foi aberta"
+                : "obrigações em aberto ainda não foram abertas"}{" "}
+              pelos clientes no portal.
+            </span>
+          </p>
         ) : null}
 
         {aguardando.length > 0 ? (

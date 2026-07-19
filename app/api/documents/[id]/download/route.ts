@@ -1,4 +1,5 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
 /**
@@ -57,6 +58,30 @@ export async function GET(
       "Arquivo indisponível (ainda não foi enviado). Fale com seu contador.",
       { status: 404 },
     );
+  }
+
+  // "Visto": marca o 1º acesso de um CLIENTE ao arquivo do documento (não conta
+  // o contador nem o comprovante). Usa service role — a RLS não deixa o cliente
+  // escrever em documents — e roda fora do caminho crítico (after), best-effort.
+  if (!isComprovante) {
+    after(async () => {
+      try {
+        const admin = createAdminClient();
+        const { data: prof } = await admin
+          .from("profiles")
+          .select("role")
+          .eq("id", user.id)
+          .single();
+        if (prof?.role !== "client") return;
+        await admin
+          .from("documents")
+          .update({ first_viewed_at: new Date().toISOString() })
+          .eq("id", id)
+          .is("first_viewed_at", null);
+      } catch {
+        /* best-effort: nunca atrapalha o download */
+      }
+    });
   }
 
   return NextResponse.redirect(signed.signedUrl);

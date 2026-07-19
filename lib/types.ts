@@ -74,6 +74,7 @@ export interface DocumentRow {
   file_name: string | null;
   uploaded_by: string | null;
   created_at: string;
+  first_viewed_at: string | null; // 1ª vez que um cliente abriu/baixou no portal (nulo = não visto)
 }
 
 export interface DocumentWithCompany extends DocumentRow {

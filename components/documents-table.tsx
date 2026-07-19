@@ -1,4 +1,4 @@
-import { Download, FileText } from "lucide-react";
+import { Download, EyeOff, FileText } from "lucide-react";
 import { deleteDocument } from "@/app/actions/documents";
 import { ComprovanteButton } from "@/components/comprovante-button";
 import { ConfirmPaymentButtons } from "@/components/confirm-payment-buttons";
@@ -167,6 +167,29 @@ export function DocumentsTable({
     );
   }
 
+  /** Selo "não visto" (só na visão do contador): guia a pagar ainda não aberta
+   *  pelo cliente no portal. Aparece só quando é acionável (não pago) e some
+   *  assim que o cliente abre/baixa. "Visto" não vira selo — evita poluir. */
+  function naoVistoBadge(doc: DocumentWithCompany) {
+    if (
+      !isAdmin ||
+      !isPagavel(doc) ||
+      doc.status === "paid" ||
+      doc.first_viewed_at
+    ) {
+      return null;
+    }
+    return (
+      <span
+        className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-700 ring-1 ring-inset ring-amber-200 dark:bg-amber-950/30 dark:text-amber-300 dark:ring-amber-900/60"
+        title="O cliente ainda não abriu este documento no portal"
+      >
+        <EyeOff className="size-3" />
+        não visto
+      </span>
+    );
+  }
+
   // Controle de pagamento por guia: no painel do contador, uma guia aguardando
   // vira Confirmar/Rejeitar; nos demais casos é o toggle de marcar/desmarcar.
   // `compact`: usa a versão curta do estado "aguardando" (o selo de status já
@@ -324,7 +347,10 @@ export function DocumentsTable({
                   </div>
                 </div>
                 {hasPagavel ? (
-                  <div className="shrink-0">{statusBadge(doc)}</div>
+                  <div className="flex shrink-0 flex-col items-end gap-1">
+                    {statusBadge(doc)}
+                    {naoVistoBadge(doc)}
+                  </div>
                 ) : null}
               </div>
 
@@ -465,7 +491,12 @@ export function DocumentsTable({
                     </td>
                   ) : null}
                   {hasPagavel ? (
-                    <td className="px-4 py-3">{statusBadge(doc)}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        {statusBadge(doc)}
+                        {naoVistoBadge(doc)}
+                      </div>
+                    </td>
                   ) : null}
                   {showPaidCol ? (
                     <td className="px-4 py-3">
