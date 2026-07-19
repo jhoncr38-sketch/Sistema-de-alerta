@@ -2,8 +2,13 @@
 
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/auth";
+import { WELCOME_BONUS_COINS } from "@/lib/constants";
+import { getUrgency } from "@/lib/dates";
+import { sendEmail } from "@/lib/email/resend";
+import { conviteAcessoEmail } from "@/lib/email/templates";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import type { DocStatus } from "@/lib/types";
 
 export interface CompanyFormState {
   error?: string;
@@ -13,6 +18,17 @@ export interface CompanyFormState {
 export interface ClientFormState {
   error?: string;
   ok?: boolean;
+}
+
+export interface ConvidarResult {
+  ok?: boolean;
+  /** RESEND_API_KEY ausente — nada foi enviado, só logado (canal e-mail). */
+  skipped?: boolean;
+  error?: string;
+  /** E-mail para onde o convite foi enviado (canal e-mail). */
+  to?: string;
+  /** URL wa.me já montada para o contador abrir e enviar (canal WhatsApp). */
+  waUrl?: string;
 }
 
 function revalidateClientes() {
@@ -324,6 +340,151 @@ export async function setClientActive(userId: string, active: boolean) {
   if (error) throw new Error(error.message);
 
   revalidateClientes();
+}
+
+/** Telefone BR -> só dígitos com DDI 55 (heurística para o link do wa.me). */
+function normalizeBrPhone(raw: string): string | null {
+  const d = raw.replace(/\D/g, "");
+  if (!d) return null;
+  if (d.startsWith("55")) return d;
+  if (d.length === 10 || d.length === 11) return `55${d}`; // fixo/celular com DDD
+  return d; // já com DDI ou formato incomum — usa como veio
+}
+
+/**
+ * Convida um CLIENTE a acessar o portal com LOGIN SEM SENHA (magic link) — usado
+ * no botão "Convidar" dos clientes (sumidos/que nunca entraram, e sob demanda no
+ * menu). Gera o link mágico via service role e:
+ *   • canal "email":    envia o convite pelo nosso e-mail dourado (Resend);
+ *   • canal "whatsapp": devolve uma URL wa.me pronta (telefone da EMPRESA) para o
+ *     contador abrir e enviar — o cliente não tem telefone próprio no cadastro.
+ * O texto anuncia o bônus de boas-vindas do Clube SJ e as obrigações acionáveis.
+ * Retorna o resultado para o botão dar o feedback (toast / abrir WhatsApp).
+ */
+export async function convidarAcesso(
+  userId: string,
+  canal: "email" | "whatsapp",
+): Promise<ConvidarResult> {
+  await requireAdmin();
+  if (!userId) return { error: "Cliente inválido." };
+
+  const admin = createAdminClient();
+
+  const { data: prof } = await admin
+    .from("profiles")
+    .select("name, email, role, status, active")
+    .eq("id", userId)
+    .single();
+  if (!prof || prof.role !== "client") {
+    return { error: "Só é possível convidar clientes." };
+  }
+  if (prof.active === false) {
+    return { error: "Cliente desativado — reative o acesso antes de convidar." };
+  }
+  if (!prof.email) {
+    return { error: "Este cliente não tem e-mail cadastrado (necessário para o acesso)." };
+  }
+
+  // Empresas que o cliente enxerga -> obrigações em aberto acionáveis delas.
+  const { data: links } = await admin
+    .from("client_companies")
+    .select("company_id")
+    .eq("profile_id", userId);
+  const companyIds = (links ?? []).map((l) => l.company_id as string);
+
+  let pendentes = 0;
+  if (companyIds.length > 0) {
+    const { data: docs } = await admin
+      .from("documents")
+      .select("status, due_date, categoria, plan:installment_plans(forma_pagamento)")
+      .in("company_id", companyIds)
+      .in("categoria", ["boleto", "parcelamento"])
+      .neq("status", "paid");
+    const list = (docs ?? []) as unknown as {
+      status: DocStatus;
+      due_date: string | null;
+      categoria: string;
+      plan: { forma_pagamento: string } | null;
+    }[];
+    // Mesma regra do painel: esconde parcela futura de débito automático (ruído).
+    pendentes = list.filter((d) => {
+      if (
+        d.categoria === "parcelamento" &&
+        d.plan?.forma_pagamento === "debito_automatico" &&
+        d.due_date
+      ) {
+        return getUrgency(d.due_date, d.status).urgency !== "em_dia";
+      }
+      return true;
+    }).length;
+  }
+
+  // Link mágico (login sem senha). Usamos o token_hash na NOSSA rota /auth/confirm
+  // (mesmo mecanismo do "esqueci a senha"), não o action_link do Supabase.
+  const site = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+  const { data: linkData, error: linkErr } = await admin.auth.admin.generateLink({
+    type: "magiclink",
+    email: prof.email,
+  });
+  const tokenHash = linkData?.properties?.hashed_token;
+  if (linkErr || !tokenHash) {
+    return { error: "Não consegui gerar o link de acesso. Tente novamente." };
+  }
+  const magicUrl =
+    `${site}/auth/confirm?token_hash=${encodeURIComponent(tokenHash)}` +
+    `&type=magiclink&next=${encodeURIComponent("/portal/boletos")}`;
+
+  const nome = prof.name || "cliente";
+
+  if (canal === "whatsapp") {
+    // Telefone é da EMPRESA (não há por pessoa): usa a 1ª empresa com telefone.
+    let phone: string | null = null;
+    if (companyIds.length > 0) {
+      const { data: cos } = await admin
+        .from("companies")
+        .select("phone")
+        .in("id", companyIds);
+      phone =
+        (cos ?? [])
+          .map((c) => c.phone as string | null)
+          .find((p) => !!p) ?? null;
+    }
+    const tel = phone ? normalizeBrPhone(phone) : null;
+    if (!tel) {
+      return {
+        error:
+          "A empresa deste cliente não tem telefone cadastrado (adicione em Clientes › editar empresa).",
+      };
+    }
+    const linhaPend =
+      pendentes > 0
+        ? `Você tem ${pendentes} ${pendentes === 1 ? "obrigação" : "obrigações"} em aberto. `
+        : "";
+    const msg =
+      `Olá, ${nome}! 👋 Seu portal da S J Contabilidade já está pronto.\n\n` +
+      `${linhaPend}🎁 E tem ${WELCOME_BONUS_COINS} moedas de boas-vindas te esperando no Clube SJ.\n\n` +
+      `Toque para entrar (sem senha):\n${magicUrl}`;
+    const waUrl = `https://wa.me/${tel}?text=${encodeURIComponent(msg)}`;
+    return { ok: true, waUrl };
+  }
+
+  // canal === "email"
+  const { subject, html } = conviteAcessoEmail({
+    name: nome,
+    pendentes,
+    bonusCoins: WELCOME_BONUS_COINS,
+    magicUrl,
+  });
+  const res = await sendEmail({ to: prof.email, subject, html });
+  if ("skipped" in res && res.skipped) return { skipped: true, to: prof.email };
+  if ("error" in res && res.error) {
+    const msg =
+      typeof res.error === "object" && res.error && "message" in res.error
+        ? String((res.error as { message: string }).message)
+        : "Falha no envio.";
+    return { error: msg };
+  }
+  return { ok: true, to: prof.email };
 }
 
 /**

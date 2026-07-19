@@ -1,4 +1,5 @@
 import { AppSidebar } from "@/components/app-sidebar";
+import { InstallAppOnboarding } from "@/components/install-app-onboarding";
 import { SiteFooter } from "@/components/site-footer";
 import { requireClient } from "@/lib/auth";
 import { getBranding } from "@/lib/branding";
@@ -45,6 +46,8 @@ export default async function ClientLayout({
         {children}
         <SiteFooter />
       </div>
+      {/* Primeiro acesso (magic link ou cadastro): convida a instalar o app. */}
+      <InstallAppOnboarding />
     </div>
   );
 }

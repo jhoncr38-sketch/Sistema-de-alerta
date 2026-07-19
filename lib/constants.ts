@@ -3,6 +3,10 @@ import type { DocCategoria, DocType } from "@/lib/types";
 export const APP_NAME = "ContAlert";
 export const APP_TAGLINE = "Obrigações Contábeis";
 
+/** Bônus de boas-vindas do SJ Rewards, creditado 1× no primeiro acesso ao portal. */
+export const WELCOME_BONUS_COINS = 300;
+export const WELCOME_BONUS_XP = 300;
+
 export const DOC_TYPE_LABELS: Record<DocType, string> = {
   das: "DAS - Simples Nacional",
   darf_irpj: "DARF - IRPJ",

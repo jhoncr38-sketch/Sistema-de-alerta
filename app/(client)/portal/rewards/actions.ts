@@ -3,6 +3,7 @@
 import { after } from "next/server";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { WELCOME_BONUS_COINS, WELCOME_BONUS_XP } from "@/lib/constants";
 import { notifyRewardsEvents } from "@/lib/email/notify-rewards";
 import { advanceMissions } from "@/lib/rewards-credit";
 import { REWARDS } from "@/lib/rewards";
@@ -107,6 +108,25 @@ export async function registerAccess(companyId: string): Promise<void> {
     error.code !== UNDEFINED_TABLE
   ) {
     console.error("[rewards] registrar acesso:", error.message);
+  }
+
+  // Bônus de boas-vindas: creditado 1× por empresa (dedupe no banco) no 1º acesso.
+  // É o que o convite anuncia ("moedas te esperando"); best-effort e idempotente.
+  const { error: bonusErr } = await supabase.rpc("rewards_credit_earned", {
+    c: companyId,
+    p_label: "Bônus de boas-vindas",
+    p_icon: "gift",
+    p_coins: WELCOME_BONUS_COINS,
+    p_xp: WELCOME_BONUS_XP,
+    p_action_key: "boas-vindas",
+    p_dedupe_key: `boas-vindas:${companyId}`,
+  });
+  if (
+    bonusErr &&
+    bonusErr.code !== UNDEFINED_FUNCTION &&
+    bonusErr.code !== UNDEFINED_TABLE
+  ) {
+    console.error("[rewards] bônus de boas-vindas:", bonusErr.message);
   }
 
   // Missões de "acessar o app": +1 por dia (idempotente pela data).

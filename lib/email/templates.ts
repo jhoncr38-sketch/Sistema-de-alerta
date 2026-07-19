@@ -500,6 +500,44 @@ export function adminDigestEmail(opts: {
   };
 }
 
+/**
+ * Convite AO CLIENTE para acessar o portal — disparado pelo contador sob demanda,
+ * para quem nunca entrou ou sumiu. Traz um LINK MÁGICO (login sem senha, 1 toque)
+ * e anuncia o bônus de boas-vindas do Clube SJ + obrigações em aberto, para dar
+ * o empurrão de ativação.
+ */
+export function conviteAcessoEmail(opts: {
+  name: string;
+  pendentes: number;
+  bonusCoins: number;
+  magicUrl: string;
+}) {
+  const { name, pendentes, bonusCoins, magicUrl } = opts;
+  const headline = "Seu acesso ao portal está pronto";
+  const subject = `Seu portal ${APP_NAME} está pronto — entre com 1 toque`;
+  const obrigLabel = pendentes === 1 ? "obrigação em aberto" : "obrigações em aberto";
+  const linhaPend =
+    pendentes > 0
+      ? p(
+          `Você tem <strong style="color:${GOLD_DARK}">${pendentes} ${obrigLabel}</strong> aguardando no seu portal.`,
+        )
+      : "";
+  const linhaBonus =
+    bonusCoins > 0
+      ? p(
+          `&#127873;&nbsp; E tem <strong style="color:${GOLD_DARK}">${bonusCoins} moedas de boas-vindas</strong> te esperando no Clube SJ — creditadas assim que você entrar.`,
+        )
+      : "";
+  const body = `
+        ${p(`Olá, ${b(name)}!`)}
+        ${p("Seu portal está pronto. Acompanhe seus boletos, baixe as guias e receba avisos de vencimento — tudo em um só lugar.")}
+        ${linhaPend}
+        ${linhaBonus}
+        ${button(magicUrl, "Entrar com 1 toque")}
+        ${p(`<span style="color:${MUTED};font-size:12px">O botão te leva direto ao portal, sem senha. O link é pessoal e expira em cerca de 1 hora — se expirar, peça um novo ao seu contador.</span>`)}`;
+  return { subject, html: shell({ headline, accent: INFO, bodyHtml: body }) };
+}
+
 /** E-mail de teste disparado pelas Configurações para validar o Resend. */
 export function testEmail() {
   const headline = "E-mail de teste";

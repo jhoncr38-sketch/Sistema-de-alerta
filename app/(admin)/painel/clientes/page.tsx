@@ -11,6 +11,7 @@ import { CompanyAiLimit } from "@/components/company-ai-limit";
 import { CnpjInput } from "@/components/masked-inputs";
 import { ConfirmActionButton } from "@/components/confirm-action-button";
 import { ConfirmDeleteButton } from "@/components/confirm-delete-button";
+import { ConvidarAcessoButton } from "@/components/convidar-acesso-button";
 import { EditClientButton } from "@/components/edit-client-button";
 import { EditCompanyButton } from "@/components/edit-company-button";
 import { NewCompanyButton } from "@/components/new-company-button";
@@ -22,6 +23,7 @@ import {
   approveClient,
   deleteClient,
   deleteCompany,
+  convidarAcesso,
   demoteToClient,
   promoteToAdmin,
   rejectClient,
@@ -375,6 +377,8 @@ export default async function ClientesPage() {
                     const inativo = c.active === false;
                     const acesso = ultimosAcessos.get(c.id);
                     const sumido = acesso?.sumido ?? false;
+                    // WhatsApp usa o telefone da empresa (não há por pessoa).
+                    const hasPhone = cos.some((co) => !!co.phone);
                     return (
                       <tr
                         key={c.id}
@@ -412,26 +416,35 @@ export default async function ClientesPage() {
                           )}
                         </td>
                         <td className="px-4 py-3">
-                          <span
-                            className={
-                              sumido
-                                ? "inline-flex items-center gap-1.5 text-amber-700 dark:text-amber-500"
-                                : "text-muted-foreground"
-                            }
-                            title={
-                              acesso?.iso
-                                ? new Date(acesso.iso).toLocaleString("pt-BR")
-                                : "Nunca fez login no portal"
-                            }
-                          >
-                            {sumido ? (
-                              <span
-                                className="size-1.5 rounded-full bg-amber-500"
-                                aria-hidden
+                          <div className="flex flex-col items-start gap-1.5">
+                            <span
+                              className={
+                                sumido
+                                  ? "inline-flex items-center gap-1.5 text-amber-700 dark:text-amber-500"
+                                  : "text-muted-foreground"
+                              }
+                              title={
+                                acesso?.iso
+                                  ? new Date(acesso.iso).toLocaleString("pt-BR")
+                                  : "Nunca fez login no portal"
+                              }
+                            >
+                              {sumido ? (
+                                <span
+                                  className="size-1.5 rounded-full bg-amber-500"
+                                  aria-hidden
+                                />
+                              ) : null}
+                              {acesso?.texto ?? "—"}
+                            </span>
+                            {sumido && !inativo && (c.email || hasPhone) ? (
+                              <ConvidarAcessoButton
+                                action={convidarAcesso.bind(null, c.id)}
+                                hasEmail={!!c.email}
+                                hasPhone={hasPhone}
                               />
                             ) : null}
-                            {acesso?.texto ?? "—"}
-                          </span>
+                          </div>
                         </td>
                         <td className="px-4 py-3">
                           <div className="flex flex-wrap justify-end gap-1">
@@ -459,12 +472,15 @@ export default async function ClientesPage() {
                             <ClientActionsMenu
                               clientName={c.name}
                               active={c.active !== false}
+                              hasEmail={!!c.email}
+                              hasPhone={hasPhone}
                               toggleActiveAction={setClientActive.bind(
                                 null,
                                 c.id,
                                 c.active === false,
                               )}
                               promoteAction={promoteToAdmin.bind(null, c.id)}
+                              convidarAction={convidarAcesso.bind(null, c.id)}
                             />
                           </div>
                         </td>
