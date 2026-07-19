@@ -41,20 +41,60 @@ function useMaxMonths(): number {
   return max;
 }
 
-/** 1240 -> "1,24k"; 24950,2 -> "24,95k"; 980 -> "980". Rótulo curto para barras.
- *  Uma casa decimal a mais que o usual, para não perder precisão no arredondamento
- *  (ex.: 24.950,2 vira "24,95k" em vez de arredondar para "25,0k"). */
+/** Formata com até `decimals` casas decimais, sem zeros à direita: 24,95 · 29,1 · 35 */
+function trimDecimals(n: number, decimals: number): string {
+  return n
+    .toFixed(decimals)
+    .replace(/\.?0+$/, "") // remove zeros à direita (e o ponto, se sobrar sozinho)
+    .replace(".", ",");
+}
+
+/** 24950,2 -> "24,95k"; 29100 -> "29,1k"; 35000 -> "35k"; 980 -> "980". Rótulo curto p/ barras.
+ *  Até uma casa decimal a mais que o usual, sem zeros à direita: não arredonda demais
+ *  (24.950,2 vira "24,95k", não "25,0k") nem polui valores redondos ("35k", não "35,00k"). */
 function compact(v: number): string {
-  if (v >= 1_000_000) return `${(v / 1_000_000).toFixed(2).replace(".", ",")}M`;
+  if (v >= 1_000_000) return `${trimDecimals(v / 1_000_000, 2)}M`;
   if (v >= 1_000) {
     const k = v / 1_000;
-    return `${k.toFixed(k >= 100 ? 1 : 2).replace(".", ",")}k`;
+    return `${trimDecimals(k, k >= 100 ? 1 : 2)}k`;
   }
   return String(Math.round(v));
 }
 
 function formatPct(v: number): string {
   return `${v.toFixed(1).replace(".", ",")}%`;
+}
+
+/** Direção da variação: seta + cor (verde sobe, vermelho cai, cinza estável). */
+function trendMeta(delta: number): { arrow: string; tone: string } {
+  if (Math.abs(delta) < 0.0005)
+    return { arrow: "→", tone: "text-muted-foreground" };
+  return delta > 0
+    ? { arrow: "▲", tone: "text-emerald-600 dark:text-emerald-400" }
+    : { arrow: "▼", tone: "text-red-600 dark:text-red-400" };
+}
+
+/** Seta compacta (só o glifo) para o rótulo da barra de faturamento. */
+function TrendArrow({ delta }: { delta: number }) {
+  const { arrow, tone } = trendMeta(delta);
+  return <span className={tone}>{arrow}</span>;
+}
+
+/** Variação do faturamento vs. mês anterior: seta, % e mês de referência. */
+function TrendBadge({
+  delta,
+  prevLabel,
+}: {
+  delta: number;
+  prevLabel: string | null;
+}) {
+  const { arrow, tone } = trendMeta(delta);
+  const pct = (Math.abs(delta) * 100).toFixed(1).replace(".", ",");
+  return (
+    <span className={`font-medium ${tone}`}>
+      {arrow} {pct}%{prevLabel ? ` vs. ${prevLabel}` : ""}
+    </span>
+  );
 }
 
 /** Cor da carga tributária por faixa (referência, não regra fiscal). */
@@ -65,7 +105,15 @@ function cargaTone(carga: number | null): string {
   return "text-emerald-600 dark:text-emerald-400";
 }
 
-function HoverCaption({ point }: { point: MonthlyPoint | null }) {
+function HoverCaption({
+  point,
+  delta,
+  prevLabel,
+}: {
+  point: MonthlyPoint | null;
+  delta: number | null;
+  prevLabel: string | null;
+}) {
   if (!point) {
     return (
       <p className="text-xs text-muted-foreground">
@@ -76,8 +124,14 @@ function HoverCaption({ point }: { point: MonthlyPoint | null }) {
   return (
     <p className="text-xs text-muted-foreground">
       <strong className="text-foreground">{point.label}</strong> · Faturamento{" "}
-      {formatCurrency(point.faturamento)} · Tributos{" "}
-      {formatCurrency(point.tributos)} · Carga{" "}
+      {formatCurrency(point.faturamento)}
+      {delta !== null ? (
+        <>
+          {" "}
+          <TrendBadge delta={delta} prevLabel={prevLabel} />
+        </>
+      ) : null}{" "}
+      · Tributos {formatCurrency(point.tributos)} · Carga{" "}
       <span className={cargaTone(point.carga)}>
         {point.carga === null ? "—" : formatPct(point.carga)}
       </span>
@@ -87,10 +141,12 @@ function HoverCaption({ point }: { point: MonthlyPoint | null }) {
 
 function FaturamentoBars({
   data,
+  deltas,
   hovered,
   onHover,
 }: {
   data: MonthlyPoint[];
+  deltas: (number | null)[];
   hovered: number | null;
   onHover: (i: number | null) => void;
 }) {
@@ -116,8 +172,11 @@ function FaturamentoBars({
               onPointerEnter={() => onHover(i)}
               onClick={() => onHover(i)}
             >
-              <span className="text-[10px] tabular-nums text-muted-foreground">
+              <span className="flex items-center gap-0.5 text-[10px] tabular-nums text-muted-foreground">
                 {compact(d.faturamento)}
+                {deltas[i] != null ? (
+                  <TrendArrow delta={deltas[i] as number} />
+                ) : null}
               </span>
               <div
                 className={`w-full rounded-t transition-colors ${
@@ -387,14 +446,33 @@ export function RevenueCharts({ data }: { data: MonthlyPoint[] }) {
   // `shown[hovered] ?? null` já protege índice fora de faixa ao trocar de breakpoint.
   const point = hovered === null ? null : (shown[hovered] ?? null);
 
+  // Variação do faturamento vs. mês anterior. Usa a série completa para que o
+  // 1º mês exibido também tenha comparação (o mês anterior pode estar fora do corte).
+  const startIdx = data.length - shown.length;
+  const deltas = shown.map((d, i) => {
+    const prev = data[startIdx + i - 1];
+    if (!prev || prev.faturamento <= 0) return null;
+    return (d.faturamento - prev.faturamento) / prev.faturamento;
+  });
+  const prevLabels = shown.map((_, i) => data[startIdx + i - 1]?.label ?? null);
+
   return (
     <div className="space-y-3">
       <div className="grid gap-3 lg:grid-cols-2">
-        <FaturamentoBars data={shown} hovered={hovered} onHover={setHovered} />
+        <FaturamentoBars
+          data={shown}
+          deltas={deltas}
+          hovered={hovered}
+          onHover={setHovered}
+        />
         <CargaLine data={shown} hovered={hovered} onHover={setHovered} />
       </div>
       <TributosPorTipo data={shown} hovered={hovered} onHover={setHovered} />
-      <HoverCaption point={point} />
+      <HoverCaption
+        point={point}
+        delta={hovered === null ? null : (deltas[hovered] ?? null)}
+        prevLabel={hovered === null ? null : (prevLabels[hovered] ?? null)}
+      />
     </div>
   );
 }

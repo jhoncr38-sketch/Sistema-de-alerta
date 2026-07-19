@@ -1,6 +1,7 @@
 import { AlertTriangle, BadgeCheck, CalendarClock, CheckCircle2, Clock, Users } from "lucide-react";
 import { AlertBanner } from "@/components/alert-banner";
 import { AssistenteChat } from "@/components/assistente-chat";
+import { CollapsibleBucket } from "@/components/collapsible-bucket";
 import { CompanyFilterSelect } from "@/components/company-filter-select";
 import { DocumentsTable } from "@/components/documents-table";
 import { MetricCard } from "@/components/metric-card";
@@ -269,7 +270,7 @@ export default async function PainelPage({
           />
         </div>
 
-        <section className="space-y-5">
+        <section className="space-y-3">
           <h2 className="text-sm font-semibold">Próximas obrigações</h2>
           {grupos.length === 0 ? (
             <DocumentsTable
@@ -277,40 +278,37 @@ export default async function PainelPage({
               emptyMessage="Nenhuma obrigação em aberto. Publique um boleto em “Enviar documento”."
             />
           ) : (
-            grupos.map((g) => {
+            grupos.map((g, gi) => {
               const Icon = g.icon;
-              // "Mais adiante" é o menos urgente: limita para não alongar a tela.
-              const items = g.key === "adiante" ? g.items.slice(0, 5) : g.items;
-              const ocultos = g.items.length - items.length;
+              // Cada bloco vira um cartão recolhível; só o mais urgente (o 1º da
+              // lista, já ordenada por urgência) abre por padrão. Blocos longos
+              // mostram 5 linhas com um "ver todos os N".
+              const LIMITE = 5;
+              const table = (docs: PainelDoc[]) => (
+                <DocumentsTable
+                  documents={docs}
+                  showClient={!filtrando}
+                  showDownload
+                  showPaid
+                  isAdmin
+                  competenciaInline
+                  subtleActions
+                  flush
+                />
+              );
+              const temMais = g.items.length > LIMITE;
               return (
-                <div key={g.key} className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <Icon className={`size-4 ${g.iconClass}`} />
-                    <span className="text-sm font-medium">{g.title}</span>
-                    <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
-                      {g.items.length}
-                    </span>
-                    {g.total > 0 ? (
-                      <span className="ml-auto text-xs text-muted-foreground tabular-nums">
-                        {formatCurrency(g.total)}
-                      </span>
-                    ) : null}
-                  </div>
-                  <DocumentsTable
-                    documents={items}
-                    showClient={!filtrando}
-                    showDownload
-                    showPaid
-                    isAdmin
-                    competenciaInline
-                    subtleActions
-                  />
-                  {ocultos > 0 ? (
-                    <p className="text-xs text-muted-foreground">
-                      + {ocultos} obrigaç{ocultos > 1 ? "ões" : "ão"} mais adiante
-                    </p>
-                  ) : null}
-                </div>
+                <CollapsibleBucket
+                  key={g.key}
+                  icon={<Icon className={`size-4 shrink-0 ${g.iconClass}`} />}
+                  title={g.title}
+                  count={g.items.length}
+                  total={g.total > 0 ? formatCurrency(g.total) : null}
+                  defaultOpen={gi === 0}
+                  preview={temMais ? table(g.items.slice(0, LIMITE)) : undefined}
+                >
+                  {table(g.items)}
+                </CollapsibleBucket>
               );
             })
           )}
