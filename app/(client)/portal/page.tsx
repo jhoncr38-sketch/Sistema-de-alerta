@@ -1,11 +1,14 @@
+import Link from "next/link";
 import {
   AlertTriangle,
   CalendarClock,
   CheckCircle2,
+  FileText,
   Info,
   Megaphone,
 } from "lucide-react";
 import { AssistenteChat } from "@/components/assistente-chat";
+import { Button } from "@/components/ui/button";
 import { DocumentsTable } from "@/components/documents-table";
 import { MetricCard } from "@/components/metric-card";
 import { ObligationsView } from "@/components/obligations-view";
@@ -127,7 +130,19 @@ export default async function PortalHome() {
       <PageHeader
         title={companyName ? `Olá, ${companyName}!` : "Olá!"}
         subtitle="Confira seus boletos e documentos"
-      />
+      >
+        <Button
+          variant="outline"
+          size="sm"
+          nativeButton={false}
+          render={
+            <Link href="/portal/relatorio">
+              <FileText />
+              Relatório do mês
+            </Link>
+          }
+        />
+      </PageHeader>
       <div className="space-y-6 p-6">
         {avisos.length > 0 ? (
           <section className="space-y-2">
