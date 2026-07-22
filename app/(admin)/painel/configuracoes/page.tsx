@@ -2,6 +2,7 @@ import { Info } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { PageHeader } from "@/components/page-header";
 import { BrandSettingsForm } from "@/components/brand-settings-form";
+import { ChangePasswordForm } from "@/components/change-password-form";
 import { TestEmailButton } from "@/components/test-email-button";
 import { getUserAndProfile } from "@/lib/auth";
 import { getBranding } from "@/lib/branding";
@@ -34,6 +35,16 @@ export default async function ConfiguracoesPage() {
             todos os dias. Configure o remetente e a chave do Resend nas
             variáveis de ambiente.
           </p>
+        </Card>
+
+        <Card className="max-w-xl gap-4 px-6 py-6">
+          <div>
+            <h2 className="text-sm font-semibold">Senha</h2>
+            <p className="text-xs text-muted-foreground">
+              Altere a senha de acesso ao painel.
+            </p>
+          </div>
+          <ChangePasswordForm />
         </Card>
 
         <Card className="max-w-xl gap-4 px-6 py-6">

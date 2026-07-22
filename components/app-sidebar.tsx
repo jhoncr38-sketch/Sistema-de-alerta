@@ -64,6 +64,7 @@ const CLIENT_NAV: NavItem[] = [
   { label: "Solicitações", href: "/portal/solicitacoes", icon: FileClock },
   { label: "SJ Rewards", href: "/portal/rewards", icon: Gift },
   { label: "Notificações", href: "/portal/notificacoes", icon: Bell },
+  { label: "Minha conta", href: "/portal/conta", icon: Settings },
 ];
 
 const INDEX_HREFS = new Set(["/painel", "/portal"]);
