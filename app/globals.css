@@ -120,6 +120,42 @@
   --sidebar-ring: oklch(0.556 0 0);
 }
 
+/* Modo Sereno — tema quente opt-in (creme + terracota). Como tudo usa os tokens,
+   vale em TODAS as telas de uma vez. É um tema claro (não usa a classe .dark). */
+.sereno {
+  --background: #efeae0;
+  --foreground: #2c2620;
+  --card: #fbf8f2;
+  --card-foreground: #2c2620;
+  --popover: #fbf8f2;
+  --popover-foreground: #2c2620;
+  --primary: #b0603a;
+  --primary-foreground: #fdf8f2;
+  --secondary: #ece5d7;
+  --secondary-foreground: #2c2620;
+  --muted: #ece5d7;
+  --muted-foreground: #857c6f;
+  --accent: #e7ddcb;
+  --accent-foreground: #2c2620;
+  --destructive: #b1462c;
+  --border: #e5ddce;
+  --input: #e5ddce;
+  --ring: #b0603a;
+  --chart-1: #b0603a;
+  --chart-2: #6f8a45;
+  --chart-3: #c9922f;
+  --chart-4: #b1462c;
+  --chart-5: #8a6d3f;
+  --sidebar: #f4efe5;
+  --sidebar-foreground: #2c2620;
+  --sidebar-primary: #b0603a;
+  --sidebar-primary-foreground: #fdf8f2;
+  --sidebar-accent: #ece5d7;
+  --sidebar-accent-foreground: #2c2620;
+  --sidebar-border: #e5ddce;
+  --sidebar-ring: #b0603a;
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

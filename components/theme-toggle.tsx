@@ -1,18 +1,31 @@
 "use client";
 
-import { useCallback, useSyncExternalStore } from "react";
-import { Moon, Sun } from "lucide-react";
+import { useSyncExternalStore } from "react";
+import { Check, Leaf, Moon, Sun, type LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 /**
- * Alterna entre tema claro e escuro. A escolha é guardada no localStorage e
- * aplicada cedo por um script inline no layout (evita "piscar" ao carregar).
- * Aqui só lemos/gravamos a classe `dark` no <html> e persistimos a preferência.
+ * Seletor de tema: Claro · Escuro · Sereno. A escolha é guardada no localStorage
+ * e aplicada cedo por um script inline no layout (evita "piscar" ao carregar).
+ * O tema Sereno é um tema claro e quente (classe `sereno`); o escuro usa `dark`.
  *
- * Lemos o tema com useSyncExternalStore — a forma recomendada de refletir um
- * estado externo (a classe no <html>) sem render em cascata nem erro de
- * hidratação. O MutationObserver avisa o React quando a classe muda.
+ * Lemos o tema com useSyncExternalStore — reflete a classe do <html> sem render
+ * em cascata nem erro de hidratação; o MutationObserver avisa quando ela muda.
  */
+type Theme = "light" | "dark" | "sereno";
+
+const OPTIONS: { key: Theme; label: string; Icon: LucideIcon }[] = [
+  { key: "light", label: "Claro", Icon: Sun },
+  { key: "dark", label: "Escuro", Icon: Moon },
+  { key: "sereno", label: "Sereno", Icon: Leaf },
+];
+
 function subscribe(onChange: () => void) {
   const observer = new MutationObserver(onChange);
   observer.observe(document.documentElement, {
@@ -22,32 +35,56 @@ function subscribe(onChange: () => void) {
   return () => observer.disconnect();
 }
 
-/** Lê o tema atual no cliente. No servidor não há <html> — assume claro. */
-const isDarkClient = () =>
-  document.documentElement.classList.contains("dark");
+function currentTheme(): Theme {
+  const c = document.documentElement.classList;
+  if (c.contains("dark")) return "dark";
+  if (c.contains("sereno")) return "sereno";
+  return "light";
+}
+
+function applyTheme(t: Theme) {
+  const el = document.documentElement;
+  el.classList.toggle("dark", t === "dark");
+  el.classList.toggle("sereno", t === "sereno");
+  try {
+    localStorage.setItem("theme", t);
+  } catch {
+    // localStorage indisponível (modo privado etc.) — ignora.
+  }
+}
 
 export function ThemeToggle() {
-  const dark = useSyncExternalStore(subscribe, isDarkClient, () => false);
-
-  const toggle = useCallback(() => {
-    const next = !document.documentElement.classList.contains("dark");
-    document.documentElement.classList.toggle("dark", next);
-    try {
-      localStorage.setItem("theme", next ? "dark" : "light");
-    } catch {
-      // localStorage indisponível (modo privado etc.) — ignora.
-    }
-  }, []);
+  const theme = useSyncExternalStore(
+    subscribe,
+    currentTheme,
+    () => "light" as Theme,
+  );
+  const CurrentIcon =
+    theme === "dark" ? Moon : theme === "sereno" ? Leaf : Sun;
 
   return (
-    <Button
-      variant="ghost"
-      size="icon-sm"
-      onClick={toggle}
-      aria-label={dark ? "Mudar para tema claro" : "Mudar para tema escuro"}
-      title={dark ? "Tema claro" : "Tema escuro"}
-    >
-      {dark ? <Sun /> : <Moon />}
-    </Button>
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Mudar tema"
+            title="Tema"
+          />
+        }
+      >
+        <CurrentIcon />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        {OPTIONS.map(({ key, label, Icon }) => (
+          <DropdownMenuItem key={key} onClick={() => applyTheme(key)}>
+            <Icon />
+            {label}
+            {theme === key ? <Check className="ml-auto size-3.5" /> : null}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }

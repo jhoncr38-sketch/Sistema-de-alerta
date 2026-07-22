@@ -42,11 +42,11 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="flex min-h-full flex-col bg-background">
-        {/* Aplica o tema escuro salvo antes da página pintar (evita flash). */}
+        {/* Aplica o tema salvo (escuro/sereno) antes da página pintar (evita flash). */}
         <script
           dangerouslySetInnerHTML={{
             __html:
-              "(function(){try{if(localStorage.getItem('theme')==='dark'){document.documentElement.classList.add('dark')}}catch(e){}})();",
+              "(function(){try{var t=localStorage.getItem('theme');if(t==='dark'){document.documentElement.classList.add('dark')}else if(t==='sereno'){document.documentElement.classList.add('sereno')}}catch(e){}})();",
           }}
         />
         {children}
