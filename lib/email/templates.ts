@@ -538,6 +538,50 @@ export function conviteAcessoEmail(opts: {
   return { subject, html: shell({ headline, accent: INFO, bodyHtml: body }) };
 }
 
+/** Aviso ao cliente de que o contador SOLICITOU um documento pelo portal. */
+export function solicitacaoDocumentoEmail(opts: {
+  companyName: string;
+  title: string;
+  description: string | null;
+  dueDate: string | null;
+  portalUrl: string;
+}) {
+  const { companyName, title, description, dueDate, portalUrl } = opts;
+  const headline = "Documento solicitado";
+  const subject = `Documento solicitado — ${title}`;
+  const body = `
+        ${p(`Olá, ${b(companyName)}!`)}
+        ${p("Seu contador solicitou o envio de um documento pelo portal:")}
+        ${infoTable(`
+          ${row("Documento", title)}
+          ${description ? row("Detalhes", description) : ""}
+          ${dueDate ? row("Prazo", formatDate(dueDate), WARN) : ""}
+        `)}
+        ${p("Envie pelo portal — dentro do prazo, você ainda ganha moedas no Clube SJ.")}
+        ${button(portalUrl, "Enviar no portal")}`;
+  return { subject, html: shell({ headline, accent: INFO, bodyHtml: body }) };
+}
+
+/** Aviso/comunicado livre do contador para a empresa (ferramenta "Enviar aviso"). */
+export function avisoEmail(opts: {
+  companyName: string;
+  title: string;
+  message: string;
+  portalUrl: string;
+}) {
+  const { companyName, title, message, portalUrl } = opts;
+  const headline = "Aviso do seu contador";
+  const subject = `Aviso — ${title}`;
+  // Quebra de linha do texto livre vira <br> (o resto é escapado pelo navegador ao exibir).
+  const corpo = message.replace(/\n/g, "<br>");
+  const body = `
+        ${p(`Olá, ${b(companyName)}!`)}
+        ${p(`<strong style="color:${GOLD_DARK}">${title}</strong>`)}
+        ${p(corpo)}
+        ${button(portalUrl, "Abrir o portal")}`;
+  return { subject, html: shell({ headline, accent: INFO, bodyHtml: body }) };
+}
+
 /** E-mail de teste disparado pelas Configurações para validar o Resend. */
 export function testEmail() {
   const headline = "E-mail de teste";

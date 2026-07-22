@@ -1,10 +1,12 @@
 import { adminNotifyTarget, companyNotifyTarget } from "@/lib/email/recipients";
 import { sendEmail } from "@/lib/email/resend";
 import {
+  avisoEmail,
   novoDocumentoEmail,
   pagamentoAguardandoEmail,
   pagamentoConfirmadoEmail,
   segundaViaEmail,
+  solicitacaoDocumentoEmail,
 } from "@/lib/email/templates";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { DocCategoria, DocType } from "@/lib/types";
@@ -164,6 +166,72 @@ export async function notifyPagamentoAguardando(opts: {
     .from("notifications")
     .insert({ document_id: opts.documentId, channel, kind: "aguardando" });
   if (error) console.warn("[notify] aguardando não registrado:", error.message);
+}
+
+/** Avisa a empresa que o contador solicitou um documento pelo portal. */
+export async function notifyDocumentRequest(opts: {
+  companyId: string;
+  title: string;
+  description: string | null;
+  dueDate: string | null;
+}): Promise<void> {
+  const supabase = createAdminClient();
+  const { recipients, companyName } = await companyNotifyTarget(
+    supabase,
+    opts.companyId,
+  );
+  if (recipients.length === 0) return;
+
+  const { subject, html } = solicitacaoDocumentoEmail({
+    companyName,
+    title: opts.title,
+    description: opts.description,
+    dueDate: opts.dueDate,
+    portalUrl: `${portalBase()}/portal/solicitacoes`,
+  });
+  await sendEmail({ to: recipients, subject, html });
+}
+
+/**
+ * Envia o aviso/comunicado do contador por e-mail. Para uma empresa: um e-mail
+ * aos destinatários dela. Global (companyId null): um e-mail POR empresa ativa
+ * (personaliza e evita expor os e-mails dos clientes entre si).
+ */
+export async function notifyAviso(opts: {
+  companyId: string | null;
+  title: string;
+  message: string;
+}): Promise<void> {
+  const supabase = createAdminClient();
+  const portalUrl = `${portalBase()}/portal`;
+
+  async function sendTo(companyId: string) {
+    const { recipients, companyName } = await companyNotifyTarget(
+      supabase,
+      companyId,
+    );
+    if (recipients.length === 0) return;
+    const { subject, html } = avisoEmail({
+      companyName,
+      title: opts.title,
+      message: opts.message,
+      portalUrl,
+    });
+    await sendEmail({ to: recipients, subject, html });
+  }
+
+  if (opts.companyId) {
+    await sendTo(opts.companyId);
+    return;
+  }
+
+  const { data: companies } = await supabase
+    .from("companies")
+    .select("id")
+    .eq("active", true);
+  for (const co of companies ?? []) {
+    await sendTo(co.id as string);
+  }
 }
 
 /**

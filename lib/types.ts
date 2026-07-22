@@ -81,6 +81,19 @@ export interface DocumentWithCompany extends DocumentRow {
   company: Pick<Company, "id" | "razao_social" | "nome_fantasia" | "email"> | null;
 }
 
+export interface Aviso {
+  id: string;
+  company_id: string | null; // null = aviso para todas as empresas
+  title: string;
+  message: string;
+  created_by: string | null;
+  created_at: string;
+}
+
+export interface AvisoWithCompany extends Aviso {
+  company: Pick<Company, "id" | "razao_social" | "nome_fantasia"> | null;
+}
+
 export interface InstallmentPlan {
   id: string;
   company_id: string;

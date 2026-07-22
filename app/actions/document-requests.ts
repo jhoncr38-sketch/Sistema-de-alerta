@@ -1,10 +1,12 @@
 "use server";
 
+import { after } from "next/server";
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { normalizeCompetencia } from "@/lib/dates";
+import { notifyDocumentRequest } from "@/lib/email/notify";
 import { creditDocumentOnTime } from "@/lib/rewards-credit";
 
 const SUBMIT_MAX = 10 * 1024 * 1024; // 10MB
@@ -58,6 +60,20 @@ export async function createDocumentRequest(
     created_by: profile.id,
   });
   if (error) return { error: `Falha ao criar solicitação: ${error.message}` };
+
+  // Avisa o cliente por e-mail (best-effort, fora do caminho crítico).
+  after(async () => {
+    try {
+      await notifyDocumentRequest({
+        companyId,
+        title,
+        description: description || null,
+        dueDate: dueDate || null,
+      });
+    } catch {
+      /* best-effort: o e-mail nunca quebra a criação da solicitação */
+    }
+  });
 
   revalidateRequests();
   return { ok: true };

@@ -1,31 +1,39 @@
-import { Download, FileClock, Info } from "lucide-react";
+import { Download, FileClock, Info, Megaphone } from "lucide-react";
+import { deleteAviso } from "@/app/actions/avisos";
 import { deleteDocumentRequest } from "@/app/actions/document-requests";
 import { ConfirmDeleteButton } from "@/components/confirm-delete-button";
+import { NewAvisoButton } from "@/components/new-aviso-button";
 import { NewDocumentRequestButton } from "@/components/new-document-request-button";
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatDate } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
-import type { DocumentRequestWithCompany } from "@/lib/types";
+import type { AvisoWithCompany, DocumentRequestWithCompany } from "@/lib/types";
 
 export default async function AdminSolicitacoesPage() {
   const supabase = await createClient();
 
-  const [{ data: companiesData }, { data: requestsData }] = await Promise.all([
-    supabase
-      .from("companies")
-      .select("id,razao_social,nome_fantasia")
-      .eq("active", true)
-      .order("razao_social"),
-    supabase
-      .from("document_requests")
-      .select("*, company:companies(id,razao_social,nome_fantasia)")
-      .order("created_at", { ascending: false }),
-  ]);
+  const [{ data: companiesData }, { data: requestsData }, { data: avisosData }] =
+    await Promise.all([
+      supabase
+        .from("companies")
+        .select("id,razao_social,nome_fantasia")
+        .eq("active", true)
+        .order("razao_social"),
+      supabase
+        .from("document_requests")
+        .select("*, company:companies(id,razao_social,nome_fantasia)")
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("avisos")
+        .select("*, company:companies(id,razao_social,nome_fantasia)")
+        .order("created_at", { ascending: false }),
+    ]);
 
   const companies = companiesData ?? [];
   const requests = (requestsData ?? []) as DocumentRequestWithCompany[];
+  const avisos = (avisosData ?? []) as AvisoWithCompany[];
 
   // URLs assinadas (1h) para os arquivos já enviados.
   const paths = requests
@@ -49,6 +57,12 @@ export default async function AdminSolicitacoesPage() {
         title="Solicitações de documentos"
         subtitle={`${requests.length} no total · ${pendentes} aguardando envio`}
       >
+        <NewAvisoButton
+          companies={companies.map((co) => ({
+            id: co.id,
+            label: co.nome_fantasia || co.razao_social,
+          }))}
+        />
         <NewDocumentRequestButton companies={companies} />
       </PageHeader>
 
@@ -133,6 +147,60 @@ export default async function AdminSolicitacoesPage() {
           O cliente vê as solicitações em “Solicitações” no portal e envia o
           arquivo por lá. Envio no prazo rende SJ Coins no Clube SJ.
         </div>
+
+        {/* Avisos/comunicados enviados ao cliente */}
+        <section className="space-y-3 pt-4">
+          <h2 className="flex items-center gap-2 text-sm font-semibold">
+            <Megaphone className="size-4 text-primary" />
+            Avisos enviados
+          </h2>
+          {avisos.length === 0 ? (
+            <div className="rounded-xl bg-card p-6 text-center text-sm text-muted-foreground ring-1 ring-foreground/10">
+              Nenhum aviso enviado. Use “Enviar aviso” para mandar um recado ao
+              cliente — aparece no portal dele.
+            </div>
+          ) : (
+            avisos.map((a) => {
+              const alvo = a.company_id
+                ? a.company?.nome_fantasia || a.company?.razao_social || "—"
+                : "Todas as empresas";
+              return (
+                <div
+                  key={a.id}
+                  className="flex flex-col gap-3 rounded-xl bg-card p-4 ring-1 ring-foreground/10 sm:flex-row sm:items-start sm:justify-between"
+                >
+                  <div className="flex min-w-0 items-start gap-3">
+                    <span className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                      <Megaphone className="size-4" />
+                    </span>
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium">{a.title}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {alvo} · {formatDate(a.created_at)}
+                      </p>
+                      <p className="mt-1 whitespace-pre-line text-sm text-muted-foreground">
+                        {a.message}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="shrink-0 self-end sm:self-auto">
+                    <ConfirmDeleteButton
+                      action={deleteAviso.bind(null, a.id)}
+                      title="Excluir aviso"
+                      description={
+                        <>
+                          Remove o aviso <strong>{a.title}</strong>. Ele some do
+                          portal do cliente. Não dá para desfazer.
+                        </>
+                      }
+                      successMessage="Aviso excluído."
+                    />
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </section>
       </div>
     </>
   );

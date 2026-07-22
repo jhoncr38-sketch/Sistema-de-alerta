@@ -1,4 +1,10 @@
-import { AlertTriangle, CalendarClock, CheckCircle2, Info } from "lucide-react";
+import {
+  AlertTriangle,
+  CalendarClock,
+  CheckCircle2,
+  Info,
+  Megaphone,
+} from "lucide-react";
 import { AssistenteChat } from "@/components/assistente-chat";
 import { DocumentsTable } from "@/components/documents-table";
 import { MetricCard } from "@/components/metric-card";
@@ -9,7 +15,7 @@ import { getClientCompanyContext } from "@/lib/companies";
 import { getUrgency } from "@/lib/dates";
 import { formatCurrency } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
-import type { DocumentWithCompany } from "@/lib/types";
+import type { Aviso, DocumentWithCompany } from "@/lib/types";
 
 /** Documento com a forma de pagamento do parcelamento (quando for parcela). */
 type PortalDoc = DocumentWithCompany & {
@@ -34,22 +40,30 @@ export default async function PortalHome() {
   const supabase = await createClient();
   const { active } = await getClientCompanyContext();
   const activeId = active?.id ?? "00000000-0000-0000-0000-000000000000";
-  const [{ data }, { data: reissues }] = await Promise.all([
-    supabase
-      .from("documents")
-      .select(
-        "*, company:companies(id,razao_social,nome_fantasia,email), plan:installment_plans(forma_pagamento)",
-      )
-      .eq("company_id", activeId)
-      .order("due_date", { ascending: true }),
-    supabase
-      .from("boleto_reissue_requests")
-      .select("document_id")
-      .eq("company_id", activeId)
-      .eq("status", "pending"),
-  ]);
+  const [{ data }, { data: reissues }, { data: avisosData }] =
+    await Promise.all([
+      supabase
+        .from("documents")
+        .select(
+          "*, company:companies(id,razao_social,nome_fantasia,email), plan:installment_plans(forma_pagamento)",
+        )
+        .eq("company_id", activeId)
+        .order("due_date", { ascending: true }),
+      supabase
+        .from("boleto_reissue_requests")
+        .select("document_id")
+        .eq("company_id", activeId)
+        .eq("status", "pending"),
+      // Avisos da empresa ativa + os globais (company_id nulo).
+      supabase
+        .from("avisos")
+        .select("*")
+        .or(`company_id.eq.${activeId},company_id.is.null`)
+        .order("created_at", { ascending: false }),
+    ]);
 
   const docs = (data ?? []) as PortalDoc[];
+  const avisos = (avisosData ?? []) as Aviso[];
   const reissueIds = new Set(
     (reissues ?? []).map((r) => (r as { document_id: string }).document_id),
   );
@@ -99,6 +113,25 @@ export default async function PortalHome() {
         subtitle="Confira seus boletos e documentos"
       />
       <div className="space-y-6 p-6">
+        {avisos.length > 0 ? (
+          <section className="space-y-2">
+            {avisos.map((a) => (
+              <div
+                key={a.id}
+                className="flex gap-3 rounded-xl border border-primary/20 bg-primary/5 p-4"
+              >
+                <Megaphone className="mt-0.5 size-4 shrink-0 text-primary" />
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold">{a.title}</p>
+                  <p className="mt-0.5 text-sm whitespace-pre-line text-muted-foreground">
+                    {a.message}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </section>
+        ) : null}
+
         <ProximoVencimento open={openList} />
 
         <div className="grid gap-3 sm:grid-cols-3">
