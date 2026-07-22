@@ -201,11 +201,14 @@ export function ObligationsCalendar({
       </div>
 
       {/* Grade */}
-      <div className="grid grid-cols-7 gap-1.5">
+      <div className="grid grid-cols-7 gap-1 sm:gap-1.5">
         {cells.map((day, i) => {
           if (day === null) {
             return (
-              <div key={`b${i}`} className="min-h-[72px] rounded-xl bg-muted/20" />
+              <div
+                key={`b${i}`}
+                className="min-h-[48px] rounded-xl bg-muted/20 sm:min-h-[72px]"
+              />
             );
           }
           const key = ymd(day);
@@ -220,7 +223,7 @@ export function ObligationsCalendar({
               disabled={!has}
               onClick={() => setSelected((s) => (s === key ? null : key))}
               className={cn(
-                "flex min-h-[72px] flex-col items-start gap-1 rounded-xl border p-1.5 text-left transition-colors",
+                "flex min-h-[48px] flex-col items-center gap-1 rounded-xl border p-1 text-center transition-colors sm:min-h-[72px] sm:items-start sm:p-1.5 sm:text-left",
                 has ? "cursor-pointer bg-card hover:bg-muted/50" : "cursor-default bg-muted/20",
                 isToday && "bg-primary/5",
                 isSel && "ring-2 ring-primary",
@@ -236,7 +239,19 @@ export function ObligationsCalendar({
               >
                 {day}
               </span>
-              <div className="flex w-full flex-col gap-1">
+              {/* Celular: bolinhas por urgência (o detalhe abaixo mostra o texto). */}
+              {has ? (
+                <div className="flex flex-wrap justify-center gap-0.5 sm:hidden">
+                  {dayItems.slice(0, 3).map((it) => (
+                    <span
+                      key={it.id}
+                      className={cn("size-1.5 rounded-full", DOT[tomOf(it.urgency)])}
+                    />
+                  ))}
+                </div>
+              ) : null}
+              {/* Telas maiores: pílulas com o nome/tipo. */}
+              <div className="hidden w-full flex-col gap-1 sm:flex">
                 {dayItems.slice(0, 2).map((it) => (
                   <span
                     key={it.id}
