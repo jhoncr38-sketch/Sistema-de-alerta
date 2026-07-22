@@ -557,7 +557,7 @@ export async function convidarAcesso(
         ? `Você tem ${pendentes} ${pendentes === 1 ? "obrigação" : "obrigações"} em aberto. `
         : "";
     const msg =
-      `Olá, ${nome}! 👋 Seu portal da S J Contabilidade já está pronto.\n\n` +
+      `Olá, ${nome}! 👋 Você foi convidado para acessar o portal da S J Contabilidade.\n\n` +
       `${linhaPend}🎁 E tem ${WELCOME_BONUS_COINS} moedas de boas-vindas te esperando no Clube SJ.\n\n` +
       `Toque para entrar (sem senha):\n${magicUrl}`;
     const waUrl = `https://wa.me/${tel}?text=${encodeURIComponent(msg)}`;

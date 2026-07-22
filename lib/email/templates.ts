@@ -513,13 +513,13 @@ export function conviteAcessoEmail(opts: {
   magicUrl: string;
 }) {
   const { name, pendentes, bonusCoins, magicUrl } = opts;
-  const headline = "Seu acesso ao portal está pronto";
-  const subject = `Seu portal ${APP_NAME} está pronto — entre com 1 toque`;
+  const headline = "Convite de acesso ao portal";
+  const subject = `Você foi convidado para acessar o portal da ${BRAND_NAME}`;
   const obrigLabel = pendentes === 1 ? "obrigação em aberto" : "obrigações em aberto";
   const linhaPend =
     pendentes > 0
       ? p(
-          `Você tem <strong style="color:${GOLD_DARK}">${pendentes} ${obrigLabel}</strong> aguardando no seu portal.`,
+          `Você tem <strong style="color:${GOLD_DARK}">${pendentes} ${obrigLabel}</strong> aguardando no portal.`,
         )
       : "";
   const linhaBonus =
@@ -530,7 +530,7 @@ export function conviteAcessoEmail(opts: {
       : "";
   const body = `
         ${p(`Olá, ${b(name)}!`)}
-        ${p("Seu portal está pronto. Acompanhe seus boletos, baixe as guias e receba avisos de vencimento — tudo em um só lugar.")}
+        ${p(`Você foi convidado para acessar o portal da ${b(BRAND_NAME)}. Nele você acompanha seus boletos, baixa as guias e recebe avisos de vencimento — tudo em um só lugar.`)}
         ${linhaPend}
         ${linhaBonus}
         ${button(magicUrl, "Entrar com 1 toque")}
