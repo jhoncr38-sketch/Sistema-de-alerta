@@ -8,10 +8,12 @@ import {
 import { AssistenteChat } from "@/components/assistente-chat";
 import { DocumentsTable } from "@/components/documents-table";
 import { MetricCard } from "@/components/metric-card";
+import { ObligationsView } from "@/components/obligations-view";
 import { PageHeader } from "@/components/page-header";
 import { ProximoVencimento } from "@/components/proximo-vencimento";
 import { getUserAndProfile } from "@/lib/auth";
 import { getClientCompanyContext } from "@/lib/companies";
+import { docTypeLabel } from "@/lib/constants";
 import { getUrgency } from "@/lib/dates";
 import { formatCurrency } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
@@ -78,6 +80,20 @@ export default async function PortalHome() {
   const openList = pagaveis
     .filter((d) => d.status !== "paid")
     .filter((d) => !ehDebitoAutomaticoFuturo(d));
+  // Itens do modo Calendário (mesmas guias em aberto; chip mostra o tipo).
+  const calItems = openList
+    .filter((d) => d.due_date)
+    .map((d) => ({
+      id: d.id,
+      dueDate: d.due_date as string,
+      cliente: d.company?.nome_fantasia || d.company?.razao_social || "",
+      tipo:
+        d.categoria === "parcelamento" && d.parcela_num
+          ? `Parcela ${d.parcela_num}`
+          : docTypeLabel(d.type),
+      amount: d.amount,
+      urgency: getUrgency(d.due_date as string, d.status).urgency,
+    }));
 
   let vencidos = 0;
   let emBreve = 0;
@@ -159,19 +175,36 @@ export default async function PortalHome() {
         </div>
 
         <section className="space-y-3">
-          <h2 className="text-sm font-semibold">Boletos e parcelas em aberto</h2>
-          <DocumentsTable
-            documents={openList}
-            showPreview
-            showDownload
-            showPaid
-            enforceProof
-            showTypeIcon
-            showExplain
-            showReissue
-            reissueRequestedIds={reissueIds}
-            emptyMessage="Você não tem boletos ou parcelas em aberto."
-          />
+          {openList.length === 0 ? (
+            <>
+              <h2 className="text-sm font-semibold">
+                Boletos e parcelas em aberto
+              </h2>
+              <DocumentsTable
+                documents={openList}
+                emptyMessage="Você não tem boletos ou parcelas em aberto."
+              />
+            </>
+          ) : (
+            <ObligationsView
+              title="Boletos e parcelas em aberto"
+              data={calItems}
+              showClient={false}
+            >
+              <DocumentsTable
+                documents={openList}
+                showPreview
+                showDownload
+                showPaid
+                enforceProof
+                showTypeIcon
+                showExplain
+                showReissue
+                reissueRequestedIds={reissueIds}
+                emptyMessage="Você não tem boletos ou parcelas em aberto."
+              />
+            </ObligationsView>
+          )}
         </section>
 
         <div className="flex items-center gap-2 rounded-lg bg-muted px-4 py-3 text-xs text-muted-foreground">

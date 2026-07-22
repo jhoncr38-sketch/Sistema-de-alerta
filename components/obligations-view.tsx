@@ -17,10 +17,13 @@ import { cn } from "@/lib/utils";
 export function ObligationsView({
   title,
   data,
+  showClient = true,
   children,
 }: {
   title: string;
   data: CalItem[];
+  /** Repassa ao calendário: false = chip mostra o tipo (visão do cliente). */
+  showClient?: boolean;
   children: ReactNode;
 }) {
   const [mode, setMode] = useState<"lista" | "calendario">("lista");
@@ -51,7 +54,11 @@ export function ObligationsView({
           {tab("calendario", "Calendário", <CalendarDays className="size-3.5" />)}
         </div>
       </div>
-      {mode === "lista" ? children : <ObligationsCalendar items={data} />}
+      {mode === "lista" ? (
+        children
+      ) : (
+        <ObligationsCalendar items={data} showClient={showClient} />
+      )}
     </div>
   );
 }

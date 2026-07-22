@@ -60,7 +60,14 @@ function dayOf(ymd: string): number {
  * hoje fica destacado. Só monta quando o contador troca de aba (não renderiza no
  * servidor), então usar `new Date()` aqui não causa mismatch de hidratação.
  */
-export function ObligationsCalendar({ items }: { items: CalItem[] }) {
+export function ObligationsCalendar({
+  items,
+  showClient = true,
+}: {
+  items: CalItem[];
+  /** Contador: chip mostra o cliente. Cliente (portal): chip mostra o tipo da guia. */
+  showClient?: boolean;
+}) {
   const today = new Date();
   const [view, setView] = useState({ y: today.getFullYear(), m: today.getMonth() });
   const [selected, setSelected] = useState<string | null>(null);
@@ -190,9 +197,9 @@ export function ObligationsCalendar({ items }: { items: CalItem[] }) {
                     "max-w-full truncate rounded px-1 py-0.5 text-[9px] font-medium leading-tight",
                     chipClass(top.urgency),
                   )}
-                  title={`${top.cliente} · ${top.tipo}`}
+                  title={showClient ? `${top.cliente} · ${top.tipo}` : top.tipo}
                 >
-                  {shortName(top.cliente)}
+                  {showClient ? shortName(top.cliente) : shortName(top.tipo)}
                 </span>
               ) : null}
               {dayItems.length > 1 ? (
@@ -235,7 +242,14 @@ export function ObligationsCalendar({ items }: { items: CalItem[] }) {
                   {dayOf(it.dueDate)}/{String(view.m + 1).padStart(2, "0")}
                 </span>
                 <span className="min-w-0 flex-1 truncate">
-                  <strong className="font-medium">{it.cliente}</strong> · {it.tipo}
+                  {showClient ? (
+                    <>
+                      <strong className="font-medium">{it.cliente}</strong> ·{" "}
+                      {it.tipo}
+                    </>
+                  ) : (
+                    <strong className="font-medium">{it.tipo}</strong>
+                  )}
                 </span>
                 {it.amount != null ? (
                   <span className="shrink-0 tabular-nums text-muted-foreground">
