@@ -31,6 +31,15 @@ export interface ConvidarResult {
   waUrl?: string;
 }
 
+export interface CreateClientResult {
+  ok?: boolean;
+  error?: string;
+  /** Cadastro criado E convite enviado com sucesso. */
+  invited?: boolean;
+  /** Criou o cadastro, mas o convite falhou (mostra aviso, não erro). */
+  inviteError?: string;
+}
+
 function revalidateClientes() {
   revalidatePath("/painel/clientes");
   revalidatePath("/painel/faturamento");
@@ -204,6 +213,93 @@ export async function approveClient(formData: FormData) {
     );
 
   revalidateClientes();
+}
+
+/**
+ * Cria a CONTA de um cliente novo direto pelo painel (sem depender do
+ * autocadastro). A conta nasce SEM SENHA (login por magic link/convite), com o
+ * e-mail já confirmado, aprovada e vinculada à empresa escolhida. Assim o
+ * contador consegue convidar quem ainda não se cadastrou — o cliente entra com
+ * 1 toque e nunca precisa criar senha.
+ *
+ * O gatilho on_auth_user_created cria o profile (client/pending); aqui a gente
+ * aprova e vincula, como no approveClient. Se `invite` vier marcado, dispara o
+ * convite por e-mail no mesmo passo.
+ */
+export async function createClientUser(
+  _prev: CreateClientResult,
+  formData: FormData,
+): Promise<CreateClientResult> {
+  await requireAdmin();
+
+  const name = String(formData.get("name") ?? "").trim();
+  const email = String(formData.get("email") ?? "")
+    .trim()
+    .toLowerCase();
+  const companyId = String(formData.get("companyId") ?? "");
+  const invite = formData.get("invite") === "1";
+
+  if (!name || !email) {
+    return { error: "Informe o nome e o e-mail do cliente." };
+  }
+  if (!companyId) {
+    return { error: "Selecione a empresa que o cliente vai acessar." };
+  }
+
+  const admin = createAdminClient();
+
+  // Cria o usuário no Auth SEM senha, com e-mail já confirmado (para o magic
+  // link funcionar de imediato). O gatilho cria o profile como client/pending.
+  const { data: created, error: createErr } = await admin.auth.admin.createUser({
+    email,
+    email_confirm: true,
+    user_metadata: { name },
+  });
+  if (createErr || !created?.user) {
+    const msg = createErr?.message ?? "";
+    if (/registered|already|exists|duplicate/i.test(msg)) {
+      return {
+        error:
+          "Já existe um cadastro com esse e-mail. Use “Convidar” na lista de clientes.",
+      };
+    }
+    return { error: msg || "Não foi possível criar o cadastro do cliente." };
+  }
+
+  const userId = created.user.id;
+
+  // Aprova o perfil e define a empresa principal (mesmo caminho do approveClient).
+  const { error: profErr } = await admin
+    .from("profiles")
+    .update({
+      name,
+      role: "client",
+      status: "approved",
+      company_id: companyId,
+    })
+    .eq("id", userId);
+  if (profErr) return { error: profErr.message };
+
+  // Vínculo N-para-N (o contador pode adicionar mais empresas depois).
+  await admin
+    .from("client_companies")
+    .upsert(
+      { profile_id: userId, company_id: companyId },
+      { onConflict: "profile_id,company_id" },
+    );
+
+  revalidateClientes();
+
+  if (invite) {
+    const r = await convidarAcesso(userId, "email");
+    if (r.ok) return { ok: true, invited: true };
+    return {
+      ok: true,
+      invited: false,
+      inviteError: r.error ?? "Não foi possível enviar o convite agora.",
+    };
+  }
+  return { ok: true };
 }
 
 /**

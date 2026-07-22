@@ -14,6 +14,7 @@ import { ConfirmDeleteButton } from "@/components/confirm-delete-button";
 import { ConvidarAcessoButton } from "@/components/convidar-acesso-button";
 import { EditClientButton } from "@/components/edit-client-button";
 import { EditCompanyButton } from "@/components/edit-company-button";
+import { NewClientButton } from "@/components/new-client-button";
 import { NewCompanyButton } from "@/components/new-company-button";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -158,6 +159,14 @@ export default async function ClientesPage() {
         title="Clientes"
         subtitle="Aprove cadastros, edite empresas e escolha quais empresas cada cliente pode ver"
       >
+        {companies.length > 0 ? (
+          <NewClientButton
+            companies={companies.map((co) => ({
+              id: co.id,
+              label: co.nome_fantasia || co.razao_social,
+            }))}
+          />
+        ) : null}
         <NewCompanyButton />
       </PageHeader>
       <div className="space-y-8 p-6">
