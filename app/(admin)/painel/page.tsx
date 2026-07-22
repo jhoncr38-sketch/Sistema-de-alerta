@@ -5,8 +5,10 @@ import { CollapsibleBucket } from "@/components/collapsible-bucket";
 import { CompanyFilterSelect } from "@/components/company-filter-select";
 import { DocumentsTable } from "@/components/documents-table";
 import { MetricCard } from "@/components/metric-card";
+import { ObligationsView } from "@/components/obligations-view";
 import { PageHeader } from "@/components/page-header";
 import { ReissueRequests, type ReissueItem } from "@/components/reissue-requests";
+import { docTypeLabel } from "@/lib/constants";
 import { getUrgency, type Urgency } from "@/lib/dates";
 import { formatCurrency } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
@@ -165,6 +167,21 @@ export default async function PainelPage({
     };
   }).filter((g) => g.items.length > 0);
 
+  // Modo Calendário: as mesmas obrigações acionáveis (com vencimento), num grid.
+  const calItems = openList
+    .filter((d) => d.due_date)
+    .map((d) => ({
+      id: d.id,
+      dueDate: d.due_date as string,
+      cliente: d.company?.nome_fantasia || d.company?.razao_social || "—",
+      tipo:
+        d.categoria === "parcelamento" && d.parcela_num
+          ? `Parcela ${d.parcela_num}`
+          : docTypeLabel(d.type),
+      amount: d.amount,
+      urgency: urgencyOf(d),
+    }));
+
   return (
     <>
       <PageHeader
@@ -286,14 +303,18 @@ export default async function PainelPage({
         </div>
 
         <section className="space-y-3">
-          <h2 className="text-sm font-semibold">Próximas obrigações</h2>
           {grupos.length === 0 ? (
-            <DocumentsTable
-              documents={[]}
-              emptyMessage="Nenhuma obrigação em aberto. Publique um boleto em “Enviar documento”."
-            />
+            <>
+              <h2 className="text-sm font-semibold">Próximas obrigações</h2>
+              <DocumentsTable
+                documents={[]}
+                emptyMessage="Nenhuma obrigação em aberto. Publique um boleto em “Enviar documento”."
+              />
+            </>
           ) : (
-            grupos.map((g, gi) => {
+            <ObligationsView title="Próximas obrigações" data={calItems}>
+              <div className="space-y-3">
+                {grupos.map((g, gi) => {
               const Icon = g.icon;
               // Cada bloco vira um cartão recolhível; só o mais urgente (o 1º da
               // lista, já ordenada por urgência) abre por padrão. Blocos longos
@@ -325,7 +346,9 @@ export default async function PainelPage({
                   {table(g.items)}
                 </CollapsibleBucket>
               );
-            })
+                })}
+              </div>
+            </ObligationsView>
           )}
         </section>
       </div>
