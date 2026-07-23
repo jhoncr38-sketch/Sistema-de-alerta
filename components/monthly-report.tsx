@@ -39,7 +39,8 @@ export interface MonthlyReportProps {
   heroTone: "emdia" | "atencao";
   heroTitle: string;
   heroEyebrow: string;
-  totalPagoLabel: string;
+  heroValueLabel: string;
+  heroValue: string;
   stats: ReportStat[];
   faturamento: { valorLabel: string; sub: string; spark: number[] } | null;
   proximos: ReportRow[];
@@ -142,8 +143,8 @@ export function MonthlyReport(props: MonthlyReportProps) {
               <h1 className="rl-hero-title">{props.heroTitle}</h1>
             </div>
             <div className="rl-hero-right">
-              <div className="rl-hero-lbl">Total pago no mês</div>
-              <div className="rl-hero-val">{props.totalPagoLabel}</div>
+              <div className="rl-hero-lbl">{props.heroValueLabel}</div>
+              <div className="rl-hero-val">{props.heroValue}</div>
             </div>
           </div>
 

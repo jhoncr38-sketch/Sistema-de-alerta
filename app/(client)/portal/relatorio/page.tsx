@@ -16,7 +16,6 @@ import { formatCurrency, formatDayMonth } from "@/lib/format";
 import {
   calcularNumeros,
   competenciaExtenso,
-  resumoFallback,
   type ResumoDoc,
 } from "@/lib/ai/resumo";
 import { createClient } from "@/lib/supabase/server";
@@ -59,13 +58,17 @@ function monthBounds(ym: string): { start: string; end: string } {
 function pct(v: number): string {
   return `${Math.abs(v).toFixed(1).replace(".", ",")}%`;
 }
+function plural(n: number, um: string, muitos: string): string {
+  return n === 1 ? um : muitos;
+}
 
 /**
- * Relatório mensal do cliente ("prestação de contas"). Reaproveita os mesmos
- * cálculos do resumo por IA (`calcularNumeros`) e do dashboard de faturamento
- * (`buildFaturamento`); o texto em linguagem simples vem de `monthly_summaries`
- * (gerado pelo cron) ou, na falta, do fallback local. Renderiza uma folha pronta
- * para imprimir/salvar como PDF. `?mes=YYYY-MM` escolhe o mês (padrão: o anterior).
+ * Relatório mensal do cliente ("prestação de contas"). É todo por COMPETÊNCIA
+ * (o mês da guia), igual ao dashboard de faturamento — então "Impostos do mês"
+ * são os tributos apurados na competência (mesma base da carga), e não a soma
+ * por data de pagamento (que inflava por causa de parcelas de parcelamento
+ * marcadas em lote no mesmo dia). Renderiza uma folha pronta para imprimir/
+ * salvar como PDF. `?mes=YYYY-MM` escolhe o mês (padrão: o anterior).
  */
 export default async function PortalRelatorioPage({
   searchParams,
@@ -87,64 +90,51 @@ export default async function PortalRelatorioPage({
   const [cy, cm] = competencia.split("-").map(Number);
 
   const supabase = await createClient();
-  const [{ data: docsRaw }, { data: revenuesRaw }, { data: summaryRaw }] =
-    await Promise.all([
-      supabase
-        .from("documents")
-        .select(
-          "id, type, categoria, amount, due_date, status, marcado_pago_at, paid_at, competencia, parcela_num",
-        )
-        .eq("company_id", activeId),
-      supabase
-        .from("revenues")
-        .select("competencia, amount")
-        .eq("company_id", activeId),
-      supabase
-        .from("monthly_summaries")
-        .select("texto")
-        .eq("company_id", activeId)
-        .eq("competencia", competencia)
-        .maybeSingle(),
-    ]);
+  const [{ data: docsRaw }, { data: revenuesRaw }] = await Promise.all([
+    supabase
+      .from("documents")
+      .select(
+        "id, type, categoria, amount, due_date, status, marcado_pago_at, paid_at, competencia, parcela_num",
+      )
+      .eq("company_id", activeId),
+    supabase
+      .from("revenues")
+      .select("competencia, amount")
+      .eq("company_id", activeId),
+  ]);
 
   const docs = (docsRaw ?? []) as ReportDoc[];
   const companyName =
     active?.nome_fantasia || active?.razao_social || "Sua empresa";
 
-  // Números do mês (mesma fonte do resumo por IA).
+  // Vencidas em aberto (hoje) e a vencer no próximo mês — para "Situação".
   const numeros = calcularNumeros(docs, competencia);
 
-  // Faturamento por competência (mesma fonte do dashboard).
+  // Faturamento/impostos por COMPETÊNCIA (mesma fonte do dashboard).
   const fat = buildFaturamento(
     docs as DocInput[],
     (revenuesRaw ?? []) as RevenueInput[],
     24,
   );
   const point = fat.data.find((p) => p.key === competencia) ?? null;
+  const impostosMes = point?.tributos ?? 0; // isTributo apurado na competência
+  const faturamentoMes = point?.faturamento ?? 0;
+  const cargaMes = point?.carga ?? null;
+
   const upto = fat.data.filter((p) => p.key <= competencia && p.faturamento > 0);
   const sparkPts = upto.slice(-6).map((p) => p.faturamento);
   let crescimento: number | null = null;
-  if (point && point.faturamento > 0 && upto.length >= 2) {
+  if (faturamentoMes > 0 && upto.length >= 2) {
     const prev = upto[upto.length - 2].faturamento;
-    if (prev > 0) crescimento = ((point.faturamento - prev) / prev) * 100;
+    if (prev > 0) crescimento = ((faturamentoMes - prev) / prev) * 100;
   }
 
-  // Cartões de números.
-  const stats: ReportStat[] = [
-    {
-      k: "Total pago",
-      v: formatCurrency(numeros.pagosValor),
-      s:
-        numeros.pagos === 1
-          ? "1 guia quitada"
-          : `${numeros.pagos} guias quitadas`,
-      tone: "up",
-    },
-  ];
-  if (point && point.faturamento > 0) {
+  // Cartões (todos por competência / status atual).
+  const stats: ReportStat[] = [];
+  if (faturamentoMes > 0) {
     stats.push({
       k: "Faturamento",
-      v: formatCurrency(point.faturamento),
+      v: formatCurrency(faturamentoMes),
       s:
         crescimento != null
           ? `${crescimento >= 0 ? "▲" : "▼"} ${pct(crescimento)}`
@@ -152,38 +142,43 @@ export default async function PortalRelatorioPage({
       tone: crescimento != null && crescimento < 0 ? "down" : "up",
     });
   }
-  if (point && point.carga != null) {
+  if (cargaMes != null) {
     stats.push({
       k: "Carga tributária",
-      v: pct(point.carga),
+      v: pct(cargaMes),
       s: "do faturamento",
       tone: "neutral",
     });
   }
   stats.push({
+    k: "A vencer",
+    v: formatCurrency(numeros.vencemProxMesValor),
+    s: `${numeros.vencemProxMes} ${plural(numeros.vencemProxMes, "guia", "guias")} no próximo mês`,
+    tone: "neutral",
+  });
+  stats.push({
     k: "Situação",
     v:
       numeros.emAtraso === 0
         ? "Em dia"
-        : `${numeros.emAtraso} vencida${numeros.emAtraso === 1 ? "" : "s"}`,
+        : `${numeros.emAtraso} ${plural(numeros.emAtraso, "vencida", "vencidas")}`,
     s: numeros.emAtraso === 0 ? "sem pendências" : "a regularizar",
     tone: numeros.emAtraso === 0 ? "up" : "down",
   });
 
-  // Faixa de destaque, coerente com os dados.
+  // Faixa de destaque (situação real, sem alegar "quitado").
   const mesExtenso = competenciaExtenso(competencia);
   let heroTone: "emdia" | "atencao" = "emdia";
-  let heroEyebrow = "Mês fechado em dia";
-  let heroTitle = `Todas as guias de ${mesExtenso} foram quitadas.`;
+  let heroEyebrow = "Obrigações em dia";
+  let heroTitle = `Suas obrigações de ${mesExtenso} estão em dia.`;
   if (numeros.emAtraso > 0) {
     heroTone = "atencao";
     heroEyebrow = "Requer atenção";
-    heroTitle = `Você tem ${numeros.emAtraso} guia${
-      numeros.emAtraso === 1 ? "" : "s"
-    } vencida${numeros.emAtraso === 1 ? "" : "s"} para regularizar.`;
-  } else if (numeros.pagos === 0) {
-    heroEyebrow = "Tudo tranquilo";
-    heroTitle = `Nenhuma guia venceu em ${mesExtenso}. Nada a pagar.`;
+    heroTitle = `Você tem ${numeros.emAtraso} ${plural(
+      numeros.emAtraso,
+      "guia vencida",
+      "guias vencidas",
+    )} para regularizar.`;
   }
 
   // Próximos vencimentos (mês seguinte à competência).
@@ -224,9 +219,45 @@ export default async function PortalRelatorioPage({
       };
     });
 
-  const resumoTexto =
-    (summaryRaw as { texto: string } | null)?.texto ??
-    resumoFallback(numeros, companyName);
+  // Resumo em palavras simples, montado a partir dos números por competência
+  // (correto e coerente com os cartões; não usa a soma por data de pagamento).
+  const partes: string[] = [];
+  partes.push(
+    faturamentoMes > 0
+      ? `Em ${mesExtenso}, ${companyName} apurou ${formatCurrency(
+          impostosMes,
+        )} em impostos sobre um faturamento de ${formatCurrency(faturamentoMes)}${
+          cargaMes != null ? ` (carga de ${pct(cargaMes)})` : ""
+        }.`
+      : `Em ${mesExtenso}, ${companyName} apurou ${formatCurrency(
+          impostosMes,
+        )} em impostos.`,
+  );
+  if (numeros.emAtraso > 0) {
+    partes.push(
+      `Há ${numeros.emAtraso} ${plural(
+        numeros.emAtraso,
+        "guia vencida",
+        "guias vencidas",
+      )} (${formatCurrency(numeros.emAtrasoValor)}) que ${plural(
+        numeros.emAtraso,
+        "precisa",
+        "precisam",
+      )} de atenção.`,
+    );
+  } else {
+    partes.push("Suas obrigações estão em dia.");
+  }
+  if (numeros.vencemProxMes > 0) {
+    partes.push(
+      `Para ${MESES[Number(nextYm.split("-")[1]) - 1]}, ${numeros.vencemProxMes} ${plural(
+        numeros.vencemProxMes,
+        "guia a vencer",
+        "guias a vencer",
+      )}, somando ${formatCurrency(numeros.vencemProxMesValor)}.`,
+    );
+  }
+  const resumoTexto = partes.join(" ");
 
   const nextNavYm = nextMonthKey(competencia);
 
@@ -239,12 +270,13 @@ export default async function PortalRelatorioPage({
       heroTone={heroTone}
       heroEyebrow={heroEyebrow}
       heroTitle={heroTitle}
-      totalPagoLabel={formatCurrency(numeros.pagosValor)}
+      heroValueLabel="Impostos do mês"
+      heroValue={formatCurrency(impostosMes)}
       stats={stats}
       faturamento={
-        point && point.faturamento > 0
+        faturamentoMes > 0
           ? {
-              valorLabel: formatCurrency(point.faturamento),
+              valorLabel: formatCurrency(faturamentoMes),
               sub:
                 crescimento != null
                   ? `${crescimento >= 0 ? "Subiu" : "Caiu"} ${pct(
