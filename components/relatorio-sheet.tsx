@@ -1,4 +1,5 @@
 import type { CSSProperties } from "react";
+import type { ProximoLinha, RelatorioView } from "@/lib/relatorio";
 
 /**
  * A "folha" do relatório mensal (prestação de contas) — layout A4 com a marca do
@@ -23,43 +24,6 @@ const C = {
 };
 const SERIF = 'Georgia, "Times New Roman", serif';
 
-export interface ProximoLinha {
-  id: string;
-  tipo: string;
-  whenLabel: string; // "24/07"
-  amountLabel: string;
-}
-
-export interface RelatorioSheetProps {
-  brandName: string;
-  logoUrl: string | null;
-  periodo: string; // "Junho · 2026"
-  competenciaCurto: string; // "Competência 06/2026"
-  cliente: string;
-  cnpj: string | null;
-  alerta: { tone: "atencao" | "ok"; texto: string };
-  totalPagoLabel: string;
-  guiasPagasLabel: string; // "19 guias quitadas em junho"
-  proximos: ProximoLinha[];
-  proximosMesLabel: string; // "Julho"
-  totalAVencerLabel: string | null;
-  faturamentoLabel: string | null;
-  faturamentoVar: { txt: string; tone: "up" | "down" } | null;
-  cargaLabel: string | null;
-  situacao: { valor: string; tone: "ok" | "alerta" };
-  evolucao: {
-    mesAnteriorLabel: string;
-    fatAnteriorLabel: string;
-    anteriorH: number;
-    mesAtualLabel: string;
-    fatAtualLabel: string;
-    atualH: number;
-    crescimentoLabel: string;
-    crescimentoTone: "up" | "down";
-  } | null;
-  resumoTexto: string;
-}
-
 const label: CSSProperties = {
   fontSize: 11,
   fontWeight: 600,
@@ -72,7 +36,7 @@ const cardBorder: CSSProperties = {
   borderRadius: 12,
 };
 
-export function RelatorioSheet(props: RelatorioSheetProps) {
+export function RelatorioSheet(props: RelatorioView) {
   const situacaoColor = props.situacao.tone === "alerta" ? C.red : C.green;
   const chipBoxAlerta: CSSProperties =
     props.situacao.tone === "alerta"
@@ -342,7 +306,8 @@ export function RelatorioSheet(props: RelatorioSheetProps) {
                     color: props.faturamentoVar.tone === "up" ? C.green : C.red,
                   }}
                 >
-                  {props.faturamentoVar.txt}
+                  {props.faturamentoVar.tone === "up" ? "▲" : "▼"}{" "}
+                  {props.faturamentoVar.pctLabel}
                 </span>
               ) : (
                 <span style={{ color: C.text2 }}>no mês</span>

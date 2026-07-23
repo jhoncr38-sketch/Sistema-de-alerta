@@ -6,7 +6,7 @@ import {
   type DocInput,
   type RevenueInput,
 } from "@/lib/faturamento";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency, formatDayMonth } from "@/lib/format";
 
 const MESES_CAP = [
   "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
@@ -34,6 +34,7 @@ export interface ProximoItem {
 /** Tudo que o relatório mensal precisa, calculado num só lugar (página + envio). */
 export interface RelatorioModel {
   competencia: string; // "YYYY-MM"
+  companyName: string;
   mesLabel: string; // "Junho"
   ano: number;
   mesExtenso: string; // "junho de 2026"
@@ -191,6 +192,7 @@ export function montarRelatorio(
   const [cy, cm] = competencia.split("-").map(Number);
   return {
     competencia,
+    companyName,
     mesLabel: MESES_CAP[cm - 1],
     ano: cy,
     mesExtenso,
@@ -207,5 +209,124 @@ export function montarRelatorio(
     proximosTotal,
     proximosMesLabel: monthName(nextYm),
     resumoTexto: partes.join(" "),
+  };
+}
+
+/** Linha da tabela "Ação necessária" já formatada. */
+export interface ProximoLinha {
+  id: string;
+  tipo: string;
+  whenLabel: string; // "24/07"
+  amountLabel: string;
+}
+
+/**
+ * "View model" do relatório: tudo já formatado em strings, pronto para renderizar.
+ * A folha na tela (`RelatorioSheet`, HTML) e o arquivo (`RelatorioPdf`, PDF) usam
+ * o MESMO objeto — então a tela e o PDF enviado ficam idênticos.
+ */
+export interface RelatorioView {
+  brandName: string;
+  logoUrl: string | null;
+  periodo: string; // "Junho · 2026"
+  competenciaCurto: string; // "Competência 06/2026"
+  cliente: string;
+  cnpj: string | null;
+  alerta: { tone: "atencao" | "ok"; texto: string };
+  totalPagoLabel: string;
+  guiasPagasLabel: string;
+  proximos: ProximoLinha[];
+  proximosMesLabel: string;
+  totalAVencerLabel: string | null;
+  faturamentoLabel: string | null;
+  faturamentoVar: { pctLabel: string; tone: "up" | "down" } | null;
+  cargaLabel: string | null;
+  situacao: { valor: string; tone: "ok" | "alerta" };
+  evolucao: {
+    mesAnteriorLabel: string;
+    fatAnteriorLabel: string;
+    anteriorH: number;
+    mesAtualLabel: string;
+    fatAtualLabel: string;
+    atualH: number;
+    crescimentoLabel: string;
+    crescimentoTone: "up" | "down";
+  } | null;
+  resumoTexto: string;
+}
+
+/** Formata o modelo em strings prontas para a folha (tela) e o PDF. */
+export function montarView(
+  model: RelatorioModel,
+  meta: { brandName: string; logoUrl: string | null; cnpj: string | null },
+): RelatorioView {
+  const [cy, cm] = model.competencia.split("-").map(Number);
+  const mesLower = model.mesLabel.toLowerCase();
+  const emAtraso = model.emAtraso;
+
+  const evolucao =
+    model.faturamentoMes > 0 &&
+    model.fatAnterior != null &&
+    model.mesAnteriorLabel &&
+    model.crescimento != null
+      ? (() => {
+          const maxFat = Math.max(model.faturamentoMes, model.fatAnterior ?? 0) || 1;
+          return {
+            mesAnteriorLabel: model.mesAnteriorLabel as string,
+            fatAnteriorLabel: formatCurrency(model.fatAnterior ?? 0),
+            anteriorH: Math.max(12, Math.round((120 * (model.fatAnterior ?? 0)) / maxFat)),
+            mesAtualLabel: model.mesLabel,
+            fatAtualLabel: formatCurrency(model.faturamentoMes),
+            atualH: Math.max(12, Math.round((120 * model.faturamentoMes) / maxFat)),
+            crescimentoLabel: `${(model.crescimento as number) >= 0 ? "+" : "−"}${pct(model.crescimento as number)}`,
+            crescimentoTone: ((model.crescimento as number) >= 0 ? "up" : "down") as "up" | "down",
+          };
+        })()
+      : null;
+
+  return {
+    brandName: meta.brandName,
+    logoUrl: meta.logoUrl,
+    periodo: `${model.mesLabel} · ${model.ano}`,
+    competenciaCurto: `Competência ${String(cm).padStart(2, "0")}/${cy}`,
+    cliente: model.companyName,
+    cnpj: meta.cnpj,
+    alerta:
+      emAtraso > 0
+        ? {
+            tone: "atencao",
+            texto: `${emAtraso} ${plural(emAtraso, "guia vencida", "guias vencidas")} a regularizar`,
+          }
+        : { tone: "ok", texto: "Tudo em dia" },
+    totalPagoLabel: formatCurrency(model.pagosValor),
+    guiasPagasLabel:
+      model.pagos > 0
+        ? `${model.pagos} ${plural(model.pagos, "guia quitada", "guias quitadas")} em ${mesLower}`
+        : `Nenhuma guia quitada em ${mesLower}`,
+    proximos: model.proximos.slice(0, 6).map((p) => ({
+      id: p.id,
+      tipo: p.tipo,
+      whenLabel: formatDayMonth(p.dueDate),
+      amountLabel: formatCurrency(p.amount ?? 0),
+    })),
+    proximosMesLabel: model.proximosMesLabel,
+    totalAVencerLabel:
+      model.proximos.length > 0 ? formatCurrency(model.proximosTotal) : null,
+    faturamentoLabel:
+      model.faturamentoMes > 0 ? formatCurrency(model.faturamentoMes) : null,
+    faturamentoVar:
+      model.crescimento != null
+        ? {
+            pctLabel: pct(model.crescimento),
+            tone: model.crescimento >= 0 ? "up" : "down",
+          }
+        : null,
+    cargaLabel: model.cargaMes != null ? pct(model.cargaMes) : null,
+    situacao:
+      emAtraso > 0
+        ? { valor: `${emAtraso} ${plural(emAtraso, "vencida", "vencidas")}`, tone: "alerta" }
+        : { valor: "Em dia", tone: "ok" },
+    evolucao,
+    resumoTexto: model.resumoTexto,
   };
 }

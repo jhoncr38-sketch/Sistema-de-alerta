@@ -3,13 +3,13 @@
 import { useRouter } from "next/navigation";
 import { useTransition } from "react";
 import { toast } from "sonner";
-import { ChevronLeft, ChevronRight, Printer, Send } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 /**
  * Barra de controle do relatório (só o contador vê; some na impressão porque
- * fica fora de #report-sheet). Escolhe a empresa, navega os meses, salva em PDF
- * (impressão do navegador) e envia o resumo por e-mail ao cliente.
+ * fica fora de #report-sheet). Escolhe a empresa, navega os meses, baixa o PDF
+ * (o mesmo arquivo que é anexado) e envia por e-mail ao cliente com o PDF.
  */
 export function RelatorioControls({
   companies,
@@ -19,6 +19,7 @@ export function RelatorioControls({
   prevYm,
   nextYm,
   clienteNome,
+  pdfHref,
   sendAction,
 }: {
   companies: { id: string; label: string }[];
@@ -28,6 +29,7 @@ export function RelatorioControls({
   prevYm: string;
   nextYm: string | null;
   clienteNome: string;
+  pdfHref: string;
   sendAction: () => Promise<{ ok: boolean; message: string }>;
 }) {
   const router = useRouter();
@@ -90,9 +92,13 @@ export function RelatorioControls({
         </div>
       </div>
       <div className="flex items-center gap-2">
-        <Button variant="outline" size="sm" onClick={() => window.print()}>
-          <Printer />
-          Salvar PDF
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => window.open(pdfHref, "_blank")}
+        >
+          <Download />
+          Baixar PDF
         </Button>
         <Button size="sm" onClick={enviar} disabled={pending}>
           <Send />

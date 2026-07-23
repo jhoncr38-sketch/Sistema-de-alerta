@@ -15,10 +15,13 @@ export async function sendEmail({
   to,
   subject,
   html,
+  attachments,
 }: {
   to: string | string[];
   subject: string;
   html: string;
+  /** Anexos opcionais (ex.: o PDF do relatório). `content` é um Buffer. */
+  attachments?: { filename: string; content: Buffer }[];
 }) {
   if (!resend) {
     console.warn(`[email] RESEND_API_KEY ausente — não enviado: "${subject}"`);
@@ -30,6 +33,7 @@ export async function sendEmail({
     to,
     subject,
     html,
+    ...(attachments && attachments.length > 0 ? { attachments } : {}),
   });
 
   if (error) {
