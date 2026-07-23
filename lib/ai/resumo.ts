@@ -64,9 +64,15 @@ function isoDay(value: string): string {
 
 /**
  * Calcula os números do mês de referência (competencia "YYYY-MM"):
- *  - pagos: guias quitadas cujo pagamento (marcado_pago_at/paid_at) caiu no mês;
+ *  - pagos: guias quitadas atribuídas ao mês (ver abaixo);
  *  - vencem no mês seguinte: guias em aberto com vencimento no próximo mês;
  *  - em atraso: guias em aberto já vencidas (na data de hoje).
+ *
+ * "Pago no mês": para BOLETO usamos a data de pagamento (marcado_pago_at/
+ * paid_at) — o caixa real. Para PARCELA de parcelamento usamos o VENCIMENTO,
+ * porque as parcelas costumam ser marcadas pagas em lote (débito automático/
+ * importação) no mesmo dia; contar pela data de pagamento empilharia dezenas de
+ * parcelas num único mês. Pelo vencimento, cada mês recebe só a parcela dele.
  */
 export function calcularNumeros(
   docs: ResumoDoc[],
@@ -94,9 +100,13 @@ export function calcularNumeros(
     if (!pagavel) continue;
     const valor = d.amount ?? 0;
 
-    // Pagos no mês de referência.
+    // Pagos no mês de referência. Boleto: pela data de pagamento (caixa).
+    // Parcela de parcelamento: pelo vencimento (a data de pagamento vem em lote).
     if (d.status === "paid") {
-      const ref = d.marcado_pago_at ?? d.paid_at;
+      const ref =
+        d.categoria === "parcelamento"
+          ? d.due_date
+          : (d.marcado_pago_at ?? d.paid_at);
       if (ref) {
         const day = isoDay(ref);
         if (day >= cur.start && day <= cur.end) {
