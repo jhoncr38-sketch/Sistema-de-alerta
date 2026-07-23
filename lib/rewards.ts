@@ -258,8 +258,8 @@ export const EARN_RULES: EarnRule[] = [
     label: "Acessar o aplicativo",
     description: "Mantém sua sequência ativa",
     icon: "smartphone",
-    coins: 20,
-    xp: 20,
+    coins: 10,
+    xp: 10,
   },
   {
     id: "video-educativo",
