@@ -77,7 +77,7 @@ export function ParcelamentoCard({
       className="group flex flex-col rounded-xl border bg-card p-4 transition-colors hover:border-primary/40 hover:bg-muted/30"
     >
       <div className="flex items-center justify-between gap-2">
-        <ParcelamentoStatusBadge status={status} />
+        <ParcelamentoStatusBadge status={status} className="shrink-0" />
         <div className="flex min-w-0 items-center gap-1.5">
           {modalidade ? (
             <span className="truncate text-[11px] font-medium text-muted-foreground">
