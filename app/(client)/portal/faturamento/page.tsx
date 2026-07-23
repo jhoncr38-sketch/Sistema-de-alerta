@@ -1,6 +1,4 @@
-import Link from "next/link";
-import { FileText, Info } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Info } from "lucide-react";
 import { FaturamentoDashboard } from "@/components/faturamento-dashboard";
 import { PageHeader } from "@/components/page-header";
 import { getUserAndProfile } from "@/lib/auth";
@@ -53,19 +51,7 @@ export default async function PortalFaturamentoPage() {
             ? `Faturamento e carga tributária — ${companyName}`
             : "Faturamento e carga tributária"
         }
-      >
-        <Button
-          variant="outline"
-          size="sm"
-          nativeButton={false}
-          render={
-            <Link href="/portal/relatorio">
-              <FileText />
-              Relatório do mês
-            </Link>
-          }
-        />
-      </PageHeader>
+      />
       <div className="space-y-6 p-6">
         <FaturamentoDashboard
           data={data}

@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import {
   Bell,
+  FileBarChart2,
   FileClock,
   FileText,
   Files,
@@ -44,6 +45,7 @@ const ADMIN_NAV: NavItem[] = [
   { label: "Clientes", href: "/painel/clientes", icon: Users },
   { label: "SJ Rewards", href: "/painel/rewards", icon: Gift },
   { label: "Faturamento", href: "/painel/faturamento", icon: TrendingUp },
+  { label: "Relatório do mês", href: "/painel/relatorio", icon: FileBarChart2 },
   { label: "Parcelamentos", href: "/painel/parcelamentos", icon: Layers },
   { label: "Folha de pagamento", href: "/painel/folha", icon: Wallet },
   { label: "Documentos", href: "/painel/documentos", icon: FileText },
