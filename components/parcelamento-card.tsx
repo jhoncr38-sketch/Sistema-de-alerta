@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Calendar, ChevronRight, Wallet } from "lucide-react";
 import { ProgressRing } from "@/components/progress-ring";
 import { ParcelamentoStatusBadge } from "@/components/parcelamento-status-badge";
+import { modalidadeLabel } from "@/lib/constants";
 import { formaPagamentoLabel, type PlanSummary } from "@/lib/parcelamento";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -41,6 +42,7 @@ export function ParcelamentoCard({
   summary,
   companyName,
   formaPagamento,
+  modalidade,
 }: {
   nome: string;
   href: string;
@@ -49,6 +51,8 @@ export function ParcelamentoCard({
   companyName?: string;
   /** "boleto" | "debito_automatico" — define o rótulo "Forma de pagamento". */
   formaPagamento?: string;
+  /** Modalidade do parcelamento (Receita Federal, PGFN, Estadual...) — canto sup. dir. */
+  modalidade?: string;
 }) {
   const {
     pagas,
@@ -74,7 +78,14 @@ export function ParcelamentoCard({
     >
       <div className="flex items-center justify-between gap-2">
         <ParcelamentoStatusBadge status={status} />
-        <ChevronRight className="size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
+        <div className="flex min-w-0 items-center gap-1.5">
+          {modalidade ? (
+            <span className="truncate text-[11px] font-medium text-muted-foreground">
+              {modalidadeLabel(modalidade)}
+            </span>
+          ) : null}
+          <ChevronRight className="size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
+        </div>
       </div>
 
       <div className="mt-3 min-w-0">
