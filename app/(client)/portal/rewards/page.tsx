@@ -5,7 +5,7 @@ import {
 import { RewardsGuide } from "@/components/rewards/rewards-guide";
 import { RewardsLocked } from "@/components/rewards/rewards-locked";
 import { RewardsView } from "@/components/rewards/rewards-view";
-import { PageHeader } from "@/components/page-header";
+import { PortalHeader } from "@/components/portal/portal-header";
 import { getUserAndProfile } from "@/lib/auth";
 import { getBranding } from "@/lib/branding";
 import { getClientCompanyContext } from "@/lib/companies";
@@ -22,7 +22,7 @@ export default async function RewardsPage() {
     const branding = await getBranding();
     return (
       <>
-        <PageHeader title="SJ Rewards" subtitle="Clube de Vantagens" />
+        <PortalHeader title="SJ Rewards" tela="rewards" />
         <RewardsLocked brandName={branding.name} />
       </>
     );
@@ -50,9 +50,9 @@ export default async function RewardsPage() {
 
   return (
     <>
-      <PageHeader title="SJ Rewards" subtitle="Clube de Vantagens">
+      <PortalHeader title="SJ Rewards" tela="rewards">
         <RewardsGuide />
-      </PageHeader>
+      </PortalHeader>
       <RewardsView initialState={state} companyId={active?.id ?? null} />
     </>
   );

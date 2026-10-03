@@ -16,9 +16,12 @@ import {
 export function FilePreviewButton({
   docId,
   fileName,
+  iconOnly = false,
 }: {
   docId: string;
   fileName: string;
+  /** Só o ícone do olho (listas compactas). */
+  iconOnly?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const viewUrl = `/api/documents/${docId}/download?view=1`;
@@ -26,15 +29,27 @@ export function FilePreviewButton({
 
   return (
     <>
-      <Button
-        type="button"
-        variant="ghost"
-        size="sm"
-        onClick={() => setOpen(true)}
-      >
-        <Eye />
-        <span className="hidden sm:inline">Visualizar</span>
-      </Button>
+      {iconOnly ? (
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          title="Visualizar"
+          aria-label={`Visualizar ${fileName}`}
+          className="inline-flex size-7 items-center justify-center rounded-[7px] text-muted-foreground hover:bg-muted hover:text-foreground"
+        >
+          <Eye className="size-4" />
+        </button>
+      ) : (
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={() => setOpen(true)}
+        >
+          <Eye />
+          <span className="hidden sm:inline">Visualizar</span>
+        </Button>
+      )}
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="flex h-[85vh] w-full max-w-4xl flex-col gap-0 overflow-hidden p-0 sm:max-w-4xl">

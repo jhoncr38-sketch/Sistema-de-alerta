@@ -1,6 +1,6 @@
-import { FileClock, Info } from "lucide-react";
+import { FileClock } from "lucide-react";
 import { DocumentRequestUpload } from "@/components/document-request-upload";
-import { PageHeader } from "@/components/page-header";
+import { PortalHeader } from "@/components/portal/portal-header";
 import { getClientCompanyContext } from "@/lib/companies";
 import { getUrgency } from "@/lib/dates";
 import { formatDate } from "@/lib/format";
@@ -63,13 +63,14 @@ export default async function PortalSolicitacoesPage() {
 
   return (
     <>
-      <PageHeader
+      <PortalHeader
         title="Solicitações"
         subtitle={
           pendentes > 0
             ? `${pendentes} documento(s) aguardando seu envio`
-            : "Documentos solicitados pelo seu contador"
+            : undefined
         }
+        tela="documentos"
       />
 
       <div className="space-y-3 p-6">
@@ -139,8 +140,7 @@ export default async function PortalSolicitacoesPage() {
           })
         )}
 
-        <div className="flex items-center gap-2 rounded-lg bg-muted px-4 py-3 text-xs text-muted-foreground">
-          <Info className="size-4 shrink-0" />
+        <p className="text-xs text-muted-foreground">
           {docReward != null ? (
             <span>
               Enviar dentro do prazo rende{" "}
@@ -150,7 +150,7 @@ export default async function PortalSolicitacoesPage() {
           ) : (
             <span>Formatos aceitos: PDF, imagem, planilha ou XML.</span>
           )}
-        </div>
+        </p>
       </div>
     </>
   );

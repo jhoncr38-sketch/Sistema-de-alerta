@@ -1,5 +1,5 @@
 import { Bell } from "lucide-react";
-import { PageHeader } from "@/components/page-header";
+import { PortalHeader } from "@/components/portal/portal-header";
 import { PushOptIn } from "@/components/push-optin";
 import { getActiveCompanyId } from "@/lib/companies";
 import { docTypeLabel } from "@/lib/constants";
@@ -42,7 +42,7 @@ export default async function NotificacoesPage() {
 
   return (
     <>
-      <PageHeader title="Notificações" subtitle="Avisos sobre seus vencimentos" />
+      <PortalHeader title="Notificações" />
       <div className="space-y-4 p-6">
         <PushOptIn />
         {items.length === 0 ? (

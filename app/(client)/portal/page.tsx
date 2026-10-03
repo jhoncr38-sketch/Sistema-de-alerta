@@ -1,44 +1,45 @@
-import {
-  AlertTriangle,
-  CalendarClock,
-  CheckCircle2,
-  Info,
-  Megaphone,
-} from "lucide-react";
-import { AssistenteChat } from "@/components/assistente-chat";
-import { DocumentsTable } from "@/components/documents-table";
-import { MetricCard } from "@/components/metric-card";
-import { ObligationsView } from "@/components/obligations-view";
-import { PageHeader } from "@/components/page-header";
-import { ProximoVencimento } from "@/components/proximo-vencimento";
-import { getUserAndProfile } from "@/lib/auth";
+import Link from "next/link";
+import { ChevronRight, Megaphone } from "lucide-react";
+import { MapaAno, type EstadoMes } from "@/components/portal/mapa-ano";
+import { PortalHeader } from "@/components/portal/portal-header";
+import { GradeGuias, type GuiaQuadro } from "@/components/portal/quadro-guias";
 import { getClientCompanyContext } from "@/lib/companies";
-import { docTypeLabel } from "@/lib/constants";
-import { getUrgency } from "@/lib/dates";
-import { formatCurrency } from "@/lib/format";
+import { currentCompetenciaKey } from "@/lib/dates";
+import { formatCurrency, formatDayMonth } from "@/lib/format";
+import {
+  ehDebitoAutomaticoFuturo,
+  guiaMeta,
+  guiaNome,
+  situacaoGuia,
+  type Situacao,
+} from "@/lib/portal";
 import { createClient } from "@/lib/supabase/server";
-import type { Aviso, DocumentWithCompany } from "@/lib/types";
+import type { Aviso, DocumentRow } from "@/lib/types";
 
-/** Documento com a forma de pagamento do parcelamento (quando for parcela). */
-type PortalDoc = DocumentWithCompany & {
-  plan: { forma_pagamento: string } | null;
+/** Guia a pagar com os dados do parcelamento (quando for parcela). */
+type PortalDoc = DocumentRow & {
+  plan: { forma_pagamento: string; nome: string } | null;
 };
 
-/**
- * Parcela de débito automático que vence a mais de 7 dias. Como o débito gera
- * todas as parcelas de uma vez, escondemos as futuras da lista "em aberto" —
- * elas continuam no detalhe do parcelamento. Só aparecem aqui as vencidas ou a
- * vencer em ≤7 dias (as acionáveis).
- */
-function ehDebitoAutomaticoFuturo(d: PortalDoc): boolean {
-  if (d.categoria !== "parcelamento") return false;
-  if (d.plan?.forma_pagamento !== "debito_automatico") return false;
-  if (!d.due_date) return false;
-  return getUrgency(d.due_date, d.status).urgency === "em_dia";
+/** "Sábado, 3 de outubro" no fuso do Brasil. */
+function hojeExtenso(): string {
+  const s = new Intl.DateTimeFormat("pt-BR", {
+    timeZone: "America/Sao_Paulo",
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+  }).format(new Date());
+  return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
+/** Ordem dos cartões: o mais urgente primeiro. */
+const ORDEM: Record<Exclude<Situacao, "pago">, number> = {
+  precisa: 0,
+  a_pagar: 1,
+  contador: 2,
+};
+
 export default async function PortalHome() {
-  const { profile } = await getUserAndProfile();
   const supabase = await createClient();
   const { active } = await getClientCompanyContext();
   const activeId = active?.id ?? "00000000-0000-0000-0000-000000000000";
@@ -46,14 +47,13 @@ export default async function PortalHome() {
     await Promise.all([
       supabase
         .from("documents")
-        .select(
-          "*, company:companies(id,razao_social,nome_fantasia,email), plan:installment_plans(forma_pagamento)",
-        )
+        .select("*, plan:installment_plans(forma_pagamento,nome)")
         .eq("company_id", activeId)
+        .in("categoria", ["boleto", "parcelamento"])
         .order("due_date", { ascending: true }),
       supabase
         .from("boleto_reissue_requests")
-        .select("document_id")
+        .select("document_id,created_at")
         .eq("company_id", activeId)
         .eq("status", "pending"),
       // Avisos da empresa ativa + os globais (company_id nulo).
@@ -66,69 +66,79 @@ export default async function PortalHome() {
 
   const docs = (data ?? []) as PortalDoc[];
   const avisos = (avisosData ?? []) as Aviso[];
-  const reissueIds = new Set(
-    (reissues ?? []).map((r) => (r as { document_id: string }).document_id),
-  );
-  // Boletos e parcelas de parcelamento são "guias a pagar" — entram no resumo.
-  const pagaveis = docs.filter(
-    (d) => d.categoria === "boleto" || d.categoria === "parcelamento",
-  );
-  // Métricas de vencido/vencendo olham só o que ainda está em aberto de fato.
-  const open = pagaveis.filter((d) => d.status === "open");
-  // Lista visível "em aberto": inclui o que aguarda confirmação (selo âmbar,
-  // botão travado), mas oculta as parcelas futuras de débito automático.
-  const openList = pagaveis
-    .filter((d) => d.status !== "paid")
-    .filter((d) => !ehDebitoAutomaticoFuturo(d));
-  // Itens do modo Calendário (mesmas guias em aberto; chip mostra o tipo).
-  const calItems = openList
-    .filter((d) => d.due_date)
-    .map((d) => ({
-      id: d.id,
-      dueDate: d.due_date as string,
-      cliente: d.company?.nome_fantasia || d.company?.razao_social || "",
-      tipo:
-        d.categoria === "parcelamento" && d.parcela_num
-          ? `Parcela ${d.parcela_num}`
-          : docTypeLabel(d.type),
-      amount: d.amount,
-      urgency: getUrgency(d.due_date as string, d.status).urgency,
-    }));
-
-  let vencidos = 0;
-  let emBreve = 0;
-  let vencidosValor = 0;
-  let emBreveValor = 0;
-  for (const d of open) {
-    if (!d.due_date) continue;
-    const { urgency } = getUrgency(d.due_date, d.status);
-    if (urgency === "vencido") {
-      vencidos++;
-      vencidosValor += d.amount ?? 0;
-    }
-    if (["vence_hoje", "proximos_3", "proximos_7"].includes(urgency)) {
-      emBreve++;
-      emBreveValor += d.amount ?? 0;
-    }
+  const reissueEm = new Map<string, string>();
+  for (const r of (reissues ?? []) as { document_id: string; created_at: string }[]) {
+    reissueEm.set(r.document_id, r.created_at);
   }
-  const pagosPagaveis = pagaveis.filter((d) => d.status === "paid");
-  const pagos = pagosPagaveis.length;
-  const pagosValor = pagosPagaveis.reduce((s, d) => s + (d.amount ?? 0), 0);
+  const reissueIds = new Set(reissueEm.keys());
 
-  const companyName =
-    active?.nome_fantasia ||
-    active?.razao_social ||
-    profile?.company?.nome_fantasia ||
-    profile?.company?.razao_social ||
-    "";
+  const mesAtual = currentCompetenciaKey();
+  const ano = mesAtual.slice(0, 4);
+  const situacoes = new Map<string, Situacao>();
+  const guias: (GuiaQuadro & { due: string })[] = [];
+  let emAberto = 0;
+  let pagosAno = 0;
+  let pagosAnoValor = 0;
+
+  for (const d of docs) {
+    const situacao = situacaoGuia(d, reissueIds);
+    situacoes.set(d.id, situacao);
+    if (situacao === "pago") {
+      const quando = d.paid_at ?? d.marcado_pago_at ?? d.due_date;
+      if (quando?.startsWith(ano)) {
+        pagosAno++;
+        pagosAnoValor += d.amount ?? 0;
+      }
+      continue;
+    }
+    // Parcelas futuras de débito automático não pedem nada ao cliente.
+    if (ehDebitoAutomaticoFuturo(d, d.plan?.forma_pagamento)) continue;
+    emAberto += d.amount ?? 0;
+
+    const debito = d.plan?.forma_pagamento === "debito_automatico";
+    guias.push({
+      id: d.id,
+      situacao,
+      nome:
+        d.categoria === "parcelamento" && d.plan?.nome
+          ? `${guiaNome(d)} · ${d.plan.nome}`
+          : guiaNome(d),
+      valor: d.amount,
+      meta:
+        debito && situacao === "a_pagar" && d.due_date
+          ? `Débito automático · ${formatDayMonth(d.due_date)}`
+          : guiaMeta(d, situacao, reissueEm.get(d.id)),
+      exigeComprovante: d.exige_comprovante,
+      temArquivo: !!d.file_path,
+      debitoAutomatico: debito,
+      due: d.due_date ?? "9999-12-31",
+    });
+  }
+  // Atrasado → a pagar → com o contador; dentro de cada um, por vencimento.
+  guias.sort((a, b) => ORDEM[a.situacao] - ORDEM[b.situacao] || a.due.localeCompare(b.due));
+
+  // Mapa do ano (por vencimento): mês com atraso fica vermelho, tudo pago verde.
+  const estados: EstadoMes[] = Array.from({ length: 12 }, (_, i) => {
+    const key = `${ano}-${String(i + 1).padStart(2, "0")}`;
+    if (key > mesAtual) return "vazio";
+    const doMes = docs.filter((d) => d.due_date?.startsWith(key));
+    if (doMes.some((d) => situacoes.get(d.id) === "precisa")) return "pendente";
+    if (key === mesAtual) return "corrente";
+    if (doMes.length > 0 && doMes.every((d) => situacoes.get(d.id) === "pago")) return "pago";
+    return doMes.length > 0 ? "corrente" : "vazio";
+  });
+
+  const companyName = active?.nome_fantasia || active?.razao_social || "";
 
   return (
     <>
-      <PageHeader
+      <PortalHeader
         title={companyName ? `Olá, ${companyName}!` : "Olá!"}
-        subtitle="Confira seus boletos e documentos"
+        subtitle={hojeExtenso()}
+        tela="boletos"
+        empresaSobTitulo
       />
-      <div className="space-y-6 p-6">
+      <div className="flex flex-col gap-4 px-4 pt-5 pb-10 sm:gap-5 sm:px-8 sm:py-7">
         {avisos.length > 0 ? (
           <section className="space-y-2">
             {avisos.map((a) => (
@@ -148,72 +158,33 @@ export default async function PortalHome() {
           </section>
         ) : null}
 
-        <ProximoVencimento open={openList} />
-
-        <div className="grid gap-3 sm:grid-cols-3">
-          <MetricCard
-            label="Vencidos"
-            value={vencidos}
-            sub={`${formatCurrency(vencidosValor)} em atraso`}
-            tone="danger"
-            icon={<AlertTriangle className="size-4" />}
-          />
-          <MetricCard
-            label="Vencem em breve"
-            value={emBreve}
-            sub={`${formatCurrency(emBreveValor)} a vencer`}
-            tone="warning"
-            icon={<CalendarClock className="size-4" />}
-          />
-          <MetricCard
-            label="Pagos"
-            value={pagos}
-            sub={`${formatCurrency(pagosValor)} quitados`}
-            tone="success"
-            icon={<CheckCircle2 className="size-4" />}
-          />
+        <div className="flex items-baseline justify-between gap-3 sm:justify-start">
+          <h2 className="text-lg font-semibold tracking-tight sm:text-[22px]">Suas guias</h2>
+          <span className="text-[13px] text-muted-foreground sm:text-sm">
+            Em aberto<span className="hidden sm:inline">:</span>{" "}
+            <strong className="font-semibold text-foreground tabular-nums">
+              {formatCurrency(emAberto)}
+            </strong>
+          </span>
         </div>
 
-        <section className="space-y-3">
-          {openList.length === 0 ? (
-            <>
-              <h2 className="text-sm font-semibold">
-                Boletos e parcelas em aberto
-              </h2>
-              <DocumentsTable
-                documents={openList}
-                emptyMessage="Você não tem boletos ou parcelas em aberto."
-              />
-            </>
-          ) : (
-            <ObligationsView
-              title="Boletos e parcelas em aberto"
-              data={calItems}
-              showClient={false}
+        <MapaAno
+          rotulo={`Pago em ${ano}`}
+          valor={formatCurrency(pagosAnoValor)}
+          estados={estados}
+          acao={
+            <Link
+              href="/portal/boletos?tab=pagos"
+              className="inline-flex items-center gap-0.5 text-[13px] font-medium whitespace-nowrap text-primary hover:underline"
             >
-              <DocumentsTable
-                documents={openList}
-                showPreview
-                showDownload
-                showPaid
-                enforceProof
-                showTypeIcon
-                showExplain
-                showReissue
-                reissueRequestedIds={reissueIds}
-                emptyMessage="Você não tem boletos ou parcelas em aberto."
-              />
-            </ObligationsView>
-          )}
-        </section>
+              {pagosAno} {pagosAno === 1 ? "pago" : "pagos"}
+              <ChevronRight className="size-3.5" />
+            </Link>
+          }
+        />
 
-        <div className="flex items-center gap-2 rounded-lg bg-muted px-4 py-3 text-xs text-muted-foreground">
-          <Info className="size-4 shrink-0" />
-          Dúvidas sobre algum boleto? Use o assistente no canto da tela ou fale
-          com seu contador.
-        </div>
+        <GradeGuias guias={guias} />
       </div>
-      <AssistenteChat scope="cliente" />
     </>
   );
 }

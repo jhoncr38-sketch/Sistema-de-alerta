@@ -1,6 +1,6 @@
 import { Card } from "@/components/ui/card";
 import { ChangePasswordForm } from "@/components/change-password-form";
-import { PageHeader } from "@/components/page-header";
+import { PortalHeader } from "@/components/portal/portal-header";
 import { getUserAndProfile } from "@/lib/auth";
 
 export default async function ContaPage() {
@@ -8,7 +8,7 @@ export default async function ContaPage() {
 
   return (
     <>
-      <PageHeader title="Minha conta" subtitle="Seus dados de acesso" />
+      <PortalHeader title="Minha conta" />
       <div className="space-y-6 p-6">
         <Card className="max-w-xl gap-4 px-6 py-6">
           <div>

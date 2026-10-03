@@ -124,7 +124,11 @@ export function ParcelasTable({
       {/* ----- Celular: cartões empilhados ----- */}
       <div className="space-y-2.5 md:hidden">
         {ordenadas.map((p) => (
-          <div key={p.id} className="space-y-3 rounded-xl border bg-card p-4">
+          <div
+            key={p.id}
+            data-parcela={p.parcela_num ?? undefined}
+            className="space-y-3 rounded-xl border bg-card p-4 transition-colors"
+          >
             <div className="flex items-start justify-between gap-3">
               <div className="font-medium">
                 Parcela {p.parcela_num}/{total}
@@ -200,7 +204,8 @@ export function ParcelasTable({
             {ordenadas.map((p) => (
               <tr
                 key={p.id}
-                className={cn("border-b last:border-0 hover:bg-muted/40")}
+                data-parcela={p.parcela_num ?? undefined}
+                className={cn("border-b transition-colors last:border-0 hover:bg-muted/40")}
               >
                 <td className="px-4 py-3 font-medium tabular-nums">
                   {p.parcela_num}/{total}

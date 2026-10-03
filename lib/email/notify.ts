@@ -28,9 +28,9 @@ function portalPathFor(categoria: DocCategoria): string {
     case "parcelamento":
       return "/portal/parcelamentos";
     case "documento":
-      return "/portal/documentos";
+      return "/portal/documentos?tab=empresa";
     case "folha":
-      return "/portal/folha";
+      return "/portal/documentos";
     default:
       return "/portal/boletos";
   }

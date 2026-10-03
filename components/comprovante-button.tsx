@@ -27,11 +27,14 @@ export function ComprovanteButton({
   paid,
   hasComprovante,
   fileName,
+  labelAnexar = "Comprovante",
 }: {
   docId: string;
   paid: boolean;
   hasComprovante: boolean;
   fileName?: string | null;
+  /** Rótulo do botão quando ainda não há comprovante (ex.: "Anexar"). */
+  labelAnexar?: string;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [open, setOpen] = useState(false);
@@ -102,7 +105,7 @@ export function ComprovanteButton({
           className="text-muted-foreground"
         >
           {pending ? <Loader2 className="animate-spin" /> : <Paperclip />}
-          <span className="hidden sm:inline">Comprovante</span>
+          <span className="hidden sm:inline">{labelAnexar}</span>
         </Button>
         {error ? (
           <span className="text-xs text-destructive">{error}</span>

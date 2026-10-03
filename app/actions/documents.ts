@@ -445,7 +445,7 @@ export async function deleteDocument(docId: string) {
   revalidatePath("/painel/folha");
   revalidatePath("/portal");
   revalidatePath("/portal/boletos");
-  revalidatePath("/portal/folha");
+  revalidatePath("/portal/documentos");
 }
 
 /**

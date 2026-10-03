@@ -248,9 +248,55 @@ export function AssistentePanel({
   );
 }
 
+/** Fecha com Esc enquanto `aberto`. */
+function useEscFecha(aberto: boolean, fechar: () => void) {
+  useEffect(() => {
+    if (!aberto) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") fechar();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [aberto, fechar]);
+}
+
+/** Janela do assistente (cabeçalho + conversa). A posição vem de `className`. */
+function AssistenteJanela({
+  scope,
+  tela,
+  className,
+}: {
+  scope: AssistenteScope;
+  tela: AssistenteTela;
+  className?: string;
+}) {
+  return (
+    <div
+      className={cn(
+        "fixed z-50 flex max-h-[70vh] w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-2xl border bg-card shadow-2xl sm:w-96",
+        className,
+      )}
+    >
+      <div className="flex items-center gap-2 border-b bg-gradient-to-r from-amber-50 to-transparent px-4 py-3 dark:from-amber-950/30">
+        <span className="flex size-8 items-center justify-center rounded-lg bg-amber-100 text-amber-600 dark:bg-amber-950/50 dark:text-amber-400">
+          <Bot className="size-5" />
+        </span>
+        <div>
+          <div className="text-sm font-semibold">Assistente S J</div>
+          <div className="text-xs text-muted-foreground">
+            Tire dúvidas sobre suas guias
+          </div>
+        </div>
+      </div>
+
+      <AssistentePanel scope={scope} tela={tela} className="min-h-0 flex-1" />
+    </div>
+  );
+}
+
 /**
- * Botão flutuante que abre o assistente. Colocado só na aba Início.
- * Fechado: pílula com faísca + rótulo (o rótulo some no mobile, vira só ícone).
+ * Botão flutuante que abre o assistente (painel do contador).
+ * Fechado: pílula com faísca + rótulo.
  */
 export function AssistenteChat({
   scope = "cliente",
@@ -260,16 +306,7 @@ export function AssistenteChat({
   tela?: AssistenteTela;
 }) {
   const [aberto, setAberto] = useState(false);
-
-  // Fecha com Esc.
-  useEffect(() => {
-    if (!aberto) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setAberto(false);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [aberto]);
+  useEscFecha(aberto, () => setAberto(false));
 
   return (
     <>
@@ -297,29 +334,46 @@ export function AssistenteChat({
         )}
       </button>
 
-      {/* Painel do chat */}
       {aberto ? (
-        <div
-          className={cn(
-            "fixed right-4 bottom-20 z-50 flex max-h-[70vh] w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-2xl border bg-card shadow-2xl",
-            "sm:w-96 md:right-6 md:bottom-24",
-          )}
-        >
-          {/* Cabeçalho */}
-          <div className="flex items-center gap-2 border-b bg-gradient-to-r from-amber-50 to-transparent px-4 py-3 dark:from-amber-950/30">
-            <span className="flex size-8 items-center justify-center rounded-lg bg-amber-100 text-amber-600 dark:bg-amber-950/50 dark:text-amber-400">
-              <Bot className="size-5" />
-            </span>
-            <div>
-              <div className="text-sm font-semibold">Assistente S J</div>
-              <div className="text-xs text-muted-foreground">
-                Tire dúvidas sobre suas guias
-              </div>
-            </div>
-          </div>
+        <AssistenteJanela
+          scope={scope}
+          tela={tela}
+          className="right-4 bottom-20 md:right-6 md:bottom-24"
+        />
+      ) : null}
+    </>
+  );
+}
 
-          <AssistentePanel scope={scope} tela={tela} className="min-h-0 flex-1" />
-        </div>
+/**
+ * "Dúvidas?" como botão de texto no cabeçalho da página (portal do cliente).
+ * Abre a mesma janela do assistente, ancorada no topo à direita.
+ */
+export function AssistenteHeaderButton({
+  tela = "geral",
+}: {
+  tela?: AssistenteTela;
+}) {
+  const [aberto, setAberto] = useState(false);
+  useEscFecha(aberto, () => setAberto(false));
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setAberto((v) => !v)}
+        aria-expanded={aberto}
+        className="inline-flex h-9 items-center gap-1.5 rounded-lg px-1.5 text-sm font-medium text-amber-700 transition-colors hover:text-amber-800 dark:text-amber-400 dark:hover:text-amber-300"
+      >
+        {aberto ? <X className="size-4" /> : <Sparkles className="size-4" />}
+        Dúvidas?
+      </button>
+      {aberto ? (
+        <AssistenteJanela
+          scope="cliente"
+          tela={tela}
+          className="top-16 right-4 md:right-6"
+        />
       ) : null}
     </>
   );

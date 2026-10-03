@@ -4,6 +4,8 @@ import { SiteFooter } from "@/components/site-footer";
 import { requireClient } from "@/lib/auth";
 import { getBranding } from "@/lib/branding";
 import { getClientCompanyContext } from "@/lib/companies";
+import { createClient } from "@/lib/supabase/server";
+import { getAlertasEmpresas } from "@/lib/portal-alertas";
 
 export default async function ClientLayout({
   children,
@@ -14,6 +16,16 @@ export default async function ClientLayout({
     requireClient(),
     getBranding(),
     getClientCompanyContext(),
+  ]);
+  const supabase = await createClient();
+  const [alertas, { count: docsPendentes }] = await Promise.all([
+    getAlertasEmpresas(companies.map((c) => c.id)),
+    // Pedidos de documento do contador ainda não enviados (badge do menu).
+    supabase
+      .from("document_requests")
+      .select("id", { count: "exact", head: true })
+      .eq("company_id", active?.id ?? "00000000-0000-0000-0000-000000000000")
+      .neq("status", "submitted"),
   ]);
 
   // Com 2+ empresas, o nome da empresa fica no seletor e o rodapé mostra a
@@ -37,12 +49,13 @@ export default async function ClientLayout({
         brandSubtitle="Área do Cliente"
         brandName={branding.name}
         brandLogoUrl={branding.logoUrl}
-        companies={companies}
-        activeCompanyId={active?.id ?? null}
         rewardsEnabled={active?.rewards_enabled !== false}
         chatEnabled={active?.chat_enabled !== false}
+        boletosVencidos={active ? (alertas[active.id]?.boletosVencidos ?? 0) : 0}
+        documentosPendentes={docsPendentes ?? 0}
       />
-      <div className="flex min-w-0 flex-1 flex-col bg-muted/30">
+      {/* pb no celular: espaço da barra inferior fixa (78px). */}
+      <div className="flex min-w-0 flex-1 flex-col bg-muted/30 pb-[78px] md:pb-0">
         {children}
         <SiteFooter />
       </div>

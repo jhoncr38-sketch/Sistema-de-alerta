@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { ConversarEmpresa } from "@/components/conversar-empresa";
-import { PageHeader } from "@/components/page-header";
+import { PortalHeader } from "@/components/portal/portal-header";
 import { getBoasVindas } from "@/lib/ai/boas-vindas";
 import { requireClient } from "@/lib/auth";
 import { getClientCompanyContext } from "@/lib/companies";
@@ -27,13 +27,10 @@ export default async function ConversarPage() {
   const boasVindas = await getBoasVindas(active.id, companyName, rewardsEnabled);
 
   return (
-    // Altura fixa da viewport (descontando a barra do mobile) para o chat ter
-    // um rodapé fixo e uma área de conversa que rola por dentro.
-    <div className="flex h-[calc(100dvh-3.5rem)] flex-col md:h-dvh">
-      <PageHeader
-        title="Converse com sua empresa"
-        subtitle="Central inteligente de dúvidas"
-      />
+    // Altura fixa da viewport (descontando as barras de cima e de baixo do
+    // celular) para o chat ter um rodapé fixo e uma área que rola por dentro.
+    <div className="flex h-[calc(100dvh-3.5rem-78px)] flex-col md:h-dvh">
+      <PortalHeader title="Converse com sua empresa" assistente={false} />
       <ConversarEmpresa boasVindas={boasVindas} />
     </div>
   );

@@ -1,7 +1,5 @@
-import { Info } from "lucide-react";
 import { FaturamentoDashboard } from "@/components/faturamento-dashboard";
-import { PageHeader } from "@/components/page-header";
-import { getUserAndProfile } from "@/lib/auth";
+import { PortalHeader } from "@/components/portal/portal-header";
 import { getClientCompanyContext } from "@/lib/companies";
 import {
   buildFaturamento,
@@ -11,7 +9,6 @@ import {
 import { createClient } from "@/lib/supabase/server";
 
 export default async function PortalFaturamentoPage() {
-  const { profile } = await getUserAndProfile();
   const supabase = await createClient();
   const { active } = await getClientCompanyContext();
   const activeId = active?.id ?? "00000000-0000-0000-0000-000000000000";
@@ -35,33 +32,14 @@ export default async function PortalFaturamentoPage() {
     24,
   );
 
-  const companyName =
-    active?.nome_fantasia ||
-    active?.razao_social ||
-    profile?.company?.nome_fantasia ||
-    profile?.company?.razao_social ||
-    "";
-
   return (
     <>
-      <PageHeader
-        title="Meu faturamento"
-        subtitle={
-          companyName
-            ? `Faturamento e carga tributária — ${companyName}`
-            : "Faturamento e carga tributária"
-        }
-      />
+      <PortalHeader title="Meu faturamento" tela="faturamento" />
       <div className="space-y-6 p-6">
         <FaturamentoDashboard
           data={data}
           emptyMessage="Seu contador ainda não registrou o faturamento. Assim que ele informar, seus gráficos aparecem aqui."
         />
-
-        <div className="flex items-center gap-2 rounded-lg bg-muted px-4 py-3 text-xs text-muted-foreground">
-          <Info className="size-4 shrink-0" />
-          Os valores de faturamento e impostos são lançados pelo seu contador.
-        </div>
       </div>
     </>
   );

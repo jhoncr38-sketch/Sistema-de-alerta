@@ -22,6 +22,7 @@ export function ExplicarGuiaButton({
   categoria,
   descricao,
   textoPronto,
+  linkTexto,
 }: {
   type: DocType;
   /** Rótulo do tipo, exibido como título (ex.: "DAS - Simples Nacional"). */
@@ -32,6 +33,8 @@ export function ExplicarGuiaButton({
   descricao?: string | null;
   /** Texto já pronto (ex.: análise do relatório fiscal): mostra sem chamar a IA. */
   textoPronto?: string | null;
+  /** Mostra o gatilho como link de texto (ex.: "O que é um parcelamento?"). */
+  linkTexto?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [texto, setTexto] = useState<string | null>(textoPronto ?? null);
@@ -78,17 +81,28 @@ export function ExplicarGuiaButton({
 
   return (
     <>
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon-sm"
-        onClick={abrir}
-        title="O que é isso?"
-        aria-label={`O que é ${titulo}?`}
-        className="text-muted-foreground"
-      >
-        <HelpCircle />
-      </Button>
+      {linkTexto ? (
+        <button
+          type="button"
+          onClick={abrir}
+          className="inline-flex items-center gap-1.5 text-[13px] text-muted-foreground hover:text-foreground"
+        >
+          <HelpCircle className="size-3.5" />
+          {linkTexto}
+        </button>
+      ) : (
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          onClick={abrir}
+          title="O que é isso?"
+          aria-label={`O que é ${titulo}?`}
+          className="text-muted-foreground"
+        >
+          <HelpCircle />
+        </Button>
+      )}
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="gap-3">
