@@ -13,6 +13,7 @@ import {
   situacaoGuia,
   type Situacao,
 } from "@/lib/portal";
+import { serproConfigurado } from "@/lib/serpro/auth";
 import { createClient } from "@/lib/supabase/server";
 import type { Aviso, DocumentRow } from "@/lib/types";
 
@@ -72,6 +73,8 @@ export default async function PortalHome() {
   }
   const reissueIds = new Set(reissueEm.keys());
 
+  // DAS vencido: o cliente gera a 2ª via sozinho quando a Receita está integrada.
+  const dasAutomatico = serproConfigurado();
   const mesAtual = currentCompetenciaKey();
   const ano = mesAtual.slice(0, 4);
   const situacoes = new Map<string, Situacao>();
@@ -111,6 +114,7 @@ export default async function PortalHome() {
       exigeComprovante: d.exige_comprovante,
       temArquivo: !!d.file_path,
       debitoAutomatico: debito,
+      gerarAuto: dasAutomatico && d.categoria === "boleto" && d.type === "das",
       due: d.due_date ?? "9999-12-31",
     });
   }

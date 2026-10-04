@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import {
   Camera,
   Check,
@@ -10,11 +11,13 @@ import {
   Paperclip,
   RefreshCw,
 } from "lucide-react";
+import { toast } from "sonner";
 import {
   payWithComprovante,
   requestBoletoReissue,
   toggleDocumentPaid,
 } from "@/app/actions/documents";
+import { gerarSegundaViaDas } from "@/app/(client)/portal/segunda-via-actions";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -52,6 +55,7 @@ export function PedirSegundaViaAcao({
   docId: string;
   tamanho?: AcaoTamanho;
 }) {
+  const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [feito, setFeito] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
@@ -77,6 +81,8 @@ export function PedirSegundaViaAcao({
             try {
               await requestBoletoReissue(docId);
               setFeito(true);
+              // Recarrega a lista: a guia passa para "Com o contador".
+              router.refresh();
             } catch (e) {
               setErro(e instanceof Error ? e.message : "Não foi possível pedir agora.");
             }
@@ -94,6 +100,73 @@ export function PedirSegundaViaAcao({
       </button>
       {erro ? <span className="text-xs text-destructive">{erro}</span> : null}
     </>
+  );
+}
+
+/**
+ * "Gerar 2ª via" — DAS vencido: o próprio cliente gera a guia atualizada na
+ * Receita (multa e juros), que substitui a vencida no portal. Se não der, a
+ * ação vira o pedido de 2ª via ao contador e avisa aqui.
+ */
+export function GerarSegundaViaAcao({
+  docId,
+  tamanho = "lg",
+}: {
+  docId: string;
+  tamanho?: AcaoTamanho;
+}) {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+  const [pedido, setPedido] = useState(false);
+
+  if (pedido) {
+    return (
+      <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-700 dark:text-amber-400">
+        <Check className="size-3.5" />
+        2ª via pedida ao contador
+      </span>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      disabled={pending}
+      className={classesAcao(tamanho)}
+      onClick={() =>
+        startTransition(async () => {
+          const r = await gerarSegundaViaDas(docId);
+          if (r.ok) {
+            const valor =
+              r.valor != null
+                ? r.valor.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
+                : "";
+            const ate = r.pagarAte ? r.pagarAte.split("-").reverse().join("/") : "";
+            toast.success("2ª via gerada", {
+              description: `${valor}${ate ? ` · pague até ${ate}` : ""}. Já está na sua lista.`,
+            });
+          } else if (r.pedidoAoContador) {
+            setPedido(true);
+            toast.message(r.mensagem);
+          } else if (r.semDebito) {
+            // Não é erro: a Receita não tem débito (provável já pago).
+            toast.message("Nada a pagar na Receita", {
+              description: r.mensagem,
+              duration: 10_000,
+            });
+          } else {
+            toast.error(r.mensagem);
+          }
+          // Recarrega a lista: guia nova (gerada) ou "Com o contador" (pedido).
+          if (r.ok || r.pedidoAoContador) router.refresh();
+        })
+      }
+    >
+      {tamanho !== "text" ? (
+        pending ? <Loader2 className="size-3.5 animate-spin" /> : <RefreshCw className="size-3.5" />
+      ) : null}
+      {pending ? "Gerando…" : "Gerar 2ª via"}
+    </button>
   );
 }
 

@@ -1,5 +1,6 @@
 import {
   BaixarGuiaAcao,
+  GerarSegundaViaAcao,
   JaPagueiAcao,
   PedirSegundaViaAcao,
 } from "@/components/portal/acoes-guia";
@@ -19,6 +20,8 @@ export interface GuiaQuadro {
   temArquivo: boolean;
   /** Parcela de débito automático: não pede ação de pagamento. */
   debitoAutomatico: boolean;
+  /** DAS: o cliente gera a 2ª via sozinho na Receita (senão, pede ao contador). */
+  gerarAuto: boolean;
 }
 
 function Cartao({ g }: { g: GuiaQuadro }) {
@@ -57,7 +60,11 @@ function Cartao({ g }: { g: GuiaQuadro }) {
       {comAcoes ? (
         <div className="mt-3 flex items-center gap-3">
           {atrasado ? (
-            <PedirSegundaViaAcao docId={g.id} />
+            g.gerarAuto ? (
+              <GerarSegundaViaAcao docId={g.id} />
+            ) : (
+              <PedirSegundaViaAcao docId={g.id} />
+            )
           ) : g.temArquivo ? (
             <BaixarGuiaAcao docId={g.id} />
           ) : (

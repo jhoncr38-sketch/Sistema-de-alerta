@@ -306,6 +306,32 @@ export function pagamentoAguardandoEmail(opts: {
 }
 
 /** Cliente pediu a 2ª via de um boleto vencido — avisa o contador. */
+/** O próprio cliente gerou a 2ª via do DAS no portal (Receita, automático). */
+export function segundaViaAutomaticaEmail(opts: {
+  companyName: string;
+  competencia: string | null;
+  valorAnterior: number | null;
+  valorNovo: number;
+  pagarAte: string;
+  painelUrl: string;
+}) {
+  const { companyName, competencia, valorAnterior, valorNovo, pagarAte, painelUrl } = opts;
+  const headline = "2ª via gerada pelo cliente";
+  const subject = `2ª via do DAS gerada — ${companyName}${competencia ? ` · ${competencia}` : ""}`;
+  const body = `
+        ${p(`O cliente ${b(companyName)} gerou sozinho, no portal, a ${b("2ª via do DAS")} vencido. A guia foi emitida na Receita com multa e juros e já substituiu a antiga.`)}
+        ${infoTable(`
+          ${row("Cliente", companyName)}
+          ${competencia ? row("Competência", competencia) : ""}
+          ${valorAnterior != null ? row("Valor anterior", formatCurrency(valorAnterior)) : ""}
+          ${row("Valor atualizado", formatCurrency(valorNovo), INFO)}
+          ${row("Pagar até", formatDate(pagarAte), WARN)}
+        `)}
+        ${p("Nada a fazer — é só um aviso para você acompanhar.")}
+        ${button(painelUrl, "Abrir no painel")}`;
+  return { subject, html: shell({ headline, accent: INFO, bodyHtml: body }) };
+}
+
 export function segundaViaEmail(opts: {
   companyName: string;
   type: DocType;

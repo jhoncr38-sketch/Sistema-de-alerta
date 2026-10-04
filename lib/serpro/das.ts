@@ -16,6 +16,9 @@ export interface DasEmitido {
   valor: number | null;
   /** Vencimento no formato ISO (YYYY-MM-DD), se informado. */
   vencimento: string | null;
+  /** Data-limite para pagar ESTE DAS (YYYY-MM-DD). Num DAS de mês vencido é
+   *  até quando valem a multa e os juros calculados; null se não vier. */
+  dataLimite: string | null;
   /** Número do documento / DAS, se informado. */
   numeroDocumento: string | null;
   /** Mensagens de negócio da Receita (avisos/sucesso). */
@@ -30,6 +33,20 @@ export interface DasResultado {
   erro?: string;
   /** Corpo bruto para diagnóstico. */
   raw: string;
+}
+
+/**
+ * Vencimento a gravar no boleto do portal. DAS de mês já vencido (2ª via) vem
+ * com o vencimento ORIGINAL (passado) e a data-limite em que valem a multa e
+ * os juros calculados — o cliente precisa ver a data-limite, senão o boleto
+ * novo já nasce "atrasado". Nos demais casos, o vencimento normal.
+ */
+export function vencimentoParaPublicar(
+  das: Pick<DasEmitido, "vencimento" | "dataLimite">,
+  hojeIso: string = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date()),
+): string | null {
+  if (das.vencimento && das.vencimento < hojeIso && das.dataLimite) return das.dataLimite;
+  return das.vencimento ?? das.dataLimite;
 }
 
 /** Converte "YYYY-MM-DD" ou "DD/MM/YYYY" (ou nº) num ISO; null se não der. */
@@ -53,6 +70,7 @@ function normalizarData(v: unknown): string | null {
 function extrairCampos(dados: Record<string, unknown>): {
   valor: number | null;
   vencimento: string | null;
+  dataLimite: string | null;
   numeroDocumento: string | null;
 } {
   const det = (dados.detalhamentoDas ?? dados) as Record<string, unknown>;
@@ -77,6 +95,7 @@ function extrairCampos(dados: Record<string, unknown>): {
   return {
     valor,
     vencimento,
+    dataLimite: normalizarData(det.dataLimiteAcolhimento ?? null),
     numeroDocumento: num == null ? null : String(num),
   };
 }

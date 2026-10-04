@@ -17,6 +17,7 @@ import { ComprovanteButton } from "@/components/comprovante-button";
 import { MapaAno, type EstadoMes } from "@/components/portal/mapa-ano";
 import {
   BaixarGuiaAcao,
+  GerarSegundaViaAcao,
   JaPagueiAcao,
   PedirSegundaViaAcao,
 } from "@/components/portal/acoes-guia";
@@ -53,6 +54,8 @@ export interface BoletoLinha {
   compKey: string | null; // "YYYY-MM" da competência
   dueDate: string | null;
   pagoEm: string | null;
+  /** DAS: o cliente gera a 2ª via sozinho na Receita (senão, pede ao contador). */
+  gerarAuto: boolean;
 }
 
 type Aba = "aberto" | "pagos" | "todos";
@@ -113,7 +116,11 @@ function AcoesDesktop({ l }: { l: BoletoLinha }) {
     <>
       <JaPagueiAcao docId={l.id} exigeComprovante={l.exigeComprovante} variante="icon" />
       {l.situacao === "precisa" ? (
-        <PedirSegundaViaAcao docId={l.id} tamanho="sm" />
+        l.gerarAuto ? (
+          <GerarSegundaViaAcao docId={l.id} tamanho="sm" />
+        ) : (
+          <PedirSegundaViaAcao docId={l.id} tamanho="sm" />
+        )
       ) : l.temArquivo ? (
         <BaixarGuiaAcao docId={l.id} tamanho="sm" />
       ) : null}
@@ -138,7 +145,11 @@ function AcoesCelular({ l }: { l: BoletoLinha }) {
     <span className="flex shrink-0 items-center gap-2">
       <JaPagueiAcao docId={l.id} exigeComprovante={l.exigeComprovante} variante="icon" />
       {l.situacao === "precisa" ? (
-        <PedirSegundaViaAcao docId={l.id} tamanho="text" />
+        l.gerarAuto ? (
+          <GerarSegundaViaAcao docId={l.id} tamanho="text" />
+        ) : (
+          <PedirSegundaViaAcao docId={l.id} tamanho="text" />
+        )
       ) : l.temArquivo ? (
         <BaixarGuiaAcao docId={l.id} tamanho="text" />
       ) : null}

@@ -10,7 +10,7 @@ import { normalizeCompetencia } from "@/lib/dates";
 import { notifyNewDocument } from "@/lib/email/notify";
 import { getSerproTokens, serproConfigurado } from "@/lib/serpro/auth";
 import { chamarServico } from "@/lib/serpro/client";
-import { gerarDas } from "@/lib/serpro/das";
+import { gerarDas, vencimentoParaPublicar } from "@/lib/serpro/das";
 import { gerarDarfDctfweb } from "@/lib/serpro/dctfweb";
 import {
   emitirParcela,
@@ -241,7 +241,8 @@ export async function emitirDasTeste(
         "Confira o PDF abaixo antes de qualquer coisa. Nada foi publicado nem enviado ao cliente.",
       pdfBase64: r.das.pdfBase64,
       valor: r.das.valor,
-      vencimento: r.das.vencimento,
+      // Mesma data que será publicada (data-limite, quando o mês já venceu).
+      vencimento: vencimentoParaPublicar(r.das),
       numeroDocumento: r.das.numeroDocumento,
       raw: r.raw,
     };
@@ -351,7 +352,10 @@ export async function publicarDas(
       detalhe: r.erro ?? "A Receita não retornou o DAS.",
     };
   }
-  const { pdfBase64, valor, vencimento } = r.das;
+  const { pdfBase64, valor } = r.das;
+  // Mês vencido (2ª via): publica com a data-limite, não com o vencimento
+  // original (senão o boleto atualizado já nasce atrasado no portal).
+  const vencimento = vencimentoParaPublicar(r.das);
   if (valor == null || !vencimento) {
     return {
       ok: false,

@@ -10,6 +10,7 @@ import {
   haDias,
   situacaoGuia,
 } from "@/lib/portal";
+import { serproConfigurado } from "@/lib/serpro/auth";
 import { createClient } from "@/lib/supabase/server";
 import type { DocumentRow } from "@/lib/types";
 
@@ -44,6 +45,8 @@ export default async function MeusBoletosPage({
   }
   const reissueIds = new Set(reissueEm.keys());
 
+  // DAS vencido: o cliente gera a 2ª via sozinho quando a Receita está integrada.
+  const dasAutomatico = serproConfigurado();
   const linhas: BoletoLinha[] = docs.map((d) => {
     const situacao = situacaoGuia(d, reissueIds);
     const pagoEm = d.paid_at ?? d.marcado_pago_at;
@@ -87,6 +90,7 @@ export default async function MeusBoletosPage({
       compKey: d.competencia ? competenciaKey(d.competencia) : null,
       dueDate: d.due_date,
       pagoEm: pagoEm ?? null,
+      gerarAuto: dasAutomatico && d.type === "das",
     };
   });
 

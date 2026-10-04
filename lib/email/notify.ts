@@ -6,6 +6,7 @@ import {
   novoDocumentoEmail,
   pagamentoAguardandoEmail,
   pagamentoConfirmadoEmail,
+  segundaViaAutomaticaEmail,
   segundaViaEmail,
   solicitacaoDocumentoEmail,
 } from "@/lib/email/templates";
@@ -289,6 +290,31 @@ export async function notifyAviso(opts: {
  * Best-effort (não bloqueia a ação): manda e-mail para o contador se houver
  * destinatário; o pedido em si já ficou registrado na tabela do banco.
  */
+/** Avisa o contador que o cliente gerou a 2ª via do DAS sozinho no portal. */
+export async function notifySegundaViaAutomatica(opts: {
+  companyId: string;
+  competencia: string | null;
+  valorAnterior: number | null;
+  valorNovo: number;
+  pagarAte: string;
+}): Promise<void> {
+  const supabase = createAdminClient();
+  const [{ companyName }, { recipients }] = await Promise.all([
+    companyNotifyTarget(supabase, opts.companyId),
+    adminNotifyTarget(supabase),
+  ]);
+  if (recipients.length === 0) return;
+  const { subject, html } = segundaViaAutomaticaEmail({
+    companyName,
+    competencia: opts.competencia,
+    valorAnterior: opts.valorAnterior,
+    valorNovo: opts.valorNovo,
+    pagarAte: opts.pagarAte,
+    painelUrl: `${portalBase()}/painel`,
+  });
+  await sendEmail({ to: recipients, subject, html });
+}
+
 export async function notifyReissueRequest(opts: {
   companyId: string;
   type: DocType;
