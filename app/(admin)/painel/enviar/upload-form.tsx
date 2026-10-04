@@ -47,9 +47,12 @@ export interface RevenueRef {
 export function UploadForm({
   companies,
   revenues,
+  empresaInicial,
 }: {
   companies: { id: string; label: string }[];
   revenues: RevenueRef[];
+  /** Cliente já escolhido (vindo de Clientes → "Enviar documento"). */
+  empresaInicial?: string;
 }) {
   const [state, action, pending] = useActionState<UploadState, FormData>(
     uploadDocument,
@@ -59,7 +62,9 @@ export function UploadForm({
   const [categoria, setCategoria] = useState<DocCategoria>("boleto");
   const [type, setType] = useState("");
   // Espelho dos campos que definem a duplicidade do faturamento.
-  const [companyId, setCompanyId] = useState("");
+  const [companyId, setCompanyId] = useState(
+    empresaInicial && companies.some((c) => c.id === empresaInicial) ? empresaInicial : "",
+  );
   const [competencia, setCompetencia] = useState("");
   const [faturamento, setFaturamento] = useState("");
   const [confirmOpen, setConfirmOpen] = useState(false);

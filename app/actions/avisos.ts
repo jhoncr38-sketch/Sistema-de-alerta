@@ -60,6 +60,45 @@ export async function createAviso(
   return { ok: true };
 }
 
+/**
+ * Comunicado para VÁRIAS empresas de uma vez (seleção em lote da tela
+ * Clientes): um aviso por empresa, cada uma vê só o seu. E-mail opcional.
+ */
+export async function createAvisoLote(input: {
+  companyIds: string[];
+  title: string;
+  message: string;
+  notify: boolean;
+}): Promise<AvisoFormState> {
+  const { profile } = await requireAdmin();
+  const companyIds = [...new Set(input.companyIds.filter(Boolean))].slice(0, 500);
+  const title = input.title.trim();
+  const message = input.message.trim();
+  if (companyIds.length === 0) return { error: "Selecione ao menos uma empresa." };
+  if (!title || !message) return { error: "Informe o título e a mensagem do aviso." };
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("avisos").insert(
+    companyIds.map((company_id) => ({ company_id, title, message, created_by: profile.id })),
+  );
+  if (error) return { error: `Falha ao enviar o comunicado: ${error.message}` };
+
+  if (input.notify) {
+    after(async () => {
+      for (const companyId of companyIds) {
+        try {
+          await notifyAviso({ companyId, title, message });
+        } catch {
+          /* o e-mail nunca quebra o comunicado */
+        }
+      }
+    });
+  }
+
+  revalidateAvisos();
+  return { ok: true };
+}
+
 /** Admin exclui um aviso. */
 export async function deleteAviso(id: string) {
   await requireAdmin();

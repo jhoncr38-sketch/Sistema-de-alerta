@@ -141,3 +141,23 @@ export function MapaAno({
     </div>
   );
 }
+
+/**
+ * Versão mínima do mapa (painel lateral da tela Clientes do contador): só as
+ * 12 células coloridas com a inicial do mês embaixo.
+ */
+export function MapaAnoMini({ estados, ano }: { estados: EstadoMes[]; ano: number }) {
+  return (
+    <div className="grid grid-cols-12 gap-[3px]" aria-label={`Mapa de ${ano}`}>
+      {estados.map((estado, i) => (
+        <div key={i} className="flex flex-col items-center gap-0.5">
+          <span
+            className={cn("h-[18px] w-full rounded-[3px]", CELULA[estado])}
+            title={`${MESES_CURTOS[i]}/${ano}`}
+          />
+          <span className="text-[10px] text-neutral-400 uppercase">{MESES_CURTOS[i].charAt(0)}</span>
+        </div>
+      ))}
+    </div>
+  );
+}

@@ -357,6 +357,27 @@ export function segundaViaEmail(opts: {
   return { subject, html: shell({ headline, accent: WARN, bodyHtml: body }) };
 }
 
+/** Contador recusou o pedido de 2ª via (ex.: a guia já foi paga) — avisa o cliente. */
+export function segundaViaRecusadaEmail(opts: {
+  companyName: string;
+  guia: string;
+  motivo: string;
+  portalUrl: string;
+}) {
+  const { companyName, guia, motivo, portalUrl } = opts;
+  const headline = "Sobre o seu pedido de 2ª via";
+  const subject = `Pedido de 2ª via — ${guia}`;
+  const body = `
+        ${p(`Olá, ${b(companyName)}! Analisamos o seu pedido de ${b("2ª via")} e ele não será emitido agora.`)}
+        ${infoTable(`
+          ${row("Guia", guia)}
+          ${row("Motivo", motivo, INFO)}
+        `)}
+        ${p("Se ainda precisar da guia, é só pedir de novo pelo portal ou falar com a gente.")}
+        ${button(portalUrl, "Abrir o portal")}`;
+  return { subject, html: shell({ headline, accent: INFO, bodyHtml: body }) };
+}
+
 /** Resumo mensal (gerado por IA/cron): panorama do mês para o cliente. */
 export function resumoMensalEmail(opts: {
   companyName: string;

@@ -440,7 +440,7 @@ export async function publicarDas(
     }).catch((err) => console.error("[notify] DAS publicado:", err)),
   );
 
-  revalidatePath("/painel");
+  revalidatePath("/painel", "layout");
   revalidatePath("/painel/documentos");
   revalidatePath("/portal");
   revalidatePath("/portal/boletos");
@@ -950,7 +950,7 @@ export async function publicarDarf(params: {
     }).catch((err) => console.error("[notify] DARF publicado:", err)),
   );
 
-  revalidatePath("/painel");
+  revalidatePath("/painel", "layout");
   revalidatePath("/painel/documentos");
   revalidatePath("/portal");
   revalidatePath("/portal/boletos");
@@ -1208,7 +1208,7 @@ export async function publicarParcelaReceita(params: {
     }).catch((err) => console.error("[notify] parcela publicada:", err)),
   );
 
-  revalidatePath("/painel");
+  revalidatePath("/painel", "layout");
   revalidatePath("/portal");
   revalidatePath("/portal/boletos");
 

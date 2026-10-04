@@ -27,8 +27,14 @@ const selectClass =
  */
 export function NewClientButton({
   companies,
+  empresaPadrao,
+  variante = "botao",
 }: {
   companies: { id: string; label: string }[];
+  /** Empresa já escolhida no formulário (painel lateral de Clientes). */
+  empresaPadrao?: string;
+  /** "link": "+ Dar acesso a outra pessoa" (texto azul, painel lateral). */
+  variante?: "botao" | "link";
 }) {
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -60,15 +66,26 @@ export function NewClientButton({
 
   return (
     <>
-      <Button
-        type="button"
-        size="sm"
-        variant="outline"
-        onClick={() => setOpen(true)}
-      >
-        <UserPlus />
-        Cadastrar cliente
-      </Button>
+      {variante === "link" ? (
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className="text-[13px] font-medium text-primary hover:underline"
+        >
+          + Dar acesso a outra pessoa
+        </button>
+      ) : (
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          className="h-7 rounded-[7px] px-2.5 text-[13px]"
+          onClick={() => setOpen(true)}
+        >
+          <UserPlus />
+          Convidar cliente
+        </Button>
+      )}
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>
@@ -97,7 +114,13 @@ export function NewClientButton({
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="companyId">Empresa que pode ver *</Label>
-              <select id="companyId" name="companyId" className={selectClass} required defaultValue="">
+              <select
+                id="companyId"
+                name="companyId"
+                className={selectClass}
+                required
+                defaultValue={empresaPadrao ?? ""}
+              >
                 <option value="" disabled>
                   Selecione a empresa...
                 </option>

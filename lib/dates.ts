@@ -134,6 +134,11 @@ export function currentCompetenciaKey(today: Date = new Date()): string {
   return `${year}-${month}`;
 }
 
+/** Hoje "YYYY-MM-DD" no fuso do Brasil. */
+export function hojeBR(agora: Date = new Date()): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(agora);
+}
+
 const isoLocal = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 

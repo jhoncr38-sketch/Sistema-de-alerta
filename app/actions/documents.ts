@@ -61,7 +61,7 @@ function revalidatePagamentos() {
   revalidatePath("/portal");
   revalidatePath("/portal/boletos");
   revalidatePath("/portal/parcelamentos");
-  revalidatePath("/painel");
+  revalidatePath("/painel", "layout");
   revalidatePath("/painel/documentos");
 }
 
@@ -439,7 +439,7 @@ export async function deleteDocument(docId: string) {
     await supabase.storage.from("boletos").remove(paths);
   }
 
-  revalidatePath("/painel");
+  revalidatePath("/painel", "layout");
   revalidatePath("/painel/documentos");
   revalidatePath("/painel/faturamento");
   revalidatePath("/painel/folha");
@@ -481,7 +481,7 @@ export async function requestBoletoReissue(docId: string) {
 
   revalidatePath("/portal");
   revalidatePath("/portal/boletos");
-  revalidatePath("/painel");
+  revalidatePath("/painel", "layout");
 }
 
 /**
@@ -501,5 +501,5 @@ export async function resolveReissueRequest(requestId: string) {
     })
     .eq("id", requestId);
   if (error) throw new Error(error.message);
-  revalidatePath("/painel");
+  revalidatePath("/painel", "layout");
 }

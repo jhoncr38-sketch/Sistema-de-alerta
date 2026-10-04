@@ -127,7 +127,7 @@ export async function updateCompany(
   }
 
   revalidateClientes();
-  revalidatePath("/painel");
+  revalidatePath("/painel", "layout");
   return { ok: true };
 }
 
@@ -332,7 +332,7 @@ export async function deleteClient(userId: string) {
   if (error) throw new Error(error.message);
 
   revalidatePath("/painel/clientes");
-  revalidatePath("/painel");
+  revalidatePath("/painel", "layout");
 }
 
 /**
@@ -362,7 +362,7 @@ export async function promoteToAdmin(userId: string) {
   if (error) throw new Error(error.message);
 
   revalidateClientes();
-  revalidatePath("/painel");
+  revalidatePath("/painel", "layout");
 }
 
 /**
@@ -403,7 +403,7 @@ export async function demoteToClient(userId: string) {
   if (error) throw new Error(error.message);
 
   revalidateClientes();
-  revalidatePath("/painel");
+  revalidatePath("/painel", "layout");
 }
 
 /**
@@ -742,5 +742,5 @@ export async function deleteCompany(companyId: string) {
   revalidatePath("/painel/clientes");
   revalidatePath("/painel/documentos");
   revalidatePath("/painel/faturamento");
-  revalidatePath("/painel");
+  revalidatePath("/painel", "layout");
 }

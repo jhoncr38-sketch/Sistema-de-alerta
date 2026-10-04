@@ -51,7 +51,7 @@ export async function POST(request: Request) {
     }
   });
 
-  revalidatePath("/painel");
+  revalidatePath("/painel", "layout");
   revalidatePath("/painel/documentos");
   revalidatePath("/portal");
   revalidatePath("/portal/boletos");

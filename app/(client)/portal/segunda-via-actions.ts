@@ -61,7 +61,7 @@ async function pedirAoContador(
   }
   revalidatePath("/portal");
   revalidatePath("/portal/boletos");
-  revalidatePath("/painel");
+  revalidatePath("/painel", "layout");
   return {
     ok: false,
     pedidoAoContador: true,
@@ -244,7 +244,7 @@ export async function gerarSegundaViaDas(docId: string): Promise<SegundaViaResul
 
   revalidatePath("/portal");
   revalidatePath("/portal/boletos");
-  revalidatePath("/painel");
+  revalidatePath("/painel", "layout");
   revalidatePath("/painel/documentos");
 
   return {

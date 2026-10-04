@@ -54,14 +54,13 @@ interface Grupo {
 const ADMIN_GRUPOS: Grupo[] = [
   {
     itens: [
-      { label: "Dashboard", href: "/painel", icon: LayoutDashboard },
+      { label: "Clientes", href: "/painel/clientes", icon: Users },
       { label: "Solicitações", href: "/painel/solicitacoes", icon: FileClock },
     ],
   },
   {
-    titulo: "Clientes",
+    titulo: "Guias e documentos",
     itens: [
-      { label: "Clientes", href: "/painel/clientes", icon: Users },
       { label: "Parcelamentos", href: "/painel/parcelamentos", icon: Layers },
       { label: "Folha de pagamento", href: "/painel/folha", icon: Wallet },
       { label: "Documentos", href: "/painel/documentos", icon: FileText },
@@ -154,7 +153,7 @@ export function AppSidebar({
   boletosVencidos?: number;
   /** Documentos pedidos pelo contador e ainda não enviados (badge azul). */
   documentosPendentes?: number;
-  /** Contador: tarefas pendentes (2ª via + confirmações) — badge do Dashboard. */
+  /** Contador: tarefas pendentes (2ª via + confirmações) — badge de Clientes. */
   tarefasPendentes?: number;
 }) {
   const pathname = usePathname();
@@ -190,7 +189,7 @@ export function AppSidebar({
       return { n: boletosVencidos, cor: "bg-red-600 text-white" };
     if (isClient && href === "/portal/documentos" && documentosPendentes > 0)
       return { n: documentosPendentes, cor: "bg-primary text-primary-foreground" };
-    if (!isClient && href === "/painel" && tarefasPendentes > 0)
+    if (!isClient && href === "/painel/clientes" && tarefasPendentes > 0)
       return { n: tarefasPendentes, cor: "bg-primary text-primary-foreground" };
     return null;
   }

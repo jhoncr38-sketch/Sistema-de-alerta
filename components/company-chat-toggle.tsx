@@ -1,9 +1,8 @@
 "use client";
 
 import { useTransition } from "react";
-import { Loader2, MessageCircle } from "lucide-react";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils";
+import { Interruptor } from "@/components/interruptor";
 
 /**
  * Interruptor por empresa da aba "Converse com sua empresa", usado na tabela de
@@ -38,29 +37,12 @@ export function CompanyChatToggle({
   }
 
   return (
-    <button
-      type="button"
+    <Interruptor
+      ligado={enabled}
       onClick={handleClick}
       disabled={pending}
-      aria-pressed={enabled}
-      title={
-        enabled
-          ? "Conversa com a empresa ligada — clique para desligar"
-          : "Conversa com a empresa desligada — clique para ligar"
-      }
-      className={cn(
-        "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ring-1 ring-inset transition-colors disabled:opacity-60",
-        enabled
-          ? "bg-primary/10 text-primary ring-primary/20 hover:bg-primary/15"
-          : "bg-muted text-muted-foreground ring-border hover:bg-muted/70",
-      )}
-    >
-      {pending ? (
-        <Loader2 className="size-3.5 animate-spin" />
-      ) : (
-        <MessageCircle className={cn("size-3.5", !enabled && "opacity-60")} />
-      )}
-      {enabled ? "Ligado" : "Desligado"}
-    </button>
+      rotulo={`Converse com sua empresa — ${companyName}`}
+      title={enabled ? "Ligado — clique para desligar" : "Desligado — clique para ligar"}
+    />
   );
 }

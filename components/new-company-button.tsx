@@ -42,9 +42,14 @@ export function NewCompanyButton() {
 
   return (
     <>
-      <Button type="button" size="sm" onClick={() => setOpen(true)}>
+      <Button
+        type="button"
+        size="sm"
+        className="h-7 rounded-[7px] px-2.5 text-[13px]"
+        onClick={() => setOpen(true)}
+      >
         <Plus />
-        Cadastrar empresa
+        Nova empresa
       </Button>
 
       <Dialog open={open} onOpenChange={setOpen}>

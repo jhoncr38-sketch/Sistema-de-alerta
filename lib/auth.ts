@@ -36,7 +36,7 @@ export async function requireClient() {
   const { user, profile } = await getUserAndProfile();
   if (!user) redirect("/login");
   if (!profile) redirect("/login");
-  if (profile.role === "admin") redirect("/painel");
+  if (profile.role === "admin") redirect("/painel/clientes");
   if (profile.active === false) redirect("/inativo");
   if (profile.status !== "approved") redirect("/pending");
   return { user, profile };

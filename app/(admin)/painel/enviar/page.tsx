@@ -119,8 +119,9 @@ export default async function EnviarPage({
                   title="Preencher um à mão"
                   subtitle="Um boleto, documento da empresa ou folha — com todos os campos"
                   icon={<Paperclip />}
+                  defaultOpen={!!empresa && companies.some((c) => c.id === empresa)}
                 >
-                  <UploadForm companies={companies} revenues={revenues} />
+                  <UploadForm companies={companies} revenues={revenues} empresaInicial={empresa} />
                 </CollapsibleSection>
                 </div>
               </>

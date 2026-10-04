@@ -71,7 +71,7 @@ export async function updateBranding(
     await supabase.storage.from("branding").remove([oldPath]);
   }
 
-  revalidatePath("/painel");
+  revalidatePath("/painel", "layout");
   revalidatePath("/portal");
   revalidatePath("/login");
   revalidatePath("/painel/configuracoes");

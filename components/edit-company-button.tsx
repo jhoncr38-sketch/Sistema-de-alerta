@@ -19,7 +19,14 @@ import { Label } from "@/components/ui/label";
 import { CnpjInput } from "@/components/masked-inputs";
 import type { Company } from "@/lib/types";
 
-export function EditCompanyButton({ company }: { company: Company }) {
+export function EditCompanyButton({
+  company,
+  comRotulo = false,
+}: {
+  company: Company;
+  /** Botão "Editar" com texto (painel lateral de Clientes). */
+  comRotulo?: boolean;
+}) {
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -41,16 +48,29 @@ export function EditCompanyButton({ company }: { company: Company }) {
 
   return (
     <>
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon-sm"
-        aria-label="Editar empresa"
-        title="Editar empresa"
-        onClick={() => setOpen(true)}
-      >
-        <Pencil />
-      </Button>
+      {comRotulo ? (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="h-7 rounded-[7px] px-2.5 text-[13px]"
+          onClick={() => setOpen(true)}
+        >
+          <Pencil />
+          Editar
+        </Button>
+      ) : (
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          aria-label="Editar empresa"
+          title="Editar empresa"
+          onClick={() => setOpen(true)}
+        >
+          <Pencil />
+        </Button>
+      )}
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>

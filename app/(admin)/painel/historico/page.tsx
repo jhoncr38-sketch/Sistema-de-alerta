@@ -1,4 +1,5 @@
-import { Mail, MonitorSmartphone } from "lucide-react";
+import Link from "next/link";
+import { Mail, MonitorSmartphone, X } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 import { docTypeLabel } from "@/lib/constants";
 import { formatDate } from "@/lib/format";
@@ -24,17 +25,36 @@ interface NotificationJoined {
   } | null;
 }
 
-export default async function HistoricoPage() {
+export default async function HistoricoPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ empresa?: string }>;
+}) {
+  const { empresa } = await searchParams;
   const supabase = await createClient();
-  const { data } = await supabase
+  // Com ?empresa= (link "Ver tudo" da tela Clientes), só os alertas dela.
+  let query = supabase
     .from("notifications")
     .select(
-      "id,channel,kind,sent_at,document:documents(type,competencia,company:companies(razao_social,nome_fantasia))",
+      empresa
+        ? "id,channel,kind,sent_at,document:documents!inner(company_id,type,competencia,company:companies(razao_social,nome_fantasia))"
+        : "id,channel,kind,sent_at,document:documents(type,competencia,company:companies(razao_social,nome_fantasia))",
     )
     .order("sent_at", { ascending: false })
     .limit(100);
+  if (empresa) query = query.eq("document.company_id", empresa);
+  const [{ data }, { data: empresaRow }] = await Promise.all([
+    query,
+    empresa
+      ? supabase.from("companies").select("razao_social,nome_fantasia").eq("id", empresa).maybeSingle()
+      : Promise.resolve({ data: null }),
+  ]);
 
   const items = (data ?? []) as unknown as NotificationJoined[];
+  const nomeEmpresa = empresaRow
+    ? (empresaRow as { razao_social: string; nome_fantasia: string | null }).nome_fantasia ||
+      (empresaRow as { razao_social: string }).razao_social
+    : null;
 
   return (
     <>
@@ -43,6 +63,15 @@ export default async function HistoricoPage() {
         subtitle="Alertas de vencimento enviados aos clientes"
       />
       <div className="p-6">
+        {nomeEmpresa ? (
+          <Link
+            href="/painel/historico"
+            className="mb-3 inline-flex items-center gap-1.5 rounded-full bg-foreground px-3 py-1 text-xs font-medium text-background"
+          >
+            {nomeEmpresa}
+            <X className="size-3" />
+          </Link>
+        ) : null}
         {items.length === 0 ? (
           <div className="rounded-xl border border-dashed bg-card px-6 py-12 text-center text-sm text-muted-foreground">
             Nenhum alerta enviado ainda. O envio acontece automaticamente

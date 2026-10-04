@@ -131,7 +131,7 @@ export async function createInstallmentPlan(
     }
 
     revalidatePath("/painel/parcelamentos");
-    revalidatePath("/painel");
+    revalidatePath("/painel", "layout");
     revalidatePath("/portal/parcelamentos");
     redirect(`/painel/parcelamentos/${plan.id}?ok=1`);
   }
@@ -234,7 +234,7 @@ export async function createInstallmentPlan(
   }
 
   revalidatePath("/painel/parcelamentos");
-  revalidatePath("/painel");
+  revalidatePath("/painel", "layout");
   redirect(`/painel/parcelamentos/${plan.id}?ok=1`);
 }
 
@@ -388,7 +388,7 @@ export async function editParcela(
 
   revalidatePath(`/painel/parcelamentos/${doc.plan_id}`);
   revalidatePath("/painel/parcelamentos");
-  revalidatePath("/painel");
+  revalidatePath("/painel", "layout");
   revalidatePath("/portal/parcelamentos");
   revalidatePath("/portal");
   return {};
@@ -428,7 +428,7 @@ export async function deleteParcela(docId: string) {
 
   revalidatePath(`/painel/parcelamentos/${doc.plan_id}`);
   revalidatePath("/painel/parcelamentos");
-  revalidatePath("/painel");
+  revalidatePath("/painel", "layout");
   revalidatePath("/portal/parcelamentos");
   revalidatePath("/portal");
 }
@@ -460,6 +460,6 @@ export async function deleteInstallmentPlan(planId: string) {
   }
 
   revalidatePath("/painel/parcelamentos");
-  revalidatePath("/painel");
+  revalidatePath("/painel", "layout");
   revalidatePath("/portal/parcelamentos");
 }

@@ -9,6 +9,7 @@ import {
   segundaViaAutomaticaEmail,
   segundaViaEmail,
   solicitacaoDocumentoEmail,
+  segundaViaRecusadaEmail,
 } from "@/lib/email/templates";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { DocCategoria, DocType } from "@/lib/types";
@@ -336,6 +337,24 @@ export async function notifyReissueRequest(opts: {
     amount: opts.amount,
     dueDate: opts.dueDate,
     painelUrl: `${portalBase()}/painel`,
+  });
+  await sendEmail({ to: recipients, subject, html });
+}
+
+/** Avisa o CLIENTE que o pedido de 2ª via foi recusado, com o motivo. */
+export async function notifySegundaViaRecusada(opts: {
+  companyId: string;
+  guia: string;
+  motivo: string;
+}): Promise<void> {
+  const supabase = createAdminClient();
+  const { recipients, companyName } = await companyNotifyTarget(supabase, opts.companyId);
+  if (recipients.length === 0) return;
+  const { subject, html } = segundaViaRecusadaEmail({
+    companyName,
+    guia: opts.guia,
+    motivo: opts.motivo,
+    portalUrl: `${portalBase()}/portal/boletos`,
   });
   await sendEmail({ to: recipients, subject, html });
 }

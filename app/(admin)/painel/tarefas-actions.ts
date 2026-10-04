@@ -3,7 +3,9 @@
 import { after } from "next/server";
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/auth";
-import { notifyNewDocument } from "@/lib/email/notify";
+import { toggleDocumentPaid } from "@/app/actions/documents";
+import { notifyNewDocument, notifySegundaViaRecusada } from "@/lib/email/notify";
+import { guiaNome } from "@/lib/portal";
 import { createClient } from "@/lib/supabase/server";
 import type { DocCategoria, DocType } from "@/lib/types";
 
@@ -94,9 +96,112 @@ export async function anexarSegundaVia(formData: FormData): Promise<AnexarResult
     }).catch((err) => console.error("[notify] 2a via anexada:", err)),
   );
 
-  revalidatePath("/painel");
+  revalidatePath("/painel", "layout");
   revalidatePath("/painel/documentos");
   revalidatePath("/portal");
   revalidatePath("/portal/boletos");
   return { ok: true, mensagem: "2ª via publicada e cliente avisado." };
+}
+
+function revalidarTarefas() {
+  revalidatePath("/painel", "layout");
+  revalidatePath("/portal");
+  revalidatePath("/portal/boletos");
+  revalidatePath("/portal/parcelamentos");
+}
+
+/**
+ * "Marcar como resolvido": dá baixa no pedido de 2ª via sem anexar nada aqui
+ * (ex.: a 2ª via foi enviada por WhatsApp ou e-mail). Só o contador.
+ */
+export async function resolverSegundaVia(requestId: string): Promise<AnexarResult> {
+  const { profile } = await requireAdmin();
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("boleto_reissue_requests")
+    .update({ status: "resolved", resolved_at: new Date().toISOString(), resolved_by: profile.id })
+    .eq("id", requestId)
+    .eq("status", "pending")
+    .select("id");
+  if (error) return { ok: false, mensagem: `Não foi possível atualizar: ${error.message}` };
+  if (!data?.length) return { ok: false, mensagem: "Este pedido já foi tratado." };
+  revalidarTarefas();
+  return { ok: true, mensagem: "Pedido de 2ª via marcado como resolvido." };
+}
+
+/**
+ * "Recusar pedido": encerra o pedido sem emitir a 2ª via (status 'rejected'),
+ * com o motivo. Opcional: marcar a guia como paga (quando o motivo é "já foi
+ * paga") e avisar o cliente por e-mail. O cliente pode pedir de novo depois.
+ */
+export async function recusarSegundaVia(input: {
+  requestId: string;
+  motivo: string;
+  avisar: boolean;
+  marcarPaga: boolean;
+}): Promise<AnexarResult> {
+  const { profile } = await requireAdmin();
+  const motivo = input.motivo.trim().slice(0, 300);
+  if (!motivo) return { ok: false, mensagem: "Informe o motivo." };
+
+  const supabase = await createClient();
+  const { data: pedido } = await supabase
+    .from("boleto_reissue_requests")
+    .select("id, status, company_id, document:documents(id, status, categoria, type, descricao, parcela_num, competencia)")
+    .eq("id", input.requestId)
+    .maybeSingle();
+  const p = pedido as unknown as {
+    id: string;
+    status: string;
+    company_id: string;
+    document: {
+      id: string;
+      status: string;
+      categoria: DocCategoria;
+      type: DocType;
+      descricao: string | null;
+      parcela_num: number | null;
+      competencia: string | null;
+    } | null;
+  } | null;
+  if (!p || p.status !== "pending") return { ok: false, mensagem: "Este pedido já foi tratado." };
+
+  const { error } = await supabase
+    .from("boleto_reissue_requests")
+    .update({ status: "rejected", resolved_at: new Date().toISOString(), resolved_by: profile.id })
+    .eq("id", p.id)
+    .eq("status", "pending");
+  if (error) return { ok: false, mensagem: `Não foi possível recusar: ${error.message}` };
+
+  // Guia já paga: marca como paga (o cliente recebe o e-mail de pagamento confirmado).
+  let marcouPaga = false;
+  if (input.marcarPaga && p.document && p.document.status !== "paid") {
+    try {
+      await toggleDocumentPaid(p.document.id, true);
+      marcouPaga = true;
+    } catch (e) {
+      revalidarTarefas();
+      return {
+        ok: false,
+        mensagem: `Pedido recusado, mas não consegui marcar a guia como paga: ${e instanceof Error ? e.message : "erro"}`,
+      };
+    }
+  }
+
+  // Um e-mail só: se a guia virou paga, o "pagamento confirmado" já avisa o cliente.
+  if (input.avisar && !marcouPaga && p.document) {
+    const d = p.document;
+    const guia = `${guiaNome(d)}${d.competencia ? ` ${d.competencia}` : ""}`;
+    after(() =>
+      notifySegundaViaRecusada({ companyId: p.company_id, guia, motivo }).catch((err) =>
+        console.error("[notify] 2ª via recusada:", err),
+      ),
+    );
+  }
+
+  revalidarTarefas();
+  return {
+    ok: true,
+    mensagem: marcouPaga ? "Pedido recusado e guia marcada como paga." : "Pedido de 2ª via recusado.",
+  };
 }
