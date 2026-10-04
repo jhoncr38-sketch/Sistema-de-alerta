@@ -3,6 +3,9 @@
 @import "shadcn/tailwind.css";
 
 @custom-variant dark (&:is(.dark *));
+/* Menu lateral recolhido (desktop). O atributo vem do script inicial do
+   layout (localStorage 'sj-menu-collapsed'), então já pinta recolhido. */
+@custom-variant recolhido (&:where([data-menu="recolhido"] *));
 
 @theme inline {
   --color-background: var(--background);

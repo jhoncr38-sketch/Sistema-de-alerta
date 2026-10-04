@@ -17,9 +17,11 @@ import type { DocumentRow } from "@/lib/types";
 export default async function MeusBoletosPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string }>;
+  searchParams: Promise<{ tab?: string; mes?: string }>;
 }) {
-  const { tab } = await searchParams;
+  const { tab, mes } = await searchParams;
+  // ?mes=AAAA-MM (vindo do mapa do Início): abre já filtrado naquele mês.
+  const mesInicial = mes && /^\d{4}-(0[1-9]|1[0-2])$/.test(mes) ? mes : null;
   const supabase = await createClient();
   const activeCompanyId = await getActiveCompanyId();
   const companyId = activeCompanyId ?? "00000000-0000-0000-0000-000000000000";
@@ -104,6 +106,7 @@ export default async function MeusBoletosPage({
         <BoletosView
           linhas={linhas}
           abaInicial={abaInicial}
+          mesInicial={mesInicial}
           mesAtual={currentCompetenciaKey()}
         />
       </div>

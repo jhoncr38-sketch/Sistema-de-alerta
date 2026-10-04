@@ -165,17 +165,31 @@ export function BoletosView({
   linhas,
   abaInicial,
   mesAtual,
+  mesInicial = null,
 }: {
   linhas: BoletoLinha[];
   abaInicial: Aba;
   /** "YYYY-MM" de hoje (fuso do Brasil), calculado no servidor. */
   mesAtual: string;
+  /** "YYYY-MM" para abrir já filtrado (link do mapa do Início). */
+  mesInicial?: string | null;
 }) {
   const anoAtual = Number(mesAtual.slice(0, 4));
   const [aba, setAbaState] = useState<Aba>(abaInicial);
   const [busca, setBusca] = useState("");
-  const [ano, setAno] = useState(anoAtual);
-  const [mes, setMes] = useState<number | null>(null);
+  const [ano, setAno] = useState(mesInicial ? Number(mesInicial.slice(0, 4)) : anoAtual);
+  const [mes, setMesState] = useState<number | null>(
+    mesInicial ? Number(mesInicial.slice(5, 7)) : null,
+  );
+
+  /** Troca o mês do filtro e mantém a URL (?mes=) em dia, para o F5 respeitar. */
+  function setMes(m: number | null, anoRef: number = ano) {
+    setMesState(m);
+    const url = new URL(window.location.href);
+    if (m === null) url.searchParams.delete("mes");
+    else url.searchParams.set("mes", `${anoRef}-${String(m).padStart(2, "0")}`);
+    window.history.replaceState(null, "", url);
+  }
   const [agrupar, setAgrupar] = useState<Agrupar>("vencimento");
   const [semComprovante, setSemComprovante] = useState(false);
   const [selecionados, setSelecionados] = useState<Set<string>>(new Set());

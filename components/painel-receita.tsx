@@ -97,11 +97,16 @@ function abrirPdf(base64: string) {
 export function PainelReceita({
   companies,
   configurado,
+  empresaInicial,
 }: {
   companies: CompanyOpt[];
   configurado: boolean;
+  /** Cliente já escolhido (ex.: botão "Serpro" do Dashboard). */
+  empresaInicial?: string;
 }) {
-  const [companyId, setCompanyId] = useState("");
+  const [companyId, setCompanyId] = useState(
+    empresaInicial && companies.some((c) => c.id === empresaInicial) ? empresaInicial : "",
+  );
   // A cada "Verificar", remonta as seções (zera resultados antigos).
   const [verificacao, setVerificacao] = useState(0);
   const [verificando, startVerificar] = useTransition();

@@ -22,9 +22,9 @@ type Aba = "pdfs" | "receita";
 export default async function EnviarPage({
   searchParams,
 }: {
-  searchParams: Promise<{ aba?: string }>;
+  searchParams: Promise<{ aba?: string; empresa?: string }>;
 }) {
-  const { aba: abaParam } = await searchParams;
+  const { aba: abaParam, empresa } = await searchParams;
   const aba: Aba = abaParam === "receita" ? "receita" : "pdfs";
 
   const supabase = await createClient();
@@ -125,7 +125,7 @@ export default async function EnviarPage({
                 </div>
               </>
             ) : dasCompanies.length > 0 ? (
-              <PainelReceita companies={dasCompanies} configurado={serproOn} />
+              <PainelReceita companies={dasCompanies} configurado={serproOn} empresaInicial={empresa} />
             ) : (
               <Card className="px-6 py-10 text-center text-sm text-muted-foreground">
                 Nenhum cliente ativo com CNPJ — a Receita só atende CNPJ.

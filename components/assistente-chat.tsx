@@ -351,8 +351,11 @@ export function AssistenteChat({
  */
 export function AssistenteHeaderButton({
   tela = "geral",
+  scope = "cliente",
 }: {
   tela?: AssistenteTela;
+  /** "contador" = painel do escritório ("Perguntar ao assistente"). */
+  scope?: AssistenteScope;
 }) {
   const [aberto, setAberto] = useState(false);
   useEscFecha(aberto, () => setAberto(false));
@@ -366,11 +369,11 @@ export function AssistenteHeaderButton({
         className="inline-flex h-9 items-center gap-1.5 rounded-lg px-1.5 text-sm font-medium text-amber-700 transition-colors hover:text-amber-800 dark:text-amber-400 dark:hover:text-amber-300"
       >
         {aberto ? <X className="size-4" /> : <Sparkles className="size-4" />}
-        Dúvidas?
+        {scope === "contador" ? "Perguntar ao assistente" : "Dúvidas?"}
       </button>
       {aberto ? (
         <AssistenteJanela
-          scope="cliente"
+          scope={scope}
           tela={tela}
           className="top-16 right-4 md:right-6"
         />

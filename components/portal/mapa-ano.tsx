@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import Link from "next/link";
 import { MESES_CURTOS } from "@/lib/portal";
 import { cn } from "@/lib/utils";
 
@@ -22,8 +23,9 @@ const CELULA: Record<EstadoMes, string> = {
 
 /**
  * Mapa compacto dos 12 meses do ano (boletos pagos, folhas publicadas). Com
- * `onSelecionar`, cada mês é clicável e filtra a lista (clicar de novo limpa);
- * sem ele, o mapa é só para olhar (Início).
+ * `onSelecionar`, cada mês filtra a lista na própria tela (clicar de novo
+ * limpa); com `linkDosMeses`, cada mês leva a outra tela já filtrada (Início →
+ * Meus boletos).
  */
 export function MapaAno({
   rotulo,
@@ -33,6 +35,8 @@ export function MapaAno({
   onSelecionar,
   legenda = [],
   acao,
+  linkDosMeses,
+  ano,
 }: {
   /** "Pago em 2026" / "Folhas de 2026". */
   rotulo: string;
@@ -46,6 +50,10 @@ export function MapaAno({
   legenda?: { estado: EstadoMes; texto: string }[];
   /** Link à direita (ex.: "22 pagos ›"); no celular fica na linha de cima. */
   acao?: ReactNode;
+  /** Cada mês vira link para esta tela + "mes=AAAA-MM" (ex.: Início →
+   *  "/portal/boletos?tab=todos"). Precisa de `ano`. */
+  linkDosMeses?: string;
+  ano?: number;
 }) {
   return (
     <div className="flex flex-col gap-2 rounded-[10px] border bg-card px-3.5 py-2.5 sm:flex-row sm:items-center sm:gap-4">
@@ -61,25 +69,14 @@ export function MapaAno({
         {estados.map((estado, i) => {
           const mes = i + 1;
           const ativo = selecionado === mes;
-          const Celula = onSelecionar ? "button" : "div";
-          return (
-            <Celula
-              key={mes}
-              {...(onSelecionar
-                ? {
-                    type: "button" as const,
-                    "aria-pressed": ativo,
-                    "aria-label": `${MESES_CURTOS[i]}${ativo ? " (selecionado)" : ""}`,
-                    onClick: () => onSelecionar(ativo ? null : mes),
-                  }
-                : {})}
-              className="flex flex-col items-center gap-1"
-            >
+          const conteudo = (
+            <>
               <span
                 className={cn(
                   "flex h-4 w-full items-center justify-center rounded-[5px] text-[11px] font-medium sm:h-[26px]",
                   CELULA[estado],
                   ativo && "ring-2 ring-foreground",
+                  (onSelecionar || linkDosMeses) && "transition-opacity hover:opacity-80",
                 )}
               >
                 <span className="hidden sm:inline">{MESES_CURTOS[i]}</span>
@@ -87,7 +84,43 @@ export function MapaAno({
               <span className="text-[10px] text-muted-foreground uppercase sm:hidden">
                 {MESES_CURTOS[i][0]}
               </span>
-            </Celula>
+            </>
+          );
+          const classe = "flex flex-col items-center gap-1";
+
+          // Link para outra tela (Início → Meus boletos daquele mês).
+          if (linkDosMeses && ano) {
+            const sep = linkDosMeses.includes("?") ? "&" : "?";
+            return (
+              <Link
+                key={mes}
+                href={`${linkDosMeses}${sep}mes=${ano}-${String(mes).padStart(2, "0")}`}
+                aria-label={`Ver ${MESES_CURTOS[i]} de ${ano}`}
+                className={classe}
+              >
+                {conteudo}
+              </Link>
+            );
+          }
+          // Filtro na própria tela (Meus boletos, Folha).
+          if (onSelecionar) {
+            return (
+              <button
+                key={mes}
+                type="button"
+                aria-pressed={ativo}
+                aria-label={`${MESES_CURTOS[i]}${ativo ? " (selecionado)" : ""}`}
+                onClick={() => onSelecionar(ativo ? null : mes)}
+                className={classe}
+              >
+                {conteudo}
+              </button>
+            );
+          }
+          return (
+            <div key={mes} className={classe}>
+              {conteudo}
+            </div>
           );
         })}
       </div>

@@ -87,8 +87,10 @@ export default async function PortalHome() {
     const situacao = situacaoGuia(d, reissueIds);
     situacoes.set(d.id, situacao);
     if (situacao === "pago") {
+      // "Pago em" e "N pagos" contam só boletos — iguais a Meus boletos, para
+      // onde o mapa e o link levam.
       const quando = d.paid_at ?? d.marcado_pago_at ?? d.due_date;
-      if (quando?.startsWith(ano)) {
+      if (d.categoria === "boleto" && quando?.startsWith(ano)) {
         pagosAno++;
         pagosAnoValor += d.amount ?? 0;
       }
@@ -122,10 +124,12 @@ export default async function PortalHome() {
   guias.sort((a, b) => ORDEM[a.situacao] - ORDEM[b.situacao] || a.due.localeCompare(b.due));
 
   // Mapa do ano (por vencimento): mês com atraso fica vermelho, tudo pago verde.
+  // Só boletos, como em Meus boletos — clicar no mês abre essa tela filtrada.
+  const boletos = docs.filter((d) => d.categoria === "boleto");
   const estados: EstadoMes[] = Array.from({ length: 12 }, (_, i) => {
     const key = `${ano}-${String(i + 1).padStart(2, "0")}`;
     if (key > mesAtual) return "vazio";
-    const doMes = docs.filter((d) => d.due_date?.startsWith(key));
+    const doMes = boletos.filter((d) => d.due_date?.startsWith(key));
     if (doMes.some((d) => situacoes.get(d.id) === "precisa")) return "pendente";
     if (key === mesAtual) return "corrente";
     if (doMes.length > 0 && doMes.every((d) => situacoes.get(d.id) === "pago")) return "pago";
@@ -176,6 +180,8 @@ export default async function PortalHome() {
           rotulo={`Pago em ${ano}`}
           valor={formatCurrency(pagosAnoValor)}
           estados={estados}
+          linkDosMeses="/portal/boletos?tab=todos"
+          ano={Number(ano)}
           acao={
             <Link
               href="/portal/boletos?tab=pagos"

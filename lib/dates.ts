@@ -134,6 +134,89 @@ export function currentCompetenciaKey(today: Date = new Date()): string {
   return `${year}-${month}`;
 }
 
+const isoLocal = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+/** Domingo de Páscoa (algoritmo de Meeus/Jones/Butcher). */
+function pascoa(ano: number): Date {
+  const a = ano % 19;
+  const b = Math.floor(ano / 100);
+  const c = ano % 100;
+  const d = Math.floor(b / 4);
+  const e = b % 4;
+  const f = Math.floor((b + 8) / 25);
+  const g = Math.floor((b - f + 1) / 3);
+  const h = (19 * a + b - d - g + 15) % 30;
+  const i = Math.floor(c / 4);
+  const k = c % 4;
+  const l = (32 + 2 * e + 2 * i - h - k) % 7;
+  const m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const mes = Math.floor((h + l - 7 * m + 114) / 31);
+  const dia = ((h + l - 7 * m + 114) % 31) + 1;
+  return new Date(ano, mes - 1, dia);
+}
+
+const feriadosCache = new Map<number, Map<string, string>>();
+
+/**
+ * Feriados nacionais em que os bancos não abrem (fixos + Carnaval, Sexta-feira
+ * Santa e Corpus Christi). Feriados estaduais/municipais não entram.
+ */
+function feriadosDoAno(ano: number): Map<string, string> {
+  const pronto = feriadosCache.get(ano);
+  if (pronto) return pronto;
+  const p = pascoa(ano);
+  const rel = (dias: number) => isoLocal(new Date(p.getFullYear(), p.getMonth(), p.getDate() + dias));
+  const mapa = new Map<string, string>([
+    [`${ano}-01-01`, "Confraternização"],
+    [rel(-48), "Carnaval"],
+    [rel(-47), "Carnaval"],
+    [rel(-2), "Sexta-feira Santa"],
+    [`${ano}-04-21`, "Tiradentes"],
+    [`${ano}-05-01`, "Dia do Trabalho"],
+    [rel(60), "Corpus Christi"],
+    [`${ano}-09-07`, "Independência"],
+    [`${ano}-10-12`, "N. Sra. Aparecida"],
+    [`${ano}-11-02`, "Finados"],
+    [`${ano}-11-15`, "Proclamação da República"],
+    [`${ano}-11-20`, "Consciência Negra"],
+    [`${ano}-12-25`, "Natal"],
+  ]);
+  feriadosCache.set(ano, mapa);
+  return mapa;
+}
+
+/** Nome do feriado nacional em "YYYY-MM-DD", ou null. */
+export function feriadoNacional(iso: string): string | null {
+  return feriadosDoAno(Number(iso.slice(0, 4))).get(iso) ?? null;
+}
+
+/** Dia útil = seg–sex e não é feriado nacional. */
+export function ehDiaUtil(iso: string): boolean {
+  const [y, m, d] = iso.split("-").map(Number);
+  const dow = new Date(y, m - 1, d).getDay();
+  return dow !== 0 && dow !== 6 && !feriadoNacional(iso);
+}
+
+/**
+ * Soma `n` dias úteis (seg–sex, pulando feriados nacionais) a um momento e
+ * devolve a data "YYYY-MM-DD" no fuso do Brasil. Ex.: pedido na sexta + 1 dia
+ * útil = segunda. Base dos prazos das tarefas do contador (2ª via, confirmação).
+ */
+export function somarDiasUteis(momento: string | Date, n: number): string {
+  const iso = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(
+    typeof momento === "string" ? new Date(momento) : momento,
+  );
+  const [y, m, d] = iso.split("-").map(Number);
+  const data = new Date(y, m - 1, d);
+  let faltam = n;
+  while (faltam > 0) {
+    data.setDate(data.getDate() + 1);
+    if (ehDiaUtil(isoLocal(data))) faltam--;
+  }
+  return isoLocal(data);
+}
+
 /** Categoria usada pelo cron de e-mails (null = não dispara alerta). */
 export function alertKind(
   dueDate: string | Date,

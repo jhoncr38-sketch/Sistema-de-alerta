@@ -54,7 +54,8 @@ export function Brand({
           <Bell className="size-5" />
         </div>
       )}
-      <div className="min-w-0 leading-tight">
+      {/* Some com o menu lateral recolhido (só sobra o logo). */}
+      <div className="max-w-[200px] min-w-0 leading-tight whitespace-nowrap transition-[opacity,max-width] duration-200 md:recolhido:max-w-0 md:recolhido:overflow-hidden md:recolhido:opacity-0">
         <div className="truncate text-sm font-semibold">{name || APP_NAME}</div>
         <div className="truncate text-[11px] text-muted-foreground">
           {subtitle ?? APP_TAGLINE}

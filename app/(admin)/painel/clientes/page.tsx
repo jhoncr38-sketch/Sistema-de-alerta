@@ -17,8 +17,7 @@ import { EditCompanyButton } from "@/components/edit-company-button";
 import { NewClientButton } from "@/components/new-client-button";
 import { NewCompanyButton } from "@/components/new-company-button";
 import { createClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
-import { formatUltimoAcesso } from "@/lib/format";
+import { fetchUltimosAcessos } from "@/lib/acessos";
 import type { Company, Profile, ProfileWithCompany } from "@/lib/types";
 import {
   approveClient,
@@ -36,57 +35,6 @@ import {
 
 const selectClass =
   "h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
-
-interface UltimoAcesso {
-  /** Texto relativo pronto: "Hoje", "Há 3 dias", "Nunca acessou". */
-  texto: string;
-  /** ISO exato, para o tooltip (data/hora completa). */
-  iso: string | null;
-  /** Nunca entrou, ou faz mais de 30 dias — destaque visual pro contador. */
-  sumido: boolean;
-}
-
-/**
- * "Último acesso" de cada usuário, direto do Supabase Auth
- * (auth.users.last_sign_in_at). É preenchido automaticamente a cada login —
- * não gravamos nada, não pesa no site do cliente. Só o contador vê, aqui.
- *
- * Retorna um mapa id -> UltimoAcesso já formatado. O "agora" é calculado aqui
- * (função utilitária, fora do render — a regra de pureza do React proíbe
- * Date.now() no corpo do componente). Se der qualquer erro (ex.: service role
- * ausente), devolve mapa vazio e a página segue funcionando.
- */
-async function fetchUltimosAcessos(): Promise<Map<string, UltimoAcesso>> {
-  const mapa = new Map<string, UltimoAcesso>();
-  const agora = Date.now();
-  try {
-    const admin = createAdminClient();
-    // listUsers é paginado. Percorremos até acabar, para não perder clientes
-    // quando o escritório passar de uma página de cadastros.
-    for (let page = 1; page <= 100; page++) {
-      const { data, error } = await admin.auth.admin.listUsers({
-        page,
-        perPage: 200,
-      });
-      if (error || !data?.users?.length) break;
-      for (const u of data.users) {
-        const iso = u.last_sign_in_at ?? null;
-        const dias = iso
-          ? Math.floor((agora - new Date(iso).getTime()) / 86_400_000)
-          : Infinity;
-        mapa.set(u.id, {
-          texto: formatUltimoAcesso(iso, agora),
-          iso,
-          sumido: dias > 30,
-        });
-      }
-      if (data.users.length < 200) break;
-    }
-  } catch {
-    // silencioso: sem último acesso a página ainda funciona.
-  }
-  return mapa;
-}
 
 export default async function ClientesPage() {
   const supabase = await createClient();

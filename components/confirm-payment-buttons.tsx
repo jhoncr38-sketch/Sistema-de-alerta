@@ -10,7 +10,14 @@ import { confirmDocumentPayment } from "@/app/actions/documents";
  * ('aguardando'): confirmar (-> pago) ou rejeitar (-> volta a aberto).
  * Aparece só nas telas do contador, no lugar do "marcar pago".
  */
-export function ConfirmPaymentButtons({ docId }: { docId: string }) {
+export function ConfirmPaymentButtons({
+  docId,
+  variante = "padrao",
+}: {
+  docId: string;
+  /** "tarefa": "Rejeitar" por extenso + "Confirmar", compactos (caixa do Dashboard). */
+  variante?: "padrao" | "tarefa";
+}) {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
@@ -23,6 +30,37 @@ export function ConfirmPaymentButtons({ docId }: { docId: string }) {
         setError(err instanceof Error ? err.message : "Falha ao atualizar.");
       }
     });
+  }
+
+  if (variante === "tarefa") {
+    const base = "h-7 rounded-[7px] px-2.5 text-[13px]";
+    return (
+      <span className="inline-flex items-center gap-1.5">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className={base}
+          disabled={pending}
+          title="Rejeitar — volta para em aberto"
+          onClick={() => run(false)}
+        >
+          Rejeitar
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          className={base}
+          disabled={pending}
+          title="Confirmar o pagamento"
+          onClick={() => run(true)}
+        >
+          {pending ? <Loader2 className="animate-spin" /> : <Check />}
+          Confirmar
+        </Button>
+        {error ? <span className="text-xs text-destructive">{error}</span> : null}
+      </span>
+    );
   }
 
   return (
