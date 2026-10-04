@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import {
+  AlertTriangle,
   CheckCircle2,
   Download,
   Landmark,
@@ -11,6 +12,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { ORIGEM_ESOCIAL, ORIGEM_MIT } from "@/lib/serpro/origem";
 import {
   gerarDarf,
   publicarDarf,
@@ -55,31 +57,67 @@ export function EmitirDarfCard({
   companies,
   configurado,
   bare = false,
+  clienteFixo,
+  semIntro = false,
+  periodoInicial,
+  origemInicial,
+  codigosEmAberto,
 }: {
   companies: CompanyOpt[];
   configurado: boolean;
   bare?: boolean;
+  /** Cliente já escolhido fora (painel da Receita): esconde o seletor. */
+  clienteFixo?: string;
+  /** Esconde o título/explicação (o painel da Receita já explica). */
+  semIntro?: boolean;
+  /** Mês (AAAAMM) já preenchido — ex.: vindo da lista de débitos. */
+  periodoInicial?: string;
+  /** Filtro de tributos já escolhido (8 = só MIT, 1 = só INSS/eSocial). */
+  origemInicial?: number | null;
+  /** Códigos de receita (4 dígitos) que a situação fiscal diz estarem em
+   *  débito neste mês. O que vier no DARF fora desta lista gera um aviso
+   *  ("pode já estar pago") antes de publicar. */
+  codigosEmAberto?: string[];
 }) {
-  const inicial = anoMesAnterior();
-  const [companyId, setCompanyId] = useState(companies[0]?.id ?? "");
+  const inicial =
+    periodoInicial && /^\d{6}$/.test(periodoInicial)
+      ? { ano: periodoInicial.slice(0, 4), mes: periodoInicial.slice(4, 6) }
+      : anoMesAnterior();
+  const [companyIdEscolhido, setCompanyId] = useState(companies[0]?.id ?? "");
+  const companyId = clienteFixo ?? companyIdEscolhido;
   const [categoria, setCategoria] = useState("GERAL_MENSAL");
   const [ano, setAno] = useState(inicial.ano);
   const [mes, setMes] = useState(inicial.mes);
+  // Quais tributos entram no DARF: "" = todos, "8" = só MIT, "1" = só INSS.
+  const [origem, setOrigem] = useState(origemInicial ? String(origemInicial) : "");
+  const origemNum = origem ? Number(origem) : null;
 
   const [gerando, startGerar] = useTransition();
   const [publicando, startPublicar] = useTransition();
   const [darf, setDarf] = useState<DarfGerarResult | null>(null);
   const [pub, setPub] = useState<PublicarDarfResult | null>(null);
 
-  // Campos que o contador preenche depois de conferir o PDF.
-  const [tipo, setTipo] = useState("darf_piscofins");
+  // Campos de publicação (vêm preenchidos com o que foi lido do PDF).
+  const [tipo, setTipo] = useState(
+    origemInicial === ORIGEM_ESOCIAL ? "gps_inss" : "darf_piscofins",
+  );
   const [valor, setValor] = useState("");
   const [vencimento, setVencimento] = useState("");
 
   function gerar() {
     setDarf(null);
     setPub(null);
-    startGerar(async () => setDarf(await gerarDarf(companyId, categoria, ano, mes)));
+    startGerar(async () => {
+      const r = await gerarDarf(companyId, categoria, ano, mes, origemNum);
+      setDarf(r);
+      // Pré-preenche com o que veio escrito no DARF ("Valor" e "Pagar até").
+      if (r.ok && r.valor != null) {
+        setValor(
+          r.valor.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+        );
+      }
+      if (r.ok && r.pagarAte) setVencimento(r.pagarAte);
+    });
   }
 
   function publicar() {
@@ -98,6 +136,7 @@ export function EmitirDarfCard({
           type: tipo,
           valor: valorNum,
           vencimento,
+          origem: origemNum,
         }),
       ),
     );
@@ -113,6 +152,7 @@ export function EmitirDarfCard({
           </div>
         )}
         <div className="flex-1 space-y-4">
+          {semIntro ? null : (
           <div>
             <h2 className="text-sm font-semibold">
               Emitir DARF (DCTFWeb — INSS, PIS/COFINS, IRPJ, CSLL)
@@ -128,6 +168,7 @@ export function EmitirDarfCard({
               atualizado (juros e multa, se houver).
             </p>
           </div>
+          )}
 
           {!configurado ? (
             <p className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">
@@ -136,6 +177,7 @@ export function EmitirDarfCard({
           ) : (
             <>
               <div className="grid gap-3 sm:grid-cols-2">
+                {clienteFixo ? null : (
                 <label className="text-sm">
                   <span className="mb-1 block text-xs font-medium text-muted-foreground">
                     Cliente
@@ -156,6 +198,7 @@ export function EmitirDarfCard({
                     )}
                   </select>
                 </label>
+                )}
 
                 <label className="text-sm">
                   <span className="mb-1 block text-xs font-medium text-muted-foreground">
@@ -199,6 +242,23 @@ export function EmitirDarfCard({
                     />
                   </label>
                 </div>
+
+                {/* Filtro por sistema de origem: separa o que veio do MIT do
+                    INSS do eSocial (a DCTFWeb não separa PIS de COFINS). */}
+                <label className="text-sm sm:col-span-2">
+                  <span className="mb-1 block text-xs font-medium text-muted-foreground">
+                    Tributos no DARF
+                  </span>
+                  <select
+                    value={origem}
+                    onChange={(e) => setOrigem(e.target.value)}
+                    className="h-9 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                  >
+                    <option value="">Todos os tributos do mês</option>
+                    <option value={String(ORIGEM_MIT)}>Só MIT — IRPJ, CSLL, PIS, COFINS</option>
+                    <option value={String(ORIGEM_ESOCIAL)}>Só INSS — eSocial (folha)</option>
+                  </select>
+                </label>
               </div>
 
               <Button
@@ -234,6 +294,47 @@ export function EmitirDarfCard({
 
                       {darf.ok && darf.pdfBase64 ? (
                         <div className="mt-3 space-y-3">
+                          {(() => {
+                            // Tributos no DARF que a situação fiscal NÃO mostra em
+                            // débito: podem já ter sido pagos por outra guia.
+                            if (!codigosEmAberto || !darf.composicao?.length) return null;
+                            const fora = darf.composicao.filter(
+                              (c) => !codigosEmAberto.includes(c.codigo),
+                            );
+                            if (fora.length === 0) return null;
+                            return (
+                              <p className="flex items-start gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">
+                                <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+                                <span>
+                                  Estes tributos estão no DARF, mas{" "}
+                                  <strong>não aparecem como débito</strong> na situação
+                                  fiscal (podem já estar pagos):{" "}
+                                  <strong>
+                                    {fora.map((c) => `${c.codigo} ${c.denominacao.split(" ")[0]}`).join(", ")}
+                                  </strong>
+                                  . Confira antes de publicar.
+                                </span>
+                              </p>
+                            );
+                          })()}
+                          {darf.composicao && darf.composicao.length > 0 ? (
+                            <div className="rounded-lg border px-3 py-2 text-sm">
+                              <div className="mb-1 text-xs font-medium text-muted-foreground">
+                                Tributos neste DARF
+                              </div>
+                              {darf.composicao.map((c) => (
+                                <div key={c.codigo} className="flex justify-between gap-3">
+                                  <span className="min-w-0 truncate">
+                                    <span className="tabular-nums text-muted-foreground">{c.codigo}</span>{" "}
+                                    {c.denominacao}
+                                  </span>
+                                  <span className="shrink-0 tabular-nums">
+                                    {c.total.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          ) : null}
                           <iframe
                             title="DARF gerado"
                             src={`data:application/pdf;base64,${darf.pdfBase64}`}

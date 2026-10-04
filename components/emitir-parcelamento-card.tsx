@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -35,12 +35,22 @@ export function EmitirParcelamentoCard({
   companies,
   configurado,
   bare = false,
+  clienteFixo,
+  semIntro = false,
+  autoBuscar = false,
 }: {
   companies: CompanyOpt[];
   configurado: boolean;
   bare?: boolean;
+  /** Cliente já escolhido fora (painel da Receita): esconde o seletor. */
+  clienteFixo?: string;
+  /** Esconde o título/explicação (o painel da Receita já explica). */
+  semIntro?: boolean;
+  /** Busca as parcelas assim que aparece (botão "Verificar pendências"). */
+  autoBuscar?: boolean;
 }) {
-  const [companyId, setCompanyId] = useState(companies[0]?.id ?? "");
+  const [companyIdEscolhido, setCompanyId] = useState(companies[0]?.id ?? "");
+  const companyId = clienteFixo ?? companyIdEscolhido;
   const [buscando, startBuscar] = useTransition();
   const [res, setRes] = useState<ListarParcelasResult | null>(null);
   // Estado de publicação por parcela (chave = sistema+parcela).
@@ -57,6 +67,14 @@ export function EmitirParcelamentoCard({
     setForcar({});
     startBuscar(async () => setRes(await listarParcelasReceita(companyId)));
   }
+
+  // Painel da Receita: busca sozinho ao montar (o pai remonta a cada verificação).
+  // Ao montar não há resultado antigo para limpar: só dispara a consulta.
+  useEffect(() => {
+    if (!autoBuscar || !configurado || !companyId) return;
+    startBuscar(async () => setRes(await listarParcelasReceita(companyId)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function publicar(p: ParcelaReceita) {
     const chave = `${p.sistema}-${p.parcela}`;
@@ -81,6 +99,7 @@ export function EmitirParcelamentoCard({
           </div>
         )}
         <div className="flex-1 space-y-4">
+          {semIntro ? null : (
           <div>
             <h2 className="text-sm font-semibold">Parcelamento na Receita</h2>
             <p className="mt-0.5 text-sm text-muted-foreground">
@@ -88,6 +107,7 @@ export function EmitirParcelamentoCard({
               PERT, RELP) e publica a guia escolhida como boleto no portal.
             </p>
           </div>
+          )}
 
           {!configurado ? (
             <p className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">
@@ -96,6 +116,7 @@ export function EmitirParcelamentoCard({
           ) : (
             <>
               <div className="flex flex-wrap items-end gap-3">
+                {clienteFixo ? null : (
                 <label className="text-sm">
                   <span className="mb-1 block text-xs font-medium text-muted-foreground">
                     Cliente
@@ -116,6 +137,7 @@ export function EmitirParcelamentoCard({
                     )}
                   </select>
                 </label>
+                )}
                 <Button
                   type="button"
                   size="sm"

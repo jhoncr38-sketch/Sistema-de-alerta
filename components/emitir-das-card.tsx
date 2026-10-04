@@ -44,15 +44,25 @@ export function EmitirDasCard({
   companies,
   configurado,
   bare = false,
+  clienteFixo,
+  semIntro = false,
+  periodoInicial,
 }: {
   companies: CompanyOpt[];
   /** Credenciais SERPRO presentes? Se não, mostra aviso e desabilita. */
   configurado: boolean;
   /** Sem o <Card> externo (quando já vem dentro de um painel com abas). */
   bare?: boolean;
+  /** Cliente já escolhido fora (painel da Receita): esconde o seletor. */
+  clienteFixo?: string;
+  /** Esconde o título/explicação (o painel da Receita já explica). */
+  semIntro?: boolean;
+  /** Mês (AAAAMM) já preenchido — ex.: vindo da lista de DAS em aberto. */
+  periodoInicial?: string;
 }) {
-  const [companyId, setCompanyId] = useState(companies[0]?.id ?? "");
-  const [periodo, setPeriodo] = useState(mesAnterior);
+  const [companyIdEscolhido, setCompanyId] = useState(companies[0]?.id ?? "");
+  const companyId = clienteFixo ?? companyIdEscolhido;
+  const [periodo, setPeriodo] = useState(periodoInicial ?? mesAnterior());
 
   const [gerando, startGerar] = useTransition();
   const [publicando, startPublicar] = useTransition();
@@ -82,6 +92,7 @@ export function EmitirDasCard({
           </div>
         )}
         <div className="flex-1 space-y-4">
+          {semIntro ? null : (
           <div>
             <h2 className="text-sm font-semibold">Emitir DAS pela Receita</h2>
             <p className="mt-0.5 text-sm text-muted-foreground">
@@ -95,6 +106,7 @@ export function EmitirDasCard({
               atualizado (juros e multa, se houver).
             </p>
           </div>
+          )}
 
           {!configurado ? (
             <p className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">
@@ -104,6 +116,7 @@ export function EmitirDasCard({
           ) : (
             <>
               <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
+                {clienteFixo ? null : (
                 <label className="text-sm">
                   <span className="mb-1 block text-xs font-medium text-muted-foreground">
                     Cliente
@@ -124,6 +137,7 @@ export function EmitirDasCard({
                     )}
                   </select>
                 </label>
+                )}
 
                 <label className="text-sm">
                   <span className="mb-1 block text-xs font-medium text-muted-foreground">

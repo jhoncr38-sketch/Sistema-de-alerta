@@ -18,6 +18,8 @@ import {
   PARCELAMENTO_SISTEMAS,
 } from "@/lib/serpro/parcelamento";
 import { consultarSituacaoFiscal } from "@/lib/serpro/sitfis";
+import { lerDarf } from "@/lib/serpro/darf-leitura";
+import { textoDoPdf } from "@/lib/serpro/sitfis-leitura";
 import { createClient } from "@/lib/supabase/server";
 import type { DocType } from "@/lib/types";
 
@@ -677,6 +679,10 @@ export interface DarfGerarResult {
   detalhe: string;
   /** PDF do DARF em base64 (para conferência). */
   pdfBase64?: string;
+  /** Lidos do PDF (sem IA) — pré-preenchem a publicação. */
+  valor?: number | null;
+  pagarAte?: string | null;
+  composicao?: { codigo: string; denominacao: string; total: number }[];
 }
 
 /** Tipos de DARF que o contador pode rotular ao publicar. */
@@ -694,6 +700,8 @@ async function rodarDarf(
   categoria: string,
   anoPA: string,
   mesPA: string,
+  /** Filtro por sistema de origem (8 = MIT, 1 = eSocial). Sem filtro = tudo. */
+  origem?: number | null,
 ): Promise<{ erro: DarfGerarResult } | { nome: string; pdfBase64: string }> {
   const contratante = digits(process.env.SERPRO_CONTRATANTE_CNPJ ?? "");
   if (!contratante) {
@@ -743,6 +751,7 @@ async function rodarDarf(
     categoria,
     anoPA,
     mesPA,
+    idsSistemaOrigem: origem ? [origem] : undefined,
   });
   if (!r.ok || !r.pdfBase64) {
     return {
@@ -765,16 +774,30 @@ export async function gerarDarf(
   categoria: string,
   anoPA: string,
   mesPA: string,
+  origem?: number | null,
 ): Promise<DarfGerarResult> {
   await requireAdmin();
-  const r = await rodarDarf(companyId, categoria, anoPA, mesPA);
+  const r = await rodarDarf(companyId, categoria, anoPA, mesPA, origem);
   if ("erro" in r) return r.erro;
+
+  // Lê valor, "pagar até" e composição do próprio PDF (sem IA). Se falhar,
+  // o contador digita como antes.
+  let lido: ReturnType<typeof lerDarf> | null = null;
+  try {
+    lido = lerDarf(await textoDoPdf(r.pdfBase64));
+  } catch (err) {
+    console.error("[darf] leitura do PDF falhou:", err);
+  }
   return {
     ok: true,
     titulo: "DARF gerado com sucesso",
-    detalhe:
-      "Confira o PDF: informe abaixo o valor e o vencimento que aparecem no DARF para publicar como boleto. Nada foi publicado ainda.",
+    detalhe: lido?.valor
+      ? "Valor e vencimento já preenchidos a partir do DARF — confira no PDF e publique. Nada foi publicado ainda."
+      : "Confira o PDF: informe abaixo o valor e o vencimento que aparecem no DARF para publicar como boleto. Nada foi publicado ainda.",
     pdfBase64: r.pdfBase64,
+    valor: lido?.valor ?? null,
+    pagarAte: lido?.pagarAte ?? null,
+    composicao: lido?.composicao ?? [],
   };
 }
 
@@ -797,6 +820,8 @@ export async function publicarDarf(params: {
   type: string; // rótulo do DARF (darf_piscofins, gps_inss, ...)
   valor: number;
   vencimento: string; // YYYY-MM-DD
+  /** Mesmo filtro de origem usado ao gerar (8 = MIT, 1 = eSocial). */
+  origem?: number | null;
 }): Promise<PublicarDarfResult> {
   const { profile } = await requireAdmin();
 
@@ -844,6 +869,7 @@ export async function publicarDarf(params: {
     params.categoria,
     params.anoPA,
     params.mesPA,
+    params.origem,
   );
   if ("erro" in r) {
     return { ok: false, titulo: r.erro.titulo, detalhe: r.erro.detalhe };

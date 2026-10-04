@@ -66,6 +66,11 @@ export function UploadForm({
   // Valor e vencimento controlados — para a importação por IA pré-preencher.
   const [amount, setAmount] = useState("");
   const [dueDate, setDueDate] = useState("");
+  // Competência e descrição vindas da IA: os campos são não-controlados, então
+  // remontamos (key) com o novo valor inicial a cada leitura.
+  const [compIA, setCompIA] = useState("");
+  const [descIA, setDescIA] = useState("");
+  const [iaVersao, setIaVersao] = useState(0);
   // Estado da leitura de boleto por IA.
   const [lendo, setLendo] = useState(false);
   const [importMsg, setImportMsg] = useState<{
@@ -94,6 +99,22 @@ export function UploadForm({
       // Pré-preenche o que a IA achou.
       setCategoria("boleto");
       if (r.companyId) setCompanyId(r.companyId);
+      if (r.tipo) {
+        setType(r.tipo);
+        if (TIPOS_SEM_FATURAMENTO.has(r.tipo)) {
+          setFaturamento("");
+          resetMode();
+        }
+      }
+      setDescIA(r.tipo === "outro" ? (r.descricao ?? "") : "");
+      if (r.competencia) {
+        setCompetencia(r.competencia);
+        setCompIA(r.competencia);
+      } else {
+        // IA não achou: mantém o que o contador já tinha digitado.
+        setCompIA(competencia);
+      }
+      setIaVersao((v) => v + 1);
       if (r.valor != null)
         setAmount(
           r.valor.toLocaleString("pt-BR", {
@@ -104,6 +125,12 @@ export function UploadForm({
       if (r.vencimento) setDueDate(r.vencimento);
       const partes = [
         r.companyLabel ? `Cliente: ${r.companyLabel}` : null,
+        r.tipo ? "tipo" : null,
+        r.competencia
+          ? r.competenciaEstimada
+            ? "competência (estimada pelo vencimento — confira)"
+            : "competência"
+          : null,
         r.valor != null ? "valor" : null,
         r.vencimento ? "vencimento" : null,
       ].filter(Boolean);
@@ -309,8 +336,10 @@ export function UploadForm({
           <div className="space-y-1.5 sm:col-span-2">
             <Label htmlFor="descricao">Descrição do documento</Label>
             <Input
+              key={`desc-${iaVersao}`}
               id="descricao"
               name="descricao"
+              defaultValue={descIA}
               maxLength={120}
               required
               placeholder="Ex.: Certidão Negativa de Débitos"
@@ -328,9 +357,10 @@ export function UploadForm({
               {isFolha ? "Competência da folha (mês/ano)" : "Competência (mês/ano)"}
             </Label>
             <CompetenciaInput
-              key={categoria}
+              key={`${categoria}-${iaVersao}`}
               id="competencia"
               name="competencia"
+              defaultValue={compIA}
               required
               onValueChange={(v) => {
                 setCompetencia(v);

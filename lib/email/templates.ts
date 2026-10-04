@@ -398,6 +398,56 @@ export function conquistaEmail(opts: {
   return { subject, html: shell({ headline, accent: GOLD, bodyHtml: body }) };
 }
 
+export interface NovaGuiaItem {
+  type: DocType;
+  descricao: string | null;
+  competencia: string | null;
+  amount: number | null;
+  dueDate: string | null;
+}
+
+/** Várias guias publicadas de uma vez (envio em lote): um e-mail por cliente
+ *  com a lista — em vez de um e-mail por guia. */
+export function novasGuiasEmail(opts: {
+  companyName: string;
+  items: NovaGuiaItem[];
+  portalUrl: string;
+}) {
+  const { companyName, items, portalUrl } = opts;
+  const n = items.length;
+  const headline = n === 1 ? "Novo boleto disponível" : "Novos boletos disponíveis";
+  const subject =
+    n === 1
+      ? `Novo boleto disponível — ${items[0].type === "outro" && items[0].descricao ? items[0].descricao : docTypeLabel(items[0].type)}`
+      : `${n} novos boletos disponíveis`;
+  const total = items.reduce((s, i) => s + (i.amount ?? 0), 0);
+  const cell = `padding:9px 10px;border-bottom:1px solid ${ROW_BORDER};font-family:Arial,Helvetica,sans-serif;font-size:13px;color:${TEXT}`;
+  const rows = items
+    .map(
+      (i) => `
+          <tr>
+            <td style="${cell}">${i.type === "outro" && i.descricao ? i.descricao : docTypeLabel(i.type)}${i.competencia ? `<br><span style="color:${MUTED};font-size:12px">${i.competencia}</span>` : ""}</td>
+            <td style="${cell};text-align:right;white-space:nowrap">${i.amount != null ? formatCurrency(i.amount) : "—"}</td>
+            <td style="${cell};text-align:right;white-space:nowrap;color:${MUTED}">${i.dueDate ? formatDate(i.dueDate) : "—"}</td>
+          </tr>`,
+    )
+    .join("");
+  const body = `
+        ${p(`Olá, ${b(companyName)}!`)}
+        ${p(n === 1 ? "Um novo boleto foi disponibilizado no seu portal:" : `${n} novos boletos foram disponibilizados no seu portal:`)}
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:16px 0;border:1px solid ${ROW_BORDER};border-radius:8px;overflow:hidden">
+          <thead><tr>${th("Guia")}${th("Valor", "right")}${th("Vencimento", "right")}</tr></thead>
+          <tbody>${rows}</tbody>
+          ${n > 1 ? `<tfoot><tr>
+            <td style="padding:11px 10px;font-weight:bold;color:${HEAD_DARK};font-family:Arial,Helvetica,sans-serif;font-size:13px">Total</td>
+            <td style="padding:11px 10px;text-align:right;font-weight:bold;color:${GOLD_DARK};font-family:Arial,Helvetica,sans-serif;font-size:13px">${formatCurrency(total)}</td>
+            <td></td>
+          </tr></tfoot>` : ""}
+        </table>
+        ${button(portalUrl, n === 1 ? "Ver e baixar o boleto" : "Ver e baixar os boletos")}`;
+  return { subject, html: shell({ headline, accent: INFO, bodyHtml: body }) };
+}
+
 export interface DigestItem {
   type: DocType;
   competencia: string | null;

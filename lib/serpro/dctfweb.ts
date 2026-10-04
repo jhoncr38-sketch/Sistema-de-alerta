@@ -39,6 +39,9 @@ export async function gerarDarfDctfweb(params: {
   categoria: string;
   anoPA: string; // AAAA
   mesPA: string; // MM
+  /** Filtra as receitas pelo sistema de origem (ex.: só MIT, só eSocial).
+   *  Sem filtro, o DARF traz tudo o que foi apurado no período. */
+  idsSistemaOrigem?: number[];
 }): Promise<DarfResultado> {
   const res = await chamarServico("Emitir", {
     contratanteCpfCnpj: params.contratanteCnpj,
@@ -51,6 +54,9 @@ export async function gerarDarfDctfweb(params: {
       categoria: params.categoria,
       anoPA: params.anoPA,
       mesPA: params.mesPA,
+      ...(params.idsSistemaOrigem?.length
+        ? { idsSistemaOrigem: params.idsSistemaOrigem }
+        : {}),
     },
   });
 

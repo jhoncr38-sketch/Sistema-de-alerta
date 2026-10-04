@@ -4,7 +4,8 @@ import { after } from "next/server";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/auth";
-import { lerBoleto } from "@/lib/ai/ler-boleto";
+import { lerGuia } from "@/lib/ai/ler-guia";
+import { clientePorDocumento, competenciaPeloVencimento } from "@/lib/lote";
 import { createClient } from "@/lib/supabase/server";
 import { normalizeCompetencia } from "@/lib/dates";
 import { notifyNewDocument } from "@/lib/email/notify";
@@ -216,6 +217,11 @@ export interface LerBoletoResult {
   /** Dados extraídos para pré-preencher o formulário. */
   companyId?: string | null;
   companyLabel?: string | null;
+  tipo?: DocType | null;
+  descricao?: string | null;
+  competencia?: string | null;
+  /** true quando a competência foi estimada pelo vencimento (não veio no PDF). */
+  competenciaEstimada?: boolean;
   valor?: number | null;
   vencimento?: string | null;
   /** Avisos para o contador conferir (ex.: cliente não encontrado). */
@@ -223,9 +229,10 @@ export interface LerBoletoResult {
 }
 
 /**
- * Lê um boleto (PDF) com IA e extrai cliente (pelo CNPJ), valor e vencimento,
- * para PRÉ-PREENCHER a publicação. Não publica nada — o contador confere e
- * confirma. A IA nunca inventa: campos não achados voltam null.
+ * Lê um boleto (PDF) com IA e extrai cliente (pelo CNPJ/CPF), tipo, competência,
+ * valor e vencimento, para PRÉ-PREENCHER a publicação. Mesma leitura do envio em
+ * lote. Não publica nada — o contador confere e confirma. A IA nunca inventa:
+ * campos não achados voltam null.
  */
 export async function lerBoletoUpload(
   formData: FormData,
@@ -244,43 +251,49 @@ export async function lerBoletoUpload(
   }
 
   const b64 = Buffer.from(await file.arrayBuffer()).toString("base64");
-  const lido = await lerBoleto(b64);
-  if (!lido) {
+  const lida = await lerGuia(b64);
+  if (!lida) {
     return {
       ok: false,
       erro: "A IA não conseguiu ler o boleto agora. Preencha manualmente.",
     };
   }
 
-  // Acha o cliente pelo CNPJ extraído (só dígitos; a coluna tem máscara).
-  let companyId: string | null = null;
+  const supabase = await createClient();
+  const companyId = await clientePorDocumento(supabase, lida.documento, lida.documentos);
   let companyLabel: string | null = null;
   let aviso: string | undefined;
-  if (lido.cnpj) {
-    const supabase = await createClient();
-    const { data: companies } = await supabase
+  if (companyId) {
+    const { data: c } = await supabase
       .from("companies")
-      .select("id, cnpj, razao_social, nome_fantasia")
-      .eq("active", true);
-    const match = (companies ?? []).find(
-      (c) => (c.cnpj ?? "").replace(/\D/g, "") === lido.cnpj,
-    );
-    if (match) {
-      companyId = match.id;
-      companyLabel = match.nome_fantasia || match.razao_social;
-    } else {
-      aviso = `Nenhum cliente ativo com o CNPJ ${lido.cnpj}. Selecione o cliente manualmente.`;
-    }
+      .select("razao_social, nome_fantasia")
+      .eq("id", companyId)
+      .single();
+    companyLabel = c ? c.nome_fantasia || c.razao_social : null;
+  } else if (lida.documento) {
+    aviso = `Nenhum cliente ativo com o CNPJ/CPF ${lida.documento}. Selecione o cliente manualmente.`;
   } else {
     aviso = "Não identifiquei o CNPJ no boleto. Selecione o cliente manualmente.";
+  }
+
+  // Sem competência no PDF: estima pelo vencimento (mês anterior).
+  let competencia = lida.competencia;
+  let competenciaEstimada = false;
+  if (!competencia && lida.vencimento) {
+    competencia = competenciaPeloVencimento(lida.vencimento);
+    competenciaEstimada = true;
   }
 
   return {
     ok: true,
     companyId,
     companyLabel,
-    valor: lido.valor,
-    vencimento: lido.vencimento,
+    tipo: lida.tipo,
+    descricao: lida.descricao,
+    competencia,
+    competenciaEstimada,
+    valor: lida.valor,
+    vencimento: lida.vencimento,
     aviso,
   };
 }

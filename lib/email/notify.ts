@@ -2,6 +2,7 @@ import { adminNotifyTarget, companyNotifyTarget } from "@/lib/email/recipients";
 import { sendEmail } from "@/lib/email/resend";
 import {
   avisoEmail,
+  novasGuiasEmail,
   novoDocumentoEmail,
   pagamentoAguardandoEmail,
   pagamentoConfirmadoEmail,
@@ -34,6 +35,55 @@ function portalPathFor(categoria: DocCategoria): string {
     default:
       return "/portal/boletos";
   }
+}
+
+/**
+ * Envio em lote: avisa a empresa das guias publicadas de uma vez, num e-mail
+ * só com a lista. Registra cada guia no feed do portal (kind "novo_doc").
+ */
+export async function notifyNovasGuias(opts: {
+  companyId: string;
+  guias: {
+    documentId: string;
+    type: DocType;
+    descricao: string | null;
+    competencia: string | null;
+    amount: number | null;
+    dueDate: string | null;
+  }[];
+}): Promise<void> {
+  if (opts.guias.length === 0) return;
+  const supabase = createAdminClient();
+  const { recipients, companyName } = await companyNotifyTarget(
+    supabase,
+    opts.companyId,
+  );
+
+  let channel: "email" | "portal" = "portal";
+  if (recipients.length > 0) {
+    const { subject, html } = novasGuiasEmail({
+      companyName,
+      items: opts.guias.map((g) => ({
+        type: g.type,
+        descricao: g.descricao,
+        competencia: g.competencia,
+        amount: g.amount,
+        dueDate: g.dueDate,
+      })),
+      portalUrl: `${portalBase()}${portalPathFor("boleto")}`,
+    });
+    await sendEmail({ to: recipients, subject, html });
+    channel = "email";
+  }
+
+  const { error } = await supabase.from("notifications").insert(
+    opts.guias.map((g) => ({
+      document_id: g.documentId,
+      channel,
+      kind: "novo_doc",
+    })),
+  );
+  if (error) console.warn("[notify] novo_doc (lote) não registrado:", error.message);
 }
 
 /** Avisa a empresa que um novo documento/boleto foi disponibilizado. */

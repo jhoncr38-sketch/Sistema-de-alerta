@@ -36,12 +36,19 @@ export function SituacaoFiscalCard({
   companies,
   configurado,
   bare = false,
+  clienteFixo,
+  semIntro = false,
 }: {
   companies: CompanyOpt[];
   configurado: boolean;
   bare?: boolean;
+  /** Cliente já escolhido fora (painel da Receita): esconde o seletor. */
+  clienteFixo?: string;
+  /** Esconde o título/explicação (o painel da Receita já explica). */
+  semIntro?: boolean;
 }) {
-  const [companyId, setCompanyId] = useState(companies[0]?.id ?? "");
+  const [companyIdEscolhido, setCompanyId] = useState(companies[0]?.id ?? "");
+  const companyId = clienteFixo ?? companyIdEscolhido;
   const [consultando, startConsultar] = useTransition();
   const [publicando, startPublicar] = useTransition();
   const [explicando, startExplicar] = useTransition();
@@ -88,6 +95,7 @@ export function SituacaoFiscalCard({
           </div>
         )}
         <div className="flex-1 space-y-4">
+          {semIntro ? null : (
           <div>
             <h2 className="text-sm font-semibold">Situação fiscal na Receita</h2>
             <p className="mt-0.5 text-sm text-muted-foreground">
@@ -96,6 +104,7 @@ export function SituacaoFiscalCard({
               portal do cliente.
             </p>
           </div>
+          )}
 
           {!configurado ? (
             <p className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">
@@ -104,6 +113,7 @@ export function SituacaoFiscalCard({
           ) : (
             <>
               <div className="flex flex-wrap items-end gap-3">
+                {clienteFixo ? null : (
                 <label className="text-sm">
                   <span className="mb-1 block text-xs font-medium text-muted-foreground">
                     Cliente
@@ -124,6 +134,7 @@ export function SituacaoFiscalCard({
                     )}
                   </select>
                 </label>
+                )}
                 <Button
                   type="button"
                   size="sm"
