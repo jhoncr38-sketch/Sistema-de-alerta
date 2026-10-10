@@ -235,12 +235,17 @@ export function novoDocumentoEmail(opts: {
   dueDate: string | null;
   count: number;
   portalUrl: string;
+  /** O PDF vai anexado a este e-mail (avisa no texto). */
+  comAnexo?: boolean;
+  /** Nome da guia quando o tipo é "Outro" (no lugar do rótulo "Outro"). */
+  nome?: string;
 }) {
-  const { companyName, categoria, type, competencia, amount, dueDate, count, portalUrl } =
+  const { companyName, categoria, type, competencia, amount, dueDate, count, portalUrl, comAnexo } =
     opts;
   const isBoleto = categoria === "boleto" || categoria === "parcelamento";
   const headline = isBoleto ? "Novo boleto disponível" : "Novo documento disponível";
-  const subject = `${headline} — ${docTypeLabel(type)}`;
+  const tipoLabel = type === "outro" && opts.nome ? opts.nome : docTypeLabel(type);
+  const subject = `${headline} — ${tipoLabel}`;
   const intro =
     count > 1
       ? `${count} novos arquivos foram disponibilizados no seu portal:`
@@ -249,11 +254,12 @@ export function novoDocumentoEmail(opts: {
         ${p(`Olá, ${b(companyName)}!`)}
         ${p(intro)}
         ${infoTable(`
-          ${row("Tipo", docTypeLabel(type))}
+          ${row("Tipo", tipoLabel)}
           ${competencia ? row("Competência", competencia) : ""}
           ${amount != null ? row("Valor", formatCurrency(amount)) : ""}
           ${dueDate ? row("Vencimento", formatDate(dueDate), INFO) : ""}
         `)}
+        ${comAnexo ? p(`A guia em PDF vai ${b("anexada a este e-mail")}. Ela também fica no portal, onde você avisa quando pagar.`) : ""}
         ${button(portalUrl, isBoleto ? "Ver e baixar o boleto" : "Ver no portal")}`;
   return { subject, html: shell({ headline, accent: INFO, bodyHtml: body }) };
 }

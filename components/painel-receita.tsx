@@ -140,7 +140,7 @@ export function PainelReceita({
           <Landmark className="size-5" />
         </span>
         <div>
-          <h2 className="text-sm font-semibold">Receita Federal</h2>
+          <h2 className="text-sm font-semibold">Pendências e boletos na Receita</h2>
           <p className="text-xs text-muted-foreground">
             Escolha o cliente e veja o que ele tem em aberto, direto do relatório
             de situação fiscal da Receita — com a guia pronta para conferir e

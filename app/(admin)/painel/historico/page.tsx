@@ -59,7 +59,7 @@ export default async function HistoricoPage({
   return (
     <>
       <PageHeader
-        title="Histórico"
+        title="Avisos enviados"
         subtitle="Alertas de vencimento enviados aos clientes"
       />
       <div className="p-6">

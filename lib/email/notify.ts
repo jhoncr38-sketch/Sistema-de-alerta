@@ -98,6 +98,10 @@ export async function notifyNewDocument(opts: {
   amount: number | null;
   dueDate: string | null;
   count: number;
+  /** PDF da guia para ir anexado ao e-mail (ex.: DAS gerado pela Receita). */
+  anexo?: { filename: string; content: Buffer };
+  /** Nome da guia quando o tipo é "Outro" (ex.: "DARF — IRPJ, CSLL, PIS e COFINS"). */
+  nome?: string;
 }): Promise<void> {
   const supabase = createAdminClient();
   const { recipients, companyName } = await companyNotifyTarget(
@@ -116,8 +120,15 @@ export async function notifyNewDocument(opts: {
       dueDate: opts.dueDate,
       count: opts.count,
       portalUrl: `${portalBase()}${portalPathFor(opts.categoria)}`,
+      comAnexo: !!opts.anexo,
+      nome: opts.nome,
     });
-    await sendEmail({ to: recipients, subject, html });
+    await sendEmail({
+      to: recipients,
+      subject,
+      html,
+      attachments: opts.anexo ? [opts.anexo] : undefined,
+    });
     channel = "email";
   }
 

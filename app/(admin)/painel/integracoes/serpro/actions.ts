@@ -18,7 +18,7 @@ import {
   PARCELAMENTO_SISTEMAS,
 } from "@/lib/serpro/parcelamento";
 import { consultarSituacaoFiscal } from "@/lib/serpro/sitfis";
-import { lerDarf } from "@/lib/serpro/darf-leitura";
+import { lerDarf, nomeDoDarf } from "@/lib/serpro/darf-leitura";
 import { textoDoPdf } from "@/lib/serpro/sitfis-leitura";
 import { createClient } from "@/lib/supabase/server";
 import type { DocType } from "@/lib/types";
@@ -437,6 +437,8 @@ export async function publicarDas(
       amount: valor,
       dueDate: vencimento,
       count: 1,
+      // O PDF do DAS vai anexado ao e-mail (além de ficar no portal).
+      anexo: { filename: `DAS-Simples-Nacional-${mesRef.replace("/", "-")}.pdf`, content: pdfBytes },
     }).catch((err) => console.error("[notify] DAS publicado:", err)),
   );
 
@@ -687,6 +689,9 @@ export interface DarfGerarResult {
   valor?: number | null;
   pagarAte?: string | null;
   composicao?: { codigo: string; denominacao: string; total: number }[];
+  /** Guias de imposto federal deste mês que o cliente já tem no portal — a
+   *  tela avisa o que ficaria em dobro (ou divergente) ao publicar este DARF. */
+  noPortal?: { tipo: string; valor: number | null; status: string }[];
 }
 
 /** Tipos de DARF que o contador pode rotular ao publicar. */
@@ -792,8 +797,28 @@ export async function gerarDarf(
   } catch (err) {
     console.error("[darf] leitura do PDF falhou:", err);
   }
+
+  // O que o cliente já tem no portal deste mês ("Outro" só conta se for DARF
+  // publicado por aqui — é também o tipo de guias enviadas à mão).
+  const supabase = await createClient();
+  const { data: guias } = await supabase
+    .from("documents")
+    .select("type, amount, status, file_name")
+    .eq("company_id", companyId)
+    .eq("categoria", "boleto")
+    .eq("competencia", normalizeCompetencia(`${mesPA}/${anoPA}`))
+    .in("type", DARF_TYPES);
+  const noPortal = (guias ?? [])
+    .filter((g) => g.type !== "outro" || (g.file_name ?? "").startsWith("DARF-"))
+    .map((g) => ({
+      tipo: g.type as string,
+      valor: g.amount == null ? null : Number(g.amount),
+      status: g.status as string,
+    }));
+
   return {
     ok: true,
+    noPortal,
     titulo: "DARF gerado com sucesso",
     detalhe: lido?.valor
       ? "Valor e vencimento já preenchidos a partir do DARF — confira no PDF e publique. Nada foi publicado ainda."
@@ -851,13 +876,17 @@ export async function publicarDarf(params: {
   // coexistir na mesma competência, então cada tributo é tratado à parte.
   //   • se QUALQUER guia já está pago/aguardando -> bloqueia (preserva histórico);
   //   • senão -> substitui as em aberto pela nova (evita duplicatas).
-  const { data: existentes } = await supabase
+  let consulta = supabase
     .from("documents")
     .select("id, status, file_path")
     .eq("company_id", params.companyId)
     .eq("categoria", "boleto")
     .eq("type", type)
     .eq("competencia", competencia);
+  // "Outro" também é o tipo de guias enviadas à mão (taxa, parcela…): aqui só
+  // conta o que é DARF publicado por esta tela, para nunca apagar outra guia.
+  if (type === "outro") consulta = consulta.like("file_name", "DARF-%");
+  const { data: existentes } = await consulta;
   const antigos = existentes ?? [];
   if (antigos.some((d) => d.status !== "open")) {
     const rotulo = docTypeLabel(type);
@@ -891,14 +920,29 @@ export async function publicarDarf(params: {
     return { ok: false, titulo: "Falha ao salvar o PDF", detalhe: upErr.message };
   }
 
+  // DARF "geral" (tributos de tipos diferentes): o portal usa a descrição como
+  // NOME da guia, então ela leva os tributos lidos do próprio PDF
+  // ("DARF — IRPJ, CSLL, PIS e COFINS").
+  let nomeGeral: string | null = null;
+  if (type === "outro") {
+    try {
+      nomeGeral = nomeDoDarf(lerDarf(await textoDoPdf(r.pdfBase64)).composicao);
+    } catch (err) {
+      console.error("[darf] leitura do PDF falhou:", err);
+      nomeGeral = nomeDoDarf([]);
+    }
+  }
+
   // Explicação curta por IA (best-effort); cai no texto fixo se a IA falhar.
   const explicacao =
+    nomeGeral ??
     (await explicarGuiaPublicada({
       type,
       competencia,
       valor: params.valor,
       vencimento: params.vencimento,
-    })) ?? "DARF DCTFWeb (tributos federais)";
+    })) ??
+    "DARF DCTFWeb (tributos federais)";
 
   const { error: insErr } = await supabase.from("documents").insert({
     id: docId,
@@ -947,6 +991,7 @@ export async function publicarDarf(params: {
       amount: params.valor,
       dueDate: params.vencimento,
       count: 1,
+      nome: nomeGeral ?? undefined,
     }).catch((err) => console.error("[notify] DARF publicado:", err)),
   );
 

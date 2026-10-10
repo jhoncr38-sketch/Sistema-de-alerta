@@ -139,7 +139,7 @@ export default async function DocumentosPage({
 
   return (
     <>
-      <PageHeader title="Documentos" subtitle="Todos os boletos publicados">
+      <PageHeader title="Guias e documentos" subtitle="Tudo o que já foi publicado para os clientes">
         <form method="get" className="flex items-center gap-2">
           {/* Preserva o filtro de status ao trocar a empresa. */}
           <input type="hidden" name="status" value={statusFiltro} />

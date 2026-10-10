@@ -133,7 +133,7 @@ export function CaixaTarefas({ tarefas, hoje }: { tarefas: Tarefa[]; hoje: strin
             ) : (
               <>
                 <Link
-                  href={`/painel/enviar?aba=receita&empresa=${t.companyId}`}
+                  href={`/painel/enviar?aba=pendencias&empresa=${t.companyId}`}
                   title="Emitir a 2ª via direto na Receita"
                   className="inline-flex h-7 items-center gap-1 rounded-[7px] border px-2.5 text-[13px] font-medium hover:bg-muted"
                 >

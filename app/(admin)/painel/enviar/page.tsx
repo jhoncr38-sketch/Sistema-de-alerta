@@ -1,8 +1,9 @@
 import Link from "next/link";
-import { Landmark, Paperclip, Upload } from "lucide-react";
+import { Calculator, Landmark, Paperclip, Upload } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { CollapsibleSection } from "@/components/collapsible-section";
 import { EnvioLote } from "@/components/lote/envio-lote";
+import { PainelDeclarar } from "@/components/painel-declarar";
 import { PainelReceita } from "@/components/painel-receita";
 import { PageHeader } from "@/components/page-header";
 import { serproConfigurado } from "@/lib/serpro/auth";
@@ -11,13 +12,15 @@ import type { Company } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { UploadForm } from "./upload-form";
 
-type Aba = "pdfs" | "receita";
+type Aba = "pdfs" | "declarar" | "pendencias";
 
 /**
- * Enviar documento — duas abas:
+ * Enviar documento — três abas, uma por tarefa:
  *   • Enviar PDFs: arrasta os PDFs (a IA reconhece cada guia) + envio à mão.
- *   • Receita Federal: escolhe o cliente e vê o que ele tem em aberto na
- *     Receita (DAS, parcelas), com DARF e situação fiscal logo abaixo.
+ *   • Declarar: declaração mensal do Simples Nacional (PGDAS-D) na Receita.
+ *   • Pendências e boletos: o que o cliente tem em aberto na Receita, com a
+ *     emissão de DAS, DARF, parcelas e a situação fiscal.
+ * (`?aba=receita` é o endereço antigo de "Pendências e boletos".)
  */
 export default async function EnviarPage({
   searchParams,
@@ -25,7 +28,14 @@ export default async function EnviarPage({
   searchParams: Promise<{ aba?: string; empresa?: string }>;
 }) {
   const { aba: abaParam, empresa } = await searchParams;
-  const aba: Aba = abaParam === "receita" ? "receita" : "pdfs";
+  const aba: Aba =
+    abaParam === "declarar"
+      ? "declarar"
+      : abaParam === "pendencias" || abaParam === "receita"
+        ? "pendencias"
+        : "pdfs";
+  // Cliente já escolhido acompanha a troca de aba.
+  const comEmpresa = empresa ? `&empresa=${encodeURIComponent(empresa)}` : "";
 
   const supabase = await createClient();
   const [{ data }, { data: revData }] = await Promise.all([
@@ -66,17 +76,34 @@ export default async function EnviarPage({
     amount: Number(r.amount),
   }));
 
-  const abas: { key: Aba; rotulo: string; icon: React.ReactNode }[] = [
-    { key: "pdfs", rotulo: "Enviar PDFs", icon: <Upload className="size-4" /> },
-    { key: "receita", rotulo: "Receita Federal", icon: <Landmark className="size-4" /> },
+  const abas: { key: Aba; rotulo: string; icon: React.ReactNode; titulo: string; subtitulo: string }[] = [
+    {
+      key: "pdfs",
+      rotulo: "Enviar PDFs",
+      icon: <Upload className="size-4" />,
+      titulo: "Enviar documento",
+      subtitulo: "Publique guias e documentos no portal dos clientes",
+    },
+    {
+      key: "declarar",
+      rotulo: "Declarar",
+      icon: <Calculator className="size-4" />,
+      titulo: "Declarar",
+      subtitulo: "Entregue a declaração do Simples Nacional (PGDAS-D) direto na Receita",
+    },
+    {
+      key: "pendencias",
+      rotulo: "Pendências e boletos",
+      icon: <Landmark className="size-4" />,
+      titulo: "Pendências e boletos",
+      subtitulo: "Veja o que o cliente tem em aberto na Receita e emita as guias",
+    },
   ];
+  const abaAtual = abas.find((a) => a.key === aba)!;
 
   return (
     <>
-      <PageHeader
-        title="Enviar documento"
-        subtitle="Publique guias e documentos no portal dos clientes"
-      />
+      <PageHeader title={abaAtual.titulo} subtitle={abaAtual.subtitulo} />
       <div className="space-y-5 p-6">
         {companies.length === 0 ? (
           <Card className="px-6 py-10 text-center text-sm text-muted-foreground">
@@ -88,11 +115,15 @@ export default async function EnviarPage({
           </Card>
         ) : (
           <>
-            <div role="tablist" className="flex w-fit rounded-lg bg-muted p-[3px]">
+            <div role="tablist" className="flex w-fit max-w-full flex-wrap rounded-lg bg-muted p-[3px]">
               {abas.map((a) => (
                 <Link
                   key={a.key}
-                  href={a.key === "pdfs" ? "/painel/enviar" : "/painel/enviar?aba=receita"}
+                  href={
+                    a.key === "pdfs"
+                      ? `/painel/enviar${empresa ? `?empresa=${encodeURIComponent(empresa)}` : ""}`
+                      : `/painel/enviar?aba=${a.key}${comEmpresa}`
+                  }
                   role="tab"
                   aria-selected={aba === a.key}
                   scroll={false}
@@ -125,12 +156,14 @@ export default async function EnviarPage({
                 </CollapsibleSection>
                 </div>
               </>
-            ) : dasCompanies.length > 0 ? (
-              <PainelReceita companies={dasCompanies} configurado={serproOn} empresaInicial={empresa} />
-            ) : (
+            ) : dasCompanies.length === 0 ? (
               <Card className="px-6 py-10 text-center text-sm text-muted-foreground">
                 Nenhum cliente ativo com CNPJ — a Receita só atende CNPJ.
               </Card>
+            ) : aba === "declarar" ? (
+              <PainelDeclarar companies={dasCompanies} configurado={serproOn} empresaInicial={empresa} />
+            ) : (
+              <PainelReceita companies={dasCompanies} configurado={serproOn} empresaInicial={empresa} />
             )}
           </>
         )}

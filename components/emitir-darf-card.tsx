@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState, useTransition } from "react";
 import {
   AlertTriangle,
@@ -12,7 +13,16 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { docTypeLabel } from "@/lib/constants";
+import { formatCurrency } from "@/lib/format";
+import {
+  nomeDoDarf,
+  siglaDoTributo,
+  tipoDoTributo,
+  tipoQueCobreTudo,
+} from "@/lib/serpro/darf-leitura";
 import { ORIGEM_ESOCIAL, ORIGEM_MIT } from "@/lib/serpro/origem";
+import type { DocType } from "@/lib/types";
 import {
   gerarDarf,
   publicarDarf,
@@ -41,6 +51,13 @@ const TIPOS = [
   { valor: "darf_csll", label: "DARF CSLL" },
   { valor: "outro", label: "DARF (geral / DCTFWeb)" },
 ];
+
+/** Situação da guia no portal, como o contador lê. */
+const STATUS_NO_PORTAL: Record<string, string> = {
+  open: "em aberto",
+  aguardando: "aguardando confirmação",
+  paid: "paga",
+};
 
 function anoMesAnterior() {
   const d = new Date();
@@ -117,6 +134,8 @@ export function EmitirDarfCard({
         );
       }
       if (r.ok && r.pagarAte) setVencimento(r.pagarAte);
+      // O nome da guia no portal já vem de acordo com o que está no DARF.
+      if (r.ok && r.composicao?.length) setTipo(tipoQueCobreTudo(r.composicao));
     });
   }
 
@@ -258,6 +277,10 @@ export function EmitirDarfCard({
                     <option value={String(ORIGEM_MIT)}>Só MIT — IRPJ, CSLL, PIS, COFINS</option>
                     <option value={String(ORIGEM_ESOCIAL)}>Só INSS — eSocial (folha)</option>
                   </select>
+                  <span className="mt-1 block text-xs text-muted-foreground">
+                    É a única separação que a Receita faz nesta guia. Os tributos do MIT (IRPJ,
+                    CSLL, PIS e COFINS) saem sempre juntos, num DARF só.
+                  </span>
                 </label>
               </div>
 
@@ -345,7 +368,7 @@ export function EmitirDarfCard({
                           <div className="grid gap-3 rounded-lg border bg-muted/30 p-3 sm:grid-cols-3">
                             <label className="text-sm">
                               <span className="mb-1 block text-xs font-medium text-muted-foreground">
-                                Tributo (rótulo)
+                                Nome da guia no portal
                               </span>
                               <select
                                 value={tipo}
@@ -382,6 +405,110 @@ export function EmitirDarfCard({
                                 className="h-9 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm tabular-nums outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
                               />
                             </label>
+                            <p className="text-xs text-muted-foreground sm:col-span-3">
+                              O nome é só como a guia aparece para o cliente — não muda os
+                              tributos nem o valor do DARF.
+                            </p>
+                            {(() => {
+                              const itens = darf.composicao ?? [];
+                              if (itens.length === 0) return null;
+                              // "Geral": mostra o nome que o cliente vai ler.
+                              if (tipo === "outro") {
+                                return (
+                                  <p className="text-xs text-muted-foreground sm:col-span-3">
+                                    O cliente vai ver esta guia como{" "}
+                                    <strong className="text-foreground">{nomeDoDarf(itens)}</strong>.
+                                  </p>
+                                );
+                              }
+                              // O nome escolhido cobre só parte do que está no DARF?
+                              const fora = itens.filter((c) => tipoDoTributo(c.denominacao) !== tipo);
+                              if (fora.length === 0) return null;
+                              const nome = TIPOS.find((t) => t.valor === tipo)?.label ?? tipo;
+                              return (
+                                <p className="flex items-start gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 sm:col-span-3 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">
+                                  <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+                                  <span>
+                                    O nome <strong>{nome}</strong> não cobre tudo: este DARF também
+                                    tem{" "}
+                                    <strong>
+                                      {fora
+                                        .map(
+                                          (c) =>
+                                            `${siglaDoTributo(c.denominacao)} (${c.total.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })})`,
+                                        )
+                                        .join(", ")}
+                                    </strong>
+                                    . O cliente veria esse nome com o valor total. Para o nome
+                                    bater com a guia, use “DARF (geral / DCTFWeb)”.
+                                  </span>
+                                </p>
+                              );
+                            })()}
+                            {(() => {
+                              // Guias deste mês que o cliente já tem no portal e o que
+                              // acontece com cada uma ao publicar com o nome escolhido.
+                              const cobrado = new Map<string, number>();
+                              for (const c of darf.composicao ?? []) {
+                                const t = tipoDoTributo(c.denominacao);
+                                cobrado.set(t, (cobrado.get(t) ?? 0) + c.total);
+                              }
+                              const guias = (darf.noPortal ?? []).filter(
+                                (g) => g.tipo === tipo || g.tipo === "outro" || cobrado.has(g.tipo),
+                              );
+                              if (guias.length === 0) return null;
+                              const efeito = (g: (typeof guias)[number]) => {
+                                if (g.status === "open") {
+                                  return g.tipo === tipo
+                                    ? "será substituída por este DARF"
+                                    : "continua no portal — cobrança em dobro";
+                                }
+                                const partes: string[] = [];
+                                const valorNaReceita = cobrado.get(g.tipo);
+                                if (valorNaReceita != null) {
+                                  partes.push(`a Receita ainda cobra ${formatCurrency(valorNaReceita)}`);
+                                }
+                                if (g.tipo === tipo) partes.push("não deixa publicar com este nome");
+                                return partes.join(" · ") || "confira antes de publicar";
+                              };
+                              const emDobro = guias.some((g) => g.status === "open" && g.tipo !== tipo);
+                              const alerta = guias.some((g) => g.status !== "open" || g.tipo !== tipo);
+                              return (
+                                <div
+                                  className={
+                                    alerta
+                                      ? "rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 sm:col-span-3 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200"
+                                      : "rounded-lg border px-3 py-2 text-sm sm:col-span-3"
+                                  }
+                                >
+                                  <div className="mb-1 text-xs font-medium opacity-80">
+                                    Guias deste mês que o cliente já tem no portal
+                                  </div>
+                                  {guias.map((g, i) => (
+                                    <div key={i} className="flex flex-wrap justify-between gap-x-3">
+                                      <span>
+                                        {g.tipo === "outro" ? "DARF (geral)" : docTypeLabel(g.tipo as DocType)}
+                                        {g.valor != null ? ` · ${formatCurrency(g.valor)}` : ""} ·{" "}
+                                        {STATUS_NO_PORTAL[g.status] ?? g.status}
+                                      </span>
+                                      <span className="font-medium">{efeito(g)}</span>
+                                    </div>
+                                  ))}
+                                  {emDobro ? (
+                                    <p className="mt-1.5 text-xs">
+                                      Para não cobrar em dobro, apague essas guias em{" "}
+                                      <Link
+                                        href={`/painel/documentos?company=${companyId}`}
+                                        className="font-medium underline"
+                                      >
+                                        Guias e documentos
+                                      </Link>{" "}
+                                      antes de publicar.
+                                    </p>
+                                  ) : null}
+                                </div>
+                              );
+                            })()}
                           </div>
 
                           <div className="flex flex-wrap items-center gap-2 border-t pt-3">

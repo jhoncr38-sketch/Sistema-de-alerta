@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   Bell,
   FileBarChart2,
@@ -11,6 +11,7 @@ import {
   Files,
   Gift,
   History,
+  Landmark,
   Layers,
   LayoutDashboard,
   Lock,
@@ -50,35 +51,35 @@ interface Grupo {
   itens: NavItem[];
 }
 
-// Painel do contador: "Enviar documento" é o botão fixo do topo (fora da lista).
+// Painel do contador, por frequência de uso: dia a dia em cima, o que é do
+// mês no meio, acompanhamento embaixo. "Enviar documento" é o botão fixo do
+// topo e "Configurações" fica no rodapé (engrenagem), fora da lista.
+const HREF_RECEITA = "/painel/enviar?aba=pendencias";
+/** Abas da tela Enviar que são da Receita (o item "Receita Federal" fica ativo nelas). */
+const ABAS_RECEITA = new Set(["pendencias", "declarar", "receita"]);
 const ADMIN_GRUPOS: Grupo[] = [
   {
     itens: [
       { label: "Clientes", href: "/painel/clientes", icon: Users },
+      { label: "Receita Federal", href: HREF_RECEITA, icon: Landmark },
       { label: "Solicitações", href: "/painel/solicitacoes", icon: FileClock },
     ],
   },
   {
-    titulo: "Guias e documentos",
+    titulo: "Do mês",
     itens: [
+      { label: "Guias e documentos", href: "/painel/documentos", icon: FileText },
       { label: "Parcelamentos", href: "/painel/parcelamentos", icon: Layers },
       { label: "Folha de pagamento", href: "/painel/folha", icon: Wallet },
-      { label: "Documentos", href: "/painel/documentos", icon: FileText },
     ],
   },
   {
-    titulo: "Relatórios",
+    titulo: "Acompanhar",
     itens: [
       { label: "Faturamento", href: "/painel/faturamento", icon: TrendingUp },
       { label: "Relatório do mês", href: "/painel/relatorio", icon: FileBarChart2 },
-      { label: "Histórico", href: "/painel/historico", icon: History },
-    ],
-  },
-  {
-    titulo: "Mais",
-    itens: [
+      { label: "Avisos enviados", href: "/painel/historico", icon: History },
       { label: "SJ Rewards", href: "/painel/rewards", icon: Gift },
-      { label: "Configurações", href: "/painel/configuracoes", icon: Settings },
     ],
   },
 ];
@@ -157,6 +158,7 @@ export function AppSidebar({
   tarefasPendentes?: number;
 }) {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const router = useRouter();
   const isClient = role === "client";
   const principais = useMemo(
@@ -173,10 +175,15 @@ export function AppSidebar({
   const todosItens = useMemo(() => grupos.flatMap((g) => g.itens), [grupos]);
   const [open, setOpen] = useState(false);
 
+  // "Receita Federal" é uma aba da tela Enviar: quem decide o item ativo é a
+  // aba aberta (?aba=receita), não só o caminho.
+  const abaReceita = pathname === "/painel/enviar" && ABAS_RECEITA.has(searchParams.get("aba") ?? "");
   const isActive = useCallback(
-    (href: string) =>
-      INDEX_HREFS.has(href) ? pathname === href : pathname.startsWith(href),
-    [pathname],
+    (href: string) => {
+      if (href === HREF_RECEITA) return abaReceita;
+      return INDEX_HREFS.has(href) ? pathname === href : pathname.startsWith(href);
+    },
+    [pathname, abaReceita],
   );
 
   // Clube desligado na empresa ativa: o item continua clicável (leva à
@@ -364,7 +371,7 @@ export function AppSidebar({
   /** Botão fixo "Enviar documento" (painel do contador). */
   function botaoEnviar(desktop: boolean, onNavigate?: () => void) {
     if (isClient) return null;
-    const ativo = pathname.startsWith("/painel/enviar");
+    const ativo = pathname.startsWith("/painel/enviar") && !abaReceita;
     return (
       <Link
         href="/painel/enviar"
@@ -406,10 +413,28 @@ export function AppSidebar({
           <div className="truncate text-sm font-medium">{userName}</div>
           <div className="truncate text-xs text-muted-foreground">{roleLabel}</div>
         </div>
-        <ThemeToggle />
-        <Button variant="ghost" size="icon-sm" onClick={signOut} aria-label="Sair" title="Sair">
-          <LogOut />
-        </Button>
+        {/* Ações juntas (sem o espaçamento do rodapé) para o nome caber inteiro. */}
+        <div className={cn("flex shrink-0 items-center", desktop && "md:recolhido:flex-col md:recolhido:gap-1")}>
+          {isClient ? null : (
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              nativeButton={false}
+              aria-label="Configurações"
+              title="Configurações"
+              className={cn(pathname.startsWith("/painel/configuracoes") && "bg-primary/10 text-primary")}
+              render={
+                <Link href="/painel/configuracoes">
+                  <Settings />
+                </Link>
+              }
+            />
+          )}
+          <ThemeToggle />
+          <Button variant="ghost" size="icon-sm" onClick={signOut} aria-label="Sair" title="Sair">
+            <LogOut />
+          </Button>
+        </div>
       </div>
     );
   }

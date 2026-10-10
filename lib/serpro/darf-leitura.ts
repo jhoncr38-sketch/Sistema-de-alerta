@@ -23,6 +23,66 @@ export interface DarfLido {
   composicao: ItemDarf[];
 }
 
+/** Como reconhecer cada tributo pela denominação que vem escrita no DARF. */
+const SIGLAS: [RegExp, string][] = [
+  [/\bIRPJ\b/, "IRPJ"],
+  [/\bCSLL\b/, "CSLL"],
+  [/\bCOFINS\b/, "COFINS"],
+  [/\bPIS\b|PASEP/, "PIS"],
+  [/^CP\b|PREVIDENCI|SEGURADO|\bINSS\b/, "INSS"],
+];
+
+/** Tipo de guia do portal em que cada tributo se encaixa. */
+const TIPO_DA_SIGLA: Record<string, string> = {
+  IRPJ: "darf_irpj",
+  CSLL: "darf_csll",
+  COFINS: "darf_piscofins",
+  PIS: "darf_piscofins",
+  INSS: "gps_inss",
+};
+
+/**
+ * Sigla do tributo ("COFINS - CONTRIB P/ FIN. SEG. SOCIAL" → "COFINS"). Vale
+ * primeiro o começo da linha, porque o resto pode citar outro tributo ("CSLL -
+ * PJ que apuram o IRPJ…"). Linha que cita mais de um (ex.: retenção de
+ * CSLL/COFINS/PIS) ou nenhum conhecido fica com o próprio começo.
+ */
+export function siglaDoTributo(denominacao: string): string {
+  const inicio = denominacao.split(" - ")[0].trim();
+  for (const texto of [inicio, denominacao]) {
+    const achadas = SIGLAS.filter(([re]) => re.test(texto.toUpperCase()));
+    if (achadas.length === 1) return achadas[0][1];
+  }
+  return inicio;
+}
+
+/** Tipo de guia do portal de UM tributo do DARF ("outro" se não tem tipo próprio). */
+export function tipoDoTributo(denominacao: string): string {
+  return TIPO_DA_SIGLA[siglaDoTributo(denominacao)] ?? "outro";
+}
+
+/** Tipo que cobre TUDO o que veio no DARF; tributos de tipos diferentes = "outro". */
+export function tipoQueCobreTudo(composicao: Pick<ItemDarf, "denominacao">[]): string {
+  const tipos = new Set(composicao.map((c) => tipoDoTributo(c.denominacao)));
+  return tipos.size === 1 ? [...tipos][0] : "outro";
+}
+
+/**
+ * Nome da guia quando ela junta tributos de tipos diferentes — é o que o
+ * cliente lê no portal e no e-mail: "DARF — IRPJ, CSLL, PIS e COFINS".
+ */
+export function nomeDoDarf(composicao: Pick<ItemDarf, "denominacao">[]): string {
+  // Sempre na mesma ordem, não na do PDF (que varia); o que não é conhecido vai ao fim.
+  const ordem = ["IRPJ", "CSLL", "PIS", "COFINS", "INSS"];
+  const pos = (s: string) => (ordem.includes(s) ? ordem.indexOf(s) : ordem.length);
+  const siglas = [...new Set(composicao.map((c) => siglaDoTributo(c.denominacao)))].sort(
+    (a, b) => pos(a) - pos(b),
+  );
+  const lista =
+    siglas.length <= 1 ? (siglas[0] ?? "") : `${siglas.slice(0, -1).join(", ")} e ${siglas.at(-1)}`;
+  return lista && lista.length <= 60 ? `DARF — ${lista}` : "DARF — tributos federais";
+}
+
 const VALOR = String.raw`(\d{1,3}(?:\.\d{3})*,\d{2})`;
 const num = (s: string) => Number(s.replace(/\./g, "").replace(",", "."));
 const iso = (d: string) => {
