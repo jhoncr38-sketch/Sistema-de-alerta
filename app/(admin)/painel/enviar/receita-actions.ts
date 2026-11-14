@@ -325,7 +325,16 @@ export async function buscarGuiasNaReceita(
   if (!pend.pgfn.semPendencias && pend.pgfn.secoes.length > 0) {
     avisos.push("Há pendências na PGFN (dívida ativa) — não entram aqui. Veja a situação fiscal do cliente.");
   }
-  for (const s of pend.outras) avisos.push(`Outras pendências na Receita: ${s.titulo}`);
+  for (const s of pend.outras) {
+    // Linha na seção de débitos que o leitor não entendeu: avisa em vez de sumir.
+    if (/^Pendência - Débito/i.test(s.titulo)) {
+      avisos.push(
+        `Há débito que não consegui ler — confira na situação fiscal do cliente: ${s.linhas.slice(0, 2).join(" · ")}`,
+      );
+    } else {
+      avisos.push(`Outras pendências na Receita: ${s.titulo}`);
+    }
+  }
 
   guias.sort((a, b) => (a.vencimento ?? "9999").localeCompare(b.vencimento ?? "9999"));
   return { companyId, ok: true, guias, avisos };

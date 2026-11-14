@@ -73,7 +73,7 @@ const RE_DEBITO = new RegExp(
 const RE_SECAO = /^_*\s*([^_]+?)\s*_{5,}\s*$/;
 /** Cabeçalho repetido no topo de cada página (não muda a seção). */
 const RE_CABECALHO =
-  /^(MINISTÉRIO DA ECONOMIA|SECRETARIA ESPECIAL DA RECEITA|PROCURADORIA-GERAL DA FAZENDA NACIONAL \d|INFORMAÇÕES DE APOIO|CNPJ: \d{2}\.\d{3}\.\d{3}(\/\d{4}-\d{2})?( - .*)?$|Página: |Receita PA\/Exerc\.)/;
+  /^(MINISTÉRIO DA (ECONOMIA|FAZENDA)|SECRETARIA ESPECIAL DA RECEITA|PROCURADORIA-GERAL DA FAZENDA NACIONAL(\s|$)|INFORMAÇÕES DE APOIO|Por meio d[oa] |CNPJ do certificado:|\d{2}\/\d{2}\/\d{4} \d{2}:\d{2}(:\d{2})?$|CNPJ: \d{2}\.\d{3}\.\d{3}(\/\d{4}-\d{2})?( - .*)?$|Página: |Receita PA\/Exerc\.)/;
 
 const num = (s: string) => Number(s.replace(/\./g, "").replace(",", "."));
 
@@ -103,6 +103,51 @@ function periodos(pa: string): { mensal: string | null; dctf: string | null; lan
   }
   if (/^\d{2}\/\d{2}\/\d{4}$/.test(pa)) return { mensal: null, dctf: null, lancamento: true };
   return { mensal: null, dctf: null, lancamento: false }; // exercício anual
+}
+
+const RE_TRIM_SOZINHO = /^TRIM\/\d{4}$/;
+/** "3º" que ficou sozinho antes da data de vencimento (o "TRIM/AAAA" foi para outra linha). */
+const RE_ORDINAL_ANTES_DA_DATA = /(\s\d[º°o])(\s+\d{2}\/\d{2}\/\d{4}\s)/;
+
+const comTrim = (linha: string, trim: string): string | null =>
+  RE_ORDINAL_ANTES_DA_DATA.test(linha)
+    ? linha.replace(RE_ORDINAL_ANTES_DA_DATA, `$1 ${trim}$2`)
+    : null;
+
+/**
+ * Devolve o "TRIM/AAAA" do PA trimestral para o lugar. O PDF imprime
+ * "3º" na linha do débito e "TRIM/2026" embaixo, e o texto pode sair como:
+ *   a) "2089-01 - IRPJ 3º 30/10/2026 2.283,98 ... DEVEDOR" + "TRIM/2026"
+ *   b) "2089-01 - IRPJ 3º" + "TRIM/2026" + "30/10/2026 2.283,98 ... DEVEDOR"
+ *   c) "2089-01 - IRPJ 3º 30/10/2026 2.283,98 ... DEVEDOR TRIM/2026"
+ * (o caso "IRPJ 2º" + "TRIM/2026 31/07/2026 ..." fica com juntarQuebras).
+ */
+function encaixarTrimestre(linhas: string[]): string[] {
+  const out: string[] = [];
+  for (const linha of linhas) {
+    const noFim = linha.match(/^(.*\S)\s+(TRIM\/\d{4})$/);
+    if (noFim && !RE_DEBITO.test(linha)) {
+      const c = comTrim(noFim[1], noFim[2]); // c)
+      if (c) {
+        out.push(c);
+        continue;
+      }
+    }
+    const anterior = out[out.length - 1];
+    if (RE_TRIM_SOZINHO.test(linha) && anterior !== undefined && !RE_DEBITO.test(anterior)) {
+      if (/\s\d[º°o]$/.test(anterior)) {
+        out[out.length - 1] = `${anterior} ${linha}`; // b) — juntarQuebras completa
+        continue;
+      }
+      const c = comTrim(anterior, linha); // a)
+      if (c) {
+        out[out.length - 1] = c;
+        continue;
+      }
+    }
+    out.push(linha);
+  }
+  return out;
 }
 
 /**
@@ -169,10 +214,12 @@ export function lerSitfis(texto: string): LeituraSitfis {
   let ultimoDebito: DebitoSitfis | null = null;
 
   const linhas = juntarQuebras(
-    texto
-      .split(/\r?\n/)
-      .map((l) => l.trim())
-      .filter((l) => l && !/^_+$/.test(l) && !RE_CABECALHO.test(l)),
+    encaixarTrimestre(
+      texto
+        .split(/\r?\n/)
+        .map((l) => l.trim())
+        .filter((l) => l && !/^_+$/.test(l) && !RE_CABECALHO.test(l)),
+    ),
   );
 
   for (const linha of linhas) {
