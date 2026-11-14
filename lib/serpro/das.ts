@@ -73,7 +73,9 @@ function extrairCampos(dados: Record<string, unknown>): {
   dataLimite: string | null;
   numeroDocumento: string | null;
 } {
-  const det = (dados.detalhamentoDas ?? dados) as Record<string, unknown>;
+  // PGDASD chama de "detalhamentoDas"; o PGMEI (DAS do MEI), de "detalhamento".
+  const bruto = dados.detalhamentoDas ?? dados.detalhamento ?? dados;
+  const det = (Array.isArray(bruto) ? (bruto[0] ?? {}) : bruto) as Record<string, unknown>;
 
   const valores = (det.valores ?? {}) as Record<string, unknown>;
   const valorRaw =
@@ -100,6 +102,15 @@ function extrairCampos(dados: Record<string, unknown>): {
   };
 }
 
+/** De onde vem o DAS: Simples Nacional (PGDASD) ou MEI (PGMEI). */
+export type SistemaDas = "PGDASD" | "PGMEI";
+
+const SERVICO_DAS: Record<SistemaDas, string> = {
+  PGDASD: "GERARDAS12",
+  // DAS do MEI em PDF — mesmo formato de retorno do GERARDAS12; não exige procuração.
+  PGMEI: "GERARDASPDF21",
+};
+
 /**
  * Gera o DAS de um contribuinte para um período (YYYYMM). Não publica nada —
  * apenas retorna o PDF e os dados normalizados para conferência.
@@ -109,13 +120,16 @@ export async function gerarDas(params: {
   autorCnpj: string;
   contribuinteCnpj: string;
   periodoApuracao: string; // YYYYMM
+  /** Padrão: Simples Nacional (PGDASD). */
+  sistema?: SistemaDas;
 }): Promise<DasResultado> {
+  const sistema = params.sistema ?? "PGDASD";
   const res = await chamarServico("Emitir", {
     contratanteCpfCnpj: params.contratanteCnpj,
     autorCpfCnpj: params.autorCnpj,
     contribuinteCpfCnpj: params.contribuinteCnpj,
-    idSistema: "PGDASD",
-    idServico: "GERARDAS12",
+    idSistema: sistema,
+    idServico: SERVICO_DAS[sistema],
     dados: { periodoApuracao: params.periodoApuracao },
   });
 

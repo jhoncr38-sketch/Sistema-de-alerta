@@ -143,6 +143,24 @@ export function numeroDocumentoDoTexto(texto: string): string | null {
   return null;
 }
 
+/**
+ * Data-limite de pagamento lida do TEXTO de um PDF de DAS/DARF ("Pagar este
+ * documento até 31/10/2026", "Pagar até: 31/10/2026", "Vencimento 31/10/2026").
+ * Devolve YYYY-MM-DD ou null.
+ */
+export function vencimentoDoTexto(texto: string): string | null {
+  const padroes = [
+    /Pagar\s+(?:este\s+documento\s+)?at[ée]:?\s*(\d{2})\/(\d{2})\/(\d{4})/i,
+    /Data\s+de\s+Vencimento:?\s*(\d{2})\/(\d{2})\/(\d{4})/i,
+    /Vencimento:?\s*(\d{2})\/(\d{2})\/(\d{4})/i,
+  ];
+  for (const re of padroes) {
+    const m = texto.match(re);
+    if (m) return `${m[3]}-${m[2]}-${m[1]}`;
+  }
+  return null;
+}
+
 // ------------------------------------------------------------
 // Casamento pagamento ↔ guia
 // ------------------------------------------------------------

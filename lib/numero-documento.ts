@@ -1,16 +1,14 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { extractText, getDocumentProxy } from "unpdf";
-import { numeroDocumentoDoTexto } from "@/lib/pagamentos-casar";
+import { numeroDocumentoDoTexto, vencimentoDoTexto } from "@/lib/pagamentos-casar";
 
 /**
  * Número do documento de arrecadação (DAS/DARF) — a "chave" que a rotina de
  * pagamentos usa para achar a guia paga na Receita (ver lib/pagamentos-receita).
  */
 
-/** Lê o número do documento no texto do PDF. null se não achar ou não for PDF legível. */
-export async function numeroDocumentoDoPdf(
-  pdf: Uint8Array | ArrayBuffer | string,
-): Promise<string | null> {
+/** Texto do PDF (todas as páginas). null se não for um PDF legível. */
+async function textoDe(pdf: Uint8Array | ArrayBuffer | string): Promise<string | null> {
   try {
     // Cópia: o leitor de PDF pode "consumir" o buffer que recebe.
     const bytes =
@@ -19,10 +17,27 @@ export async function numeroDocumentoDoPdf(
         : new Uint8Array(pdf instanceof Uint8Array ? pdf.slice() : pdf.slice(0));
     const doc = await getDocumentProxy(bytes);
     const { text } = await extractText(doc, { mergePages: true });
-    return numeroDocumentoDoTexto(Array.isArray(text) ? text.join("\n") : text);
+    return Array.isArray(text) ? text.join("\n") : text;
   } catch {
     return null;
   }
+}
+
+/** Lê o número do documento no texto do PDF. null se não achar ou não for PDF legível. */
+export async function numeroDocumentoDoPdf(
+  pdf: Uint8Array | ArrayBuffer | string,
+): Promise<string | null> {
+  const texto = await textoDe(pdf);
+  return texto ? numeroDocumentoDoTexto(texto) : null;
+}
+
+/** Número do documento e data-limite de pagamento (YYYY-MM-DD) lidos do PDF. */
+export async function lerGuiaDoPdf(
+  pdf: Uint8Array | ArrayBuffer | string,
+): Promise<{ numeroDocumento: string | null; vencimento: string | null }> {
+  const texto = await textoDe(pdf);
+  if (!texto) return { numeroDocumento: null, vencimento: null };
+  return { numeroDocumento: numeroDocumentoDoTexto(texto), vencimento: vencimentoDoTexto(texto) };
 }
 
 /** Igual, a partir de um arquivo enviado (só PDF). */

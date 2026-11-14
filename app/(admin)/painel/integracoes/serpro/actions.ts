@@ -8,14 +8,18 @@ import { explicarSitfis } from "@/lib/ai/explicar-sitfis";
 import { explicarGuiaPublicada } from "@/lib/ai/explicar-guia-publicada";
 import { normalizeCompetencia } from "@/lib/dates";
 import { notifyNewDocument } from "@/lib/email/notify";
-import { guardarNumeroDocumento, numeroDocumentoDoPdf } from "@/lib/numero-documento";
+import {
+  guardarNumeroDocumento,
+  lerGuiaDoPdf,
+  numeroDocumentoDoPdf,
+} from "@/lib/numero-documento";
 import {
   verificarPagamentosNaReceita,
   type ResultadoVerificacao,
 } from "@/lib/pagamentos-receita";
 import { getSerproTokens, serproConfigurado } from "@/lib/serpro/auth";
 import { chamarServico } from "@/lib/serpro/client";
-import { gerarDas, vencimentoParaPublicar } from "@/lib/serpro/das";
+import { gerarDas, vencimentoParaPublicar, type SistemaDas } from "@/lib/serpro/das";
 import { gerarDarfDctfweb } from "@/lib/serpro/dctfweb";
 import {
   emitirParcela,
@@ -23,7 +27,7 @@ import {
   PARCELAMENTO_SISTEMAS,
 } from "@/lib/serpro/parcelamento";
 import { consultarSituacaoFiscal } from "@/lib/serpro/sitfis";
-import { lerDarf, nomeDoDarf } from "@/lib/serpro/darf-leitura";
+import { lerDarf, nomeDoDarf, tipoQueCobreTudo } from "@/lib/serpro/darf-leitura";
 import { textoDoPdf } from "@/lib/serpro/sitfis-leitura";
 import { createClient } from "@/lib/supabase/server";
 import type { DocType } from "@/lib/types";
@@ -265,6 +269,14 @@ export interface PublicarDasResult {
   ok: boolean;
   titulo: string;
   detalhe: string;
+  /** Guia criada no portal (para o aviso agrupado do "Trazer tudo"). */
+  documentId?: string;
+}
+
+/** Opções internas de publicação (não expostas como parâmetro das actions). */
+interface OpcoesPublicar {
+  /** false = não manda e-mail agora (o "Trazer tudo" avisa 1 vez por cliente). */
+  avisar: boolean;
 }
 
 /**
@@ -289,7 +301,32 @@ export async function publicarDas(
   companyId: string,
   periodoApuracao: string,
 ): Promise<PublicarDasResult> {
+  return publicarDasInterno(companyId, periodoApuracao, "PGDASD", { avisar: true });
+}
+
+/**
+ * Gera o DAS do MEI (PGMEI) de um período (AAAAMM) e publica como boleto,
+ * avisando o cliente — mesma regra de duplicidade do DAS do Simples.
+ */
+export async function publicarDasMei(
+  companyId: string,
+  periodoApuracao: string,
+): Promise<PublicarDasResult> {
+  return publicarDasInterno(companyId, periodoApuracao, "PGMEI", { avisar: true });
+}
+
+/**
+ * Núcleo do publicarDas — serve o DAS do Simples (PGDASD) e o do MEI (PGMEI).
+ * Não é exportado: as opções (sistema, avisar) só vêm do próprio servidor.
+ */
+async function publicarDasInterno(
+  companyId: string,
+  periodoApuracao: string,
+  sistema: SistemaDas,
+  opcoes: OpcoesPublicar,
+): Promise<PublicarDasResult> {
   const { profile } = await requireAdmin();
+  const mei = sistema === "PGMEI";
 
   const contratante = digits(process.env.SERPRO_CONTRATANTE_CNPJ ?? "");
   const periodo = digits(periodoApuracao);
@@ -349,6 +386,7 @@ export async function publicarDas(
     autorCnpj: contratante,
     contribuinteCnpj: contribuinte,
     periodoApuracao: periodo,
+    sistema,
   });
   if (!r.ok || !r.das) {
     return {
@@ -372,7 +410,7 @@ export async function publicarDas(
 
   // Sobe o PDF (base64 -> arquivo) no mesmo bucket dos boletos.
   const docId = crypto.randomUUID();
-  const fileName = `DAS-${periodo}-${contribuinte}.pdf`;
+  const fileName = `${mei ? "DAS-MEI" : "DAS"}-${periodo}-${contribuinte}.pdf`;
   const path = `${companyId}/${docId}-${fileName}`;
   const pdfBytes = Buffer.from(pdfBase64, "base64");
   const { error: upErr } = await supabase.storage
@@ -386,13 +424,16 @@ export async function publicarDas(
     };
   }
 
-  // Explicação curta por IA (opcional, best-effort): o cliente lê no "?".
-  const explicacao = await explicarGuiaPublicada({
-    type: "das",
-    competencia,
-    valor,
-    vencimento,
-  });
+  // Explicação curta (o cliente lê no "?"). DAS do Simples: por IA, best-effort.
+  // DAS do MEI: texto fixo — a IA explicaria o Simples, que não é o caso.
+  const explicacao = mei
+    ? "Guia mensal do MEI (DAS-MEI): reúne o INSS do empresário e, conforme a atividade, o ICMS e/ou o ISS, em valor fixo."
+    : await explicarGuiaPublicada({
+        type: "das",
+        competencia,
+        valor,
+        vencimento,
+      });
 
   // Cria o boleto (mesma forma do envio manual em /painel/enviar).
   const { error: insErr } = await supabase.from("documents").insert({
@@ -437,21 +478,27 @@ export async function publicarDas(
     }
   }
 
-  // Avisa o cliente (mesmo aviso dos boletos manuais).
-  after(() =>
-    notifyNewDocument({
-      companyId,
-      documentId: docId,
-      categoria: "boleto",
-      type: "das",
-      competencia,
-      amount: valor,
-      dueDate: vencimento,
-      count: 1,
-      // O PDF do DAS vai anexado ao e-mail (além de ficar no portal).
-      anexo: { filename: `DAS-Simples-Nacional-${mesRef.replace("/", "-")}.pdf`, content: pdfBytes },
-    }).catch((err) => console.error("[notify] DAS publicado:", err)),
-  );
+  // Avisa o cliente (mesmo aviso dos boletos manuais). No "Trazer tudo" o
+  // aviso sai depois, 1 e-mail por cliente com todas as guias dele.
+  if (opcoes.avisar) {
+    after(() =>
+      notifyNewDocument({
+        companyId,
+        documentId: docId,
+        categoria: "boleto",
+        type: "das",
+        competencia,
+        amount: valor,
+        dueDate: vencimento,
+        count: 1,
+        // O PDF do DAS vai anexado ao e-mail (além de ficar no portal).
+        anexo: {
+          filename: `${mei ? "DAS-MEI" : "DAS-Simples-Nacional"}-${mesRef.replace("/", "-")}.pdf`,
+          content: pdfBytes,
+        },
+      }).catch((err) => console.error("[notify] DAS publicado:", err)),
+    );
+  }
 
   revalidatePath("/painel", "layout");
   revalidatePath("/painel/documentos");
@@ -459,12 +506,15 @@ export async function publicarDas(
   revalidatePath("/portal/boletos");
 
   const venBR = vencimento.split("-").reverse().join("/");
+  const rotulo = mei ? "DAS-MEI" : "DAS";
+  const aviso = opcoes.avisar ? " O cliente já pode ver e será avisado." : "";
   return {
     ok: true,
-    titulo: substituido ? "DAS atualizado no portal" : "DAS publicado no portal",
+    documentId: docId,
+    titulo: substituido ? `${rotulo} atualizado no portal` : `${rotulo} publicado no portal`,
     detalhe: substituido
-      ? `O DAS de ${nome} para ${mesRef} (que estava em aberto) foi substituído pelo novo (venc. ${venBR}). O cliente será avisado.`
-      : `DAS de ${nome} (venc. ${venBR}) publicado como boleto. O cliente já pode ver e será avisado.`,
+      ? `O ${rotulo} de ${nome} para ${mesRef} (que estava em aberto) foi substituído pelo novo (venc. ${venBR}).${aviso}`
+      : `${rotulo} de ${nome} (venc. ${venBR}) publicado como boleto.${aviso}`,
   };
 }
 
@@ -845,14 +895,11 @@ export interface PublicarDarfResult {
   ok: boolean;
   titulo: string;
   detalhe: string;
+  /** Guia criada no portal (para o aviso agrupado do "Trazer tudo"). */
+  documentId?: string;
 }
 
-/**
- * Publica o DARF da DCTFWeb como BOLETO no portal. Como a Receita não devolve
- * valor/vencimento nesse serviço, eles vêm do contador (que os leu no PDF).
- * Regera o DARF no servidor (fonte da verdade) e cria o boleto.
- */
-export async function publicarDarf(params: {
+interface ParamsDarf {
   companyId: string;
   categoria: string;
   anoPA: string;
@@ -862,7 +909,27 @@ export async function publicarDarf(params: {
   vencimento: string; // YYYY-MM-DD
   /** Mesmo filtro de origem usado ao gerar (8 = MIT, 1 = eSocial). */
   origem?: number | null;
-}): Promise<PublicarDarfResult> {
+}
+
+/**
+ * Publica o DARF da DCTFWeb como BOLETO no portal. Como a Receita não devolve
+ * valor/vencimento nesse serviço, eles vêm do contador (que os leu no PDF).
+ * Regera o DARF no servidor (fonte da verdade) e cria o boleto.
+ */
+export async function publicarDarf(params: ParamsDarf): Promise<PublicarDarfResult> {
+  return publicarDarfInterno(params, null, { avisar: true });
+}
+
+/**
+ * Núcleo do publicarDarf. `pdfPronto` = DARF que o PRÓPRIO servidor acabou de
+ * gerar (o "Trazer tudo" gera, lê e confere antes) — evita gerar 2× na Receita.
+ * Não é exportado: nada aqui vem do navegador.
+ */
+async function publicarDarfInterno(
+  params: ParamsDarf,
+  pdfPronto: { nome: string; pdfBase64: string } | null,
+  opcoes: OpcoesPublicar,
+): Promise<PublicarDarfResult> {
   const { profile } = await requireAdmin();
 
   if (!(params.valor > 0)) {
@@ -908,13 +975,15 @@ export async function publicarDarf(params: {
     };
   }
 
-  const r = await rodarDarf(
-    params.companyId,
-    params.categoria,
-    params.anoPA,
-    params.mesPA,
-    params.origem,
-  );
+  const r =
+    pdfPronto ??
+    (await rodarDarf(
+      params.companyId,
+      params.categoria,
+      params.anoPA,
+      params.mesPA,
+      params.origem,
+    ));
   if ("erro" in r) {
     return { ok: false, titulo: r.erro.titulo, detalhe: r.erro.detalhe };
   }
@@ -994,19 +1063,21 @@ export async function publicarDarf(params: {
     }
   }
 
-  after(() =>
-    notifyNewDocument({
-      companyId: params.companyId,
-      documentId: docId,
-      categoria: "boleto",
-      type,
-      competencia,
-      amount: params.valor,
-      dueDate: params.vencimento,
-      count: 1,
-      nome: nomeGeral ?? undefined,
-    }).catch((err) => console.error("[notify] DARF publicado:", err)),
-  );
+  if (opcoes.avisar) {
+    after(() =>
+      notifyNewDocument({
+        companyId: params.companyId,
+        documentId: docId,
+        categoria: "boleto",
+        type,
+        competencia,
+        amount: params.valor,
+        dueDate: params.vencimento,
+        count: 1,
+        nome: nomeGeral ?? undefined,
+      }).catch((err) => console.error("[notify] DARF publicado:", err)),
+    );
+  }
 
   revalidatePath("/painel", "layout");
   revalidatePath("/painel/documentos");
@@ -1014,12 +1085,14 @@ export async function publicarDarf(params: {
   revalidatePath("/portal/boletos");
 
   const venBR = params.vencimento.split("-").reverse().join("/");
+  const aviso = opcoes.avisar ? " O cliente será avisado." : "";
   return {
     ok: true,
+    documentId: docId,
     titulo: substituido ? "DARF atualizado no portal" : "DARF publicado no portal",
     detalhe: substituido
-      ? `A guia de ${r.nome} para ${competencia} (que estava em aberto) foi substituída pela nova (venc. ${venBR}). O cliente será avisado.`
-      : `DARF de ${r.nome} (venc. ${venBR}) publicado como boleto. O cliente já pode ver e será avisado.`,
+      ? `A guia de ${r.nome} para ${competencia} (que estava em aberto) foi substituída pela nova (venc. ${venBR}).${aviso}`
+      : `DARF de ${r.nome} (venc. ${venBR}) publicado como boleto.${aviso}`,
   };
 }
 
@@ -1137,6 +1210,15 @@ export interface PublicarParcelaResult {
   ok: boolean;
   titulo: string;
   detalhe: string;
+  /** Guia criada no portal (para o aviso agrupado do "Trazer tudo"). */
+  documentId?: string;
+}
+
+interface ParamsParcela {
+  companyId: string;
+  sistema: string;
+  parcela: number; // AAAAMM
+  valor: number | null;
 }
 
 /**
@@ -1144,12 +1226,16 @@ export interface PublicarParcelaResult {
  * no portal do cliente. Evita duplicar: se já existir um boleto de parcelamento
  * dessa competência para o cliente em aberto, substitui; se pago, bloqueia.
  */
-export async function publicarParcelaReceita(params: {
-  companyId: string;
-  sistema: string;
-  parcela: number; // AAAAMM
-  valor: number | null;
-}): Promise<PublicarParcelaResult> {
+export async function publicarParcelaReceita(
+  params: ParamsParcela,
+): Promise<PublicarParcelaResult> {
+  return publicarParcelaInterno(params, { avisar: true });
+}
+
+async function publicarParcelaInterno(
+  params: ParamsParcela,
+  opcoes: OpcoesPublicar,
+): Promise<PublicarParcelaResult> {
   const { profile } = await requireAdmin();
   const contratante = digits(process.env.SERPRO_CONTRATANTE_CNPJ ?? "");
   if (!contratante) {
@@ -1170,14 +1256,17 @@ export async function publicarParcelaReceita(params: {
 
   const competencia = aaaammParaCompetencia(params.parcela);
 
-  // Já existe boleto de parcela dessa competência? (mesma regra do DAS)
+  // Já existe boleto de parcela dessa competência? (mesma regra do DAS). Só
+  // conta PARCELA publicada por aqui ("Parcela-…"): "Outro" também é o tipo do
+  // DARF com vários tributos e das guias à mão — nunca substituir essas.
   const { data: existentes } = await supabase
     .from("documents")
     .select("id, status, file_path")
     .eq("company_id", params.companyId)
     .eq("categoria", "boleto")
     .eq("type", "outro")
-    .eq("competencia", competencia);
+    .eq("competencia", competencia)
+    .like("file_name", "Parcela-%");
   const antigos = existentes ?? [];
   if (antigos.some((d) => d.status !== "open")) {
     return {
@@ -1216,6 +1305,10 @@ export async function publicarParcelaReceita(params: {
     return { ok: false, titulo: "Falha ao salvar o PDF", detalhe: upErr.message };
   }
 
+  // A Receita não devolve o vencimento da parcela — lemos do PDF ("Pagar este
+  // documento até"), junto com o nº do documento. Sem data, fica em branco.
+  const lida = await lerGuiaDoPdf(emit.pdfBase64);
+
   const { error: insErr } = await supabase.from("documents").insert({
     id: docId,
     company_id: params.companyId,
@@ -1223,6 +1316,7 @@ export async function publicarParcelaReceita(params: {
     categoria: "boleto",
     competencia,
     amount: params.valor,
+    due_date: lida.vencimento,
     descricao: "Parcela de parcelamento (Receita Federal)",
     file_path: path,
     file_name: fileName,
@@ -1237,7 +1331,7 @@ export async function publicarParcelaReceita(params: {
     };
   }
   // Nº do documento (lido do PDF): é como a rotina de pagamentos acha a parcela.
-  await guardarNumeroDocumento(supabase, docId, await numeroDocumentoDoPdf(emit.pdfBase64));
+  await guardarNumeroDocumento(supabase, docId, lida.numeroDocumento);
 
   // Substitui os antigos em aberto dessa competência (evita duplicata).
   const substituiu = antigos.length > 0;
@@ -1255,18 +1349,20 @@ export async function publicarParcelaReceita(params: {
     if (paths.length) await supabase.storage.from("boletos").remove(paths);
   }
 
-  after(() =>
-    notifyNewDocument({
-      companyId: params.companyId,
-      documentId: docId,
-      categoria: "boleto",
-      type: "outro",
-      competencia,
-      amount: params.valor,
-      dueDate: null,
-      count: 1,
-    }).catch((err) => console.error("[notify] parcela publicada:", err)),
-  );
+  if (opcoes.avisar) {
+    after(() =>
+      notifyNewDocument({
+        companyId: params.companyId,
+        documentId: docId,
+        categoria: "boleto",
+        type: "outro",
+        competencia,
+        amount: params.valor,
+        dueDate: lida.vencimento,
+        count: 1,
+      }).catch((err) => console.error("[notify] parcela publicada:", err)),
+    );
+  }
 
   revalidatePath("/painel", "layout");
   revalidatePath("/portal");
@@ -1274,6 +1370,7 @@ export async function publicarParcelaReceita(params: {
 
   return {
     ok: true,
+    documentId: docId,
     titulo: substituiu ? "Parcela atualizada no portal" : "Parcela publicada no portal",
     detalhe: `A guia da parcela ${competencia} de ${nome} foi ${substituiu ? "atualizada" : "publicada"} como boleto. O cliente já pode baixá-la.`,
   };
@@ -1291,4 +1388,128 @@ export async function verificarPagamentosAgora(
 ): Promise<ResultadoVerificacao> {
   await requireAdmin();
   return verificarPagamentosNaReceita({ companyId: companyId ?? undefined, dryRun });
+}
+
+// ============================================================
+// "Trazer tudo da Receita" — gera e publica UMA guia da lista montada por
+// buscarGuiasNaReceita (enviar/receita-actions). Publica SEM avisar: a tela
+// avisa no fim, 1 e-mail por cliente (/api/lote/notificar).
+// ============================================================
+
+export interface GuiaDaReceitaParaPublicar {
+  tipo: "das" | "das_mei" | "darf" | "parcela";
+  /** AAAAMM (DAS, DAS-MEI, DARF). */
+  periodo: string | null;
+  /** DARF: filtro de origem (8 = MIT, 1 = eSocial). */
+  origem: number | null;
+  /** DARF: tributos que a situação fiscal mostra em aberto (códigos de 4 dígitos). */
+  codigos: string[];
+  /** Parcela. */
+  sistema: string | null;
+  parcela: number | null;
+  valor: number | null;
+}
+
+export interface PublicarGuiaResult {
+  ok: boolean;
+  titulo: string;
+  detalhe: string;
+  documentId?: string;
+}
+
+export async function publicarGuiaDaReceita(
+  companyId: string,
+  g: GuiaDaReceitaParaPublicar,
+): Promise<PublicarGuiaResult> {
+  await requireAdmin();
+  const periodo = digits(g.periodo ?? "");
+  const semPeriodo = { ok: false, titulo: "Período inválido", detalhe: "" };
+
+  try {
+    switch (g.tipo) {
+      case "das":
+        if (!/^\d{6}$/.test(periodo)) return semPeriodo;
+        return await publicarDasInterno(companyId, periodo, "PGDASD", { avisar: false });
+      case "das_mei":
+        if (!/^\d{6}$/.test(periodo)) return semPeriodo;
+        return await publicarDasInterno(companyId, periodo, "PGMEI", { avisar: false });
+      case "darf":
+        if (!/^\d{6}$/.test(periodo)) return semPeriodo;
+        return await publicarDarfAutomatico(companyId, periodo, g.origem, g.codigos ?? []);
+      case "parcela":
+        if (!g.sistema || !PARCELAMENTO_SISTEMAS.some((s) => s.id === g.sistema) || !g.parcela) {
+          return { ok: false, titulo: "Parcela inválida", detalhe: "" };
+        }
+        return await publicarParcelaInterno(
+          { companyId, sistema: g.sistema, parcela: g.parcela, valor: g.valor },
+          { avisar: false },
+        );
+    }
+  } catch (err) {
+    // Rede/tempo com o SERPRO: a guia fica de fora; dá para tentar de novo.
+    return {
+      ok: false,
+      titulo: "A Receita não respondeu",
+      detalhe: err instanceof Error ? err.message : "Tente de novo em alguns minutos.",
+    };
+  }
+  return { ok: false, titulo: "Tipo de guia desconhecido", detalhe: "" };
+}
+
+/**
+ * DARF sem conferência manual: gera na DCTFWeb, lê valor/vencimento/composição
+ * do próprio PDF e só publica se a composição bater com o que a situação fiscal
+ * mostra em aberto. Qualquer dúvida → não publica e manda conferir na tela do
+ * cliente (onde o contador vê o PDF antes).
+ */
+async function publicarDarfAutomatico(
+  companyId: string,
+  periodo: string,
+  origem: number | null,
+  codigosEmAberto: string[],
+): Promise<PublicarGuiaResult> {
+  const anoPA = periodo.slice(0, 4);
+  const mesPA = periodo.slice(4, 6);
+  const conferir = (motivo: string): PublicarGuiaResult => ({
+    ok: false,
+    titulo: "Confira na tela do cliente",
+    detalhe: `${motivo} Use "Verificar pendências" deste cliente para conferir o DARF antes de publicar.`,
+  });
+
+  const r = await rodarDarf(companyId, "GERAL_MENSAL", anoPA, mesPA, origem);
+  if ("erro" in r) return { ok: false, titulo: r.erro.titulo, detalhe: r.erro.detalhe };
+
+  let lido: ReturnType<typeof lerDarf> | null = null;
+  try {
+    lido = lerDarf(await textoDoPdf(r.pdfBase64));
+  } catch (err) {
+    console.error("[trazer tudo] leitura do DARF falhou:", err);
+  }
+  if (!lido?.valor || !lido.pagarAte) {
+    return conferir("Não consegui ler o valor e o vencimento no DARF.");
+  }
+  const fora = lido.composicao.filter((c) => !codigosEmAberto.includes(c.codigo));
+  if (codigosEmAberto.length === 0 || lido.composicao.length === 0 || fora.length > 0) {
+    const quais = fora.map((c) => `${c.codigo} ${c.denominacao.split(" ")[0]}`).join(", ");
+    return conferir(
+      quais
+        ? `O DARF traz tributos que a situação fiscal não mostra em aberto (${quais}) — podem já estar pagos.`
+        : "Não consegui conferir os tributos do DARF.",
+    );
+  }
+
+  return publicarDarfInterno(
+    {
+      companyId,
+      categoria: "GERAL_MENSAL",
+      anoPA,
+      mesPA,
+      type: tipoQueCobreTudo(lido.composicao),
+      valor: lido.valor,
+      vencimento: lido.pagarAte,
+      origem,
+    },
+    r,
+    { avisar: false },
+  );
 }

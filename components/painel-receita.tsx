@@ -18,11 +18,13 @@ import {
   type DebitoNaTela,
   type Pendencias,
 } from "@/app/(admin)/painel/enviar/receita-actions";
+import { publicarDasMei } from "@/app/(admin)/painel/integracoes/serpro/actions";
 import { CollapsibleSection } from "@/components/collapsible-section";
 import { EmitirDarfCard } from "@/components/emitir-darf-card";
 import { EmitirDasCard } from "@/components/emitir-das-card";
 import { EmitirParcelamentoCard } from "@/components/emitir-parcelamento-card";
 import { SituacaoFiscalCard } from "@/components/situacao-fiscal-card";
+import { TrazerTudoReceita } from "@/components/trazer-tudo-receita";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { formatCurrency, formatDate } from "@/lib/format";
@@ -35,6 +37,9 @@ interface CompanyOpt {
   label: string;
   cnpj: string;
 }
+
+/** Valor do seletor que abre o "Trazer tudo da Receita" (todos os clientes). */
+const TODOS = "__todos__";
 
 /** Título de seção dentro do painel. */
 function Secao({
@@ -77,6 +82,46 @@ function nomePeriodo(pa: string): string {
   if (tri) return `${tri[1]}º trimestre ${tri[2]}`;
   if (/^\d{4}$/.test(pa)) return `Exercício ${pa}`;
   return pa;
+}
+
+/** DAS-MEI de um mês: gera no PGMEI e publica no portal (avisa o cliente). */
+function PublicarMeiBotao({ companyId, periodo }: { companyId: string; periodo: string }) {
+  const [pending, start] = useTransition();
+  const [res, setRes] = useState<{ ok: boolean; titulo: string; detalhe: string } | null>(null);
+  if (res?.ok) {
+    return (
+      <span className="flex w-[160px] items-center justify-end gap-1 text-right text-xs text-emerald-700 dark:text-emerald-400">
+        <CheckCircle2 className="size-3.5" /> {res.titulo}
+      </span>
+    );
+  }
+  return (
+    <span className="flex flex-col items-end gap-1">
+      <Button
+        type="button"
+        size="sm"
+        disabled={pending}
+        onClick={() =>
+          start(async () => {
+            try {
+              setRes(await publicarDasMei(companyId, periodo));
+            } catch (e) {
+              setRes({ ok: false, titulo: "Falha", detalhe: e instanceof Error ? e.message : "" });
+            }
+          })
+        }
+      >
+        {pending ? <Loader2 className="animate-spin" /> : null}
+        Gerar DAS-MEI e publicar
+      </Button>
+      {res && !res.ok ? (
+        <span className="max-w-[220px] text-right text-[11px] text-amber-800 dark:text-amber-200">
+          {res.titulo}
+          {res.detalhe ? ` — ${res.detalhe}` : ""}
+        </span>
+      ) : null}
+    </span>
+  );
 }
 
 /** Abre o PDF (base64) numa aba nova, via blob (o navegador bloqueia data:). */
@@ -129,6 +174,7 @@ export function PainelReceita({
     startVerificar(async () => setPend(await verificarPendencias(companyId)));
   }
 
+  const todos = companyId === TODOS;
   const chave = `${companyId}-${verificacao}`;
   const total = (pend?.debitos ?? []).reduce((s, d) => s + d.saldoConsolidado, 0);
   const hoje = new Date().toISOString().slice(0, 10);
@@ -144,7 +190,8 @@ export function PainelReceita({
           <p className="text-xs text-muted-foreground">
             Escolha o cliente e veja o que ele tem em aberto, direto do relatório
             de situação fiscal da Receita — com a guia pronta para conferir e
-            publicar.
+            publicar. Ou escolha &ldquo;Todos os clientes&rdquo; para trazer tudo
+            de uma vez.
           </p>
         </div>
       </div>
@@ -165,6 +212,9 @@ export function PainelReceita({
               className="h-9 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
             >
               <option value="">Escolha o cliente…</option>
+              {companies.length > 1 ? (
+                <option value={TODOS}>Todos os clientes — trazer tudo de uma vez</option>
+              ) : null}
               {companies.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.label}
@@ -172,18 +222,22 @@ export function PainelReceita({
               ))}
             </select>
           </label>
-          <Button
-            type="button"
-            disabled={!companyId || verificando}
-            onClick={verificar}
-          >
-            {verificando ? <Loader2 className="animate-spin" /> : <Search />}
-            Verificar pendências
-          </Button>
+          {todos ? null : (
+            <Button
+              type="button"
+              disabled={!companyId || verificando}
+              onClick={verificar}
+            >
+              {verificando ? <Loader2 className="animate-spin" /> : <Search />}
+              Verificar pendências
+            </Button>
+          )}
         </div>
       )}
 
-      {configurado && companyId && verificacao > 0 ? (
+      {configurado && todos ? <TrazerTudoReceita companies={companies} /> : null}
+
+      {configurado && companyId && !todos && verificacao > 0 ? (
         <>
           {/* ----- Débitos em aberto (relatório de situação fiscal) ----- */}
           <Secao
@@ -295,13 +349,13 @@ export function PainelReceita({
                           >
                             {aberto === id ? "Fechar" : acao}
                           </Button>
+                        ) : d.tipo === "mei" && d.periodoMensal ? (
+                          <PublicarMeiBotao companyId={companyId} periodo={d.periodoMensal} />
                         ) : (
                           <span className="w-[160px] text-right text-xs text-muted-foreground">
-                            {d.tipo === "mei"
-                              ? "DAS-MEI: emissão pelo PGMEI ainda não integrada"
-                              : d.lancamento
-                                ? "Lançamento/multa: pague pela notificação no e-CAC"
-                                : "—"}
+                            {d.lancamento
+                              ? "Lançamento/multa: pague pela notificação no e-CAC"
+                              : "—"}
                           </span>
                         )}
                       </div>
@@ -452,7 +506,7 @@ export function PainelReceita({
         </>
       ) : null}
 
-      {configurado && companyId ? (
+      {configurado && companyId && !todos ? (
         <div className="space-y-3 border-t pt-5 [&>div]:max-w-none">
           <CollapsibleSection
             key={`${companyId}-darf`}
