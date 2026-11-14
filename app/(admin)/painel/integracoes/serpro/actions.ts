@@ -8,6 +8,11 @@ import { explicarSitfis } from "@/lib/ai/explicar-sitfis";
 import { explicarGuiaPublicada } from "@/lib/ai/explicar-guia-publicada";
 import { normalizeCompetencia } from "@/lib/dates";
 import { notifyNewDocument } from "@/lib/email/notify";
+import { guardarNumeroDocumento, numeroDocumentoDoPdf } from "@/lib/numero-documento";
+import {
+  verificarPagamentosNaReceita,
+  type ResultadoVerificacao,
+} from "@/lib/pagamentos-receita";
 import { getSerproTokens, serproConfigurado } from "@/lib/serpro/auth";
 import { chamarServico } from "@/lib/serpro/client";
 import { gerarDas, vencimentoParaPublicar } from "@/lib/serpro/das";
@@ -411,6 +416,12 @@ export async function publicarDas(
       detalhe: insErr.message,
     };
   }
+  // Nº do documento: é como a rotina de pagamentos acha este DAS na Receita.
+  await guardarNumeroDocumento(
+    supabase,
+    docId,
+    r.das.numeroDocumento ?? (await numeroDocumentoDoPdf(pdfBase64)),
+  );
 
   // Substituição: o novo DAS entrou; remove os antigos (todos em aberto) e os
   // PDFs deles. Só chega aqui se nenhum estava pago (o pago já foi bloqueado).
@@ -965,6 +976,8 @@ export async function publicarDarf(params: {
       detalhe: insErr.message,
     };
   }
+  // Nº do documento (lido do PDF): é como a rotina de pagamentos acha o DARF.
+  await guardarNumeroDocumento(supabase, docId, await numeroDocumentoDoPdf(r.pdfBase64));
 
   // Substituição: a nova guia entrou; remove as antigas (todas em aberto, do
   // mesmo tipo/competência) e os PDFs delas. Só chega aqui se nenhuma estava
@@ -1223,6 +1236,8 @@ export async function publicarParcelaReceita(params: {
       detalhe: insErr.message,
     };
   }
+  // Nº do documento (lido do PDF): é como a rotina de pagamentos acha a parcela.
+  await guardarNumeroDocumento(supabase, docId, await numeroDocumentoDoPdf(emit.pdfBase64));
 
   // Substitui os antigos em aberto dessa competência (evita duplicata).
   const substituiu = antigos.length > 0;
@@ -1262,4 +1277,18 @@ export async function publicarParcelaReceita(params: {
     titulo: substituiu ? "Parcela atualizada no portal" : "Parcela publicada no portal",
     detalhe: `A guia da parcela ${competencia} de ${nome} foi ${substituiu ? "atualizada" : "publicada"} como boleto. O cliente já pode baixá-la.`,
   };
+}
+
+// ============================================================
+// Pagamentos na Receita — roda à mão a mesma verificação do cron diário
+// (/api/cron/pagamentos). Com dryRun (padrão), só mostra o que SERIA marcado
+// como pago: não grava, não avisa o cliente, não baixa comprovante.
+// ============================================================
+
+export async function verificarPagamentosAgora(
+  companyId: string | null,
+  dryRun: boolean,
+): Promise<ResultadoVerificacao> {
+  await requireAdmin();
+  return verificarPagamentosNaReceita({ companyId: companyId ?? undefined, dryRun });
 }

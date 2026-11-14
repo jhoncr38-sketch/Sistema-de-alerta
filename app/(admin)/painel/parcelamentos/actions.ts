@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { modalidadeDocType, modalidadeLabel } from "@/lib/constants";
+import { guardarNumeroDocumento, numeroDocumentoDoArquivo } from "@/lib/numero-documento";
 
 export interface PlanState {
   error?: string;
@@ -303,7 +304,9 @@ export async function addParcela(
     return { error: `Falha ao enviar o arquivo: ${(e as Error).message}` };
   }
 
+  const docId = crypto.randomUUID();
   const { error: insertError } = await supabase.from("documents").insert({
+    id: docId,
     company_id: plan.company_id,
     type: modalidadeDocType(plan.modalidade),
     categoria: "parcelamento" as const,
@@ -320,6 +323,8 @@ export async function addParcela(
     await supabase.storage.from("boletos").remove([path]);
     return { error: `Falha ao salvar a parcela: ${insertError.message}` };
   }
+  // Nº do documento lido do PDF: como a rotina de pagamentos acha a parcela paga.
+  await guardarNumeroDocumento(supabase, docId, await numeroDocumentoDoArquivo(file));
 
   revalidatePath(`/painel/parcelamentos/${planId}`);
   revalidatePath("/painel/parcelamentos");

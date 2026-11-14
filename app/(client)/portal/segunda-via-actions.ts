@@ -4,6 +4,7 @@ import { after } from "next/server";
 import { revalidatePath } from "next/cache";
 import { getUserAndProfile } from "@/lib/auth";
 import { notifyReissueRequest, notifySegundaViaAutomatica } from "@/lib/email/notify";
+import { guardarNumeroDocumento, numeroDocumentoDoPdf } from "@/lib/numero-documento";
 import { serproConfigurado } from "@/lib/serpro/auth";
 import { gerarDas, vencimentoParaPublicar } from "@/lib/serpro/das";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -211,6 +212,13 @@ export async function gerarSegundaViaDas(docId: string): Promise<SegundaViaResul
     await admin.storage.from("boletos").remove([path]);
     return pedirAoContador(docId, `insert: ${insErr.message}`);
   }
+  // Nº do documento da 2ª via: é o que o cliente vai pagar — e como a rotina
+  // de pagamentos acha a guia na Receita.
+  await guardarNumeroDocumento(
+    admin,
+    novoId,
+    r.das.numeroDocumento ?? (await numeroDocumentoDoPdf(r.das.pdfBase64)),
+  );
 
   const idsAntigos = antigos.map((d) => d.id);
   if (idsAntigos.length) {

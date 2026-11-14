@@ -68,6 +68,16 @@ export interface DocumentRow {
   comprovante_name: string | null; // nome original do arquivo do comprovante
   comprovante_at: string | null; // ISO timestamp de quando o comprovante foi anexado
   exige_comprovante: boolean; // quando true, o cliente só marca pago com comprovante anexado
+  numero_documento?: string | null; // nº do DAS/DARF (17 dígitos) — acha o pagamento na Receita
+  pago_origem?: "receita" | null; // 'receita' = pagamento encontrado na Receita (automático)
+  pagamento_receita?: {
+    numeroDocumento: string;
+    tipo: string;
+    dataArrecadacao: string | null;
+    valorTotal: number;
+    criterio: string;
+    verificadoEm: string;
+  } | null;
   plan_id: string | null; // parcelamento ao qual a parcela pertence (categoria 'parcelamento')
   parcela_num: number | null; // número da parcela dentro do plano (1..total)
   file_path: string | null; // null em parcela de débito automático (sem boleto)

@@ -9,6 +9,7 @@ import { clientePorDocumento, competenciaPeloVencimento } from "@/lib/lote";
 import { createClient } from "@/lib/supabase/server";
 import { normalizeCompetencia } from "@/lib/dates";
 import { notifyNewDocument } from "@/lib/email/notify";
+import { guardarNumeroDocumento, numeroDocumentoDoArquivo } from "@/lib/numero-documento";
 import type { DocType } from "@/lib/types";
 
 export interface UploadState {
@@ -153,6 +154,12 @@ export async function uploadDocument(
     // desfaz os uploads se o registro falhar
     await supabase.storage.from("boletos").remove(uploadedPaths);
     return { error: `Falha ao salvar o registro: ${insertError.message}` };
+  }
+
+  // Guia (DAS/DARF): guarda o nº do documento lido do PDF — é como a rotina de
+  // pagamentos acha a guia paga na Receita. Best-effort.
+  if (isBoleto && rows[0]) {
+    await guardarNumeroDocumento(supabase, rows[0].id, await numeroDocumentoDoArquivo(files[0]));
   }
 
   // Faturamento do mês (opcional): 1 valor por empresa/competência.

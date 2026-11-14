@@ -1,5 +1,6 @@
 import { PageHeader } from "@/components/page-header";
 import { Card } from "@/components/ui/card";
+import { PagamentosReceitaCard } from "@/components/pagamentos-receita-card";
 import { SerproDiagnostico } from "@/components/serpro-diagnostico";
 import { requireAdmin } from "@/lib/auth";
 import { serproConfigurado } from "@/lib/serpro/auth";
@@ -58,6 +59,14 @@ export default async function SerproIntegracaoPage() {
           </Card>
         ) : null}
 
+        <PagamentosReceitaCard
+          configurado={configurado}
+          companies={companies.map((c) => ({
+            id: c.id,
+            label: c.nome_fantasia || c.razao_social,
+            cnpj: c.cnpj,
+          }))}
+        />
         <SerproDiagnostico
           configurado={configurado}
           companies={companies.map((c) => ({

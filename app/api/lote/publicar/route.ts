@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { contadorLogado, erroDoArquivo, validarGuia } from "@/lib/lote";
+import { guardarNumeroDocumento, numeroDocumentoDoArquivo } from "@/lib/numero-documento";
 import { createClient } from "@/lib/supabase/server";
 
 /**
@@ -53,6 +54,8 @@ export async function POST(request: Request) {
     await supabase.storage.from("boletos").remove([path]); // desfaz o upload
     return NextResponse.json({ ok: false, erro: `Falha ao salvar: ${insErr.message}` });
   }
+  // Nº do documento (DAS/DARF): como a rotina de pagamentos acha a guia na Receita.
+  await guardarNumeroDocumento(supabase, docId, await numeroDocumentoDoArquivo(pdf));
 
   return NextResponse.json({ ok: true, documentId: docId });
 }
